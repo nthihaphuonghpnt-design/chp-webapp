@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import type { DonHang } from "@/types/database";
 
 interface Option {
@@ -10,11 +11,19 @@ interface Option {
   ten: string;
 }
 
+interface DiaDiemOption {
+  id: string;
+  ten: string;
+  ma_dia_diem: string | null;
+  dia_chi: string | null;
+  khu_vuc: string | null;
+}
+
 interface MasterData {
   khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null }[];
   loaiContainer: Option[];
   hangHoa: Option[];
-  diaDiem: Option[];
+  diaDiem: DiaDiemOption[];
 }
 
 const LOAI_DON_HANG = ["Xuất", "Nhập", "Khác"];
@@ -41,10 +50,7 @@ export default function DonHangForm({
     dvt: initial?.dvt ?? "",
     so_bl_bk: initial?.so_bl_bk ?? "",
     so_lo: initial?.so_lo ?? "",
-    so_cont: initial?.so_cont ?? "",
-    so_seal: initial?.so_seal ?? "",
     hang_hoa_id: initial?.hang_hoa_id ?? "",
-    khoi_luong: initial?.khoi_luong?.toString() ?? "",
     kich_thuoc: initial?.kich_thuoc ?? "",
     noi_lay_cont_hang_id: initial?.noi_lay_cont_hang_id ?? "",
     noi_dong_giao_id: initial?.noi_dong_giao_id ?? "",
@@ -61,6 +67,13 @@ export default function DonHangForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  const diaDiemOptions = masterData.diaDiem.map((d) => ({
+    value: d.id,
+    label: d.ten,
+    code: d.ma_dia_diem,
+    sublabel: [d.khu_vuc, d.dia_chi].filter(Boolean).join(" · "),
+  }));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -70,7 +83,6 @@ export default function DonHangForm({
     for (const [key, value] of Object.entries(values)) {
       payload[key] = value === "" ? null : value;
     }
-    if (payload.khoi_luong) payload.khoi_luong = Number(payload.khoi_luong);
     if (payload.gia) payload.gia = Number(payload.gia);
 
     if (initial) {
@@ -174,12 +186,12 @@ export default function DonHangForm({
         <Field label="Số lô">
           <input value={values.so_lo} onChange={(e) => set("so_lo", e.target.value)} className={inputClass} />
         </Field>
-        <Field label="Số container">
-          <input value={values.so_cont} onChange={(e) => set("so_cont", e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Số seal">
-          <input value={values.so_seal} onChange={(e) => set("so_seal", e.target.value)} className={inputClass} />
-        </Field>
+        {!initial && (
+          <p className="sm:col-span-2 text-xs text-slate-400">
+            Số container, số seal, khối lượng/số ký từng container sẽ nhập ở trang chi tiết sau khi lưu đơn hàng
+            này (một lô có thể có nhiều container).
+          </p>
+        )}
       </Section>
 
       <Section title="Hàng hóa">
@@ -193,15 +205,6 @@ export default function DonHangForm({
             ))}
           </select>
         </Field>
-        <Field label="Khối lượng">
-          <input
-            type="number"
-            step="any"
-            value={values.khoi_luong}
-            onChange={(e) => set("khoi_luong", e.target.value)}
-            className={inputClass}
-          />
-        </Field>
         <Field label="Kích thước (WxLxH)">
           <input value={values.kich_thuoc} onChange={(e) => set("kich_thuoc", e.target.value)} className={inputClass} />
         </Field>
@@ -209,34 +212,28 @@ export default function DonHangForm({
 
       <Section title="Địa điểm">
         <Field label="Nơi lấy cont/hàng">
-          <select value={values.noi_lay_cont_hang_id} onChange={(e) => set("noi_lay_cont_hang_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.diaDiem.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={diaDiemOptions}
+            value={values.noi_lay_cont_hang_id}
+            onChange={(v) => set("noi_lay_cont_hang_id", v)}
+            placeholder="Gõ tên hoặc mã địa điểm..."
+          />
         </Field>
         <Field label="Nơi đóng/giao">
-          <select value={values.noi_dong_giao_id} onChange={(e) => set("noi_dong_giao_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.diaDiem.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={diaDiemOptions}
+            value={values.noi_dong_giao_id}
+            onChange={(v) => set("noi_dong_giao_id", v)}
+            placeholder="Gõ tên hoặc mã địa điểm..."
+          />
         </Field>
         <Field label="Nơi hạ/trả rỗng">
-          <select value={values.noi_ha_tra_rong_id} onChange={(e) => set("noi_ha_tra_rong_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.diaDiem.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={diaDiemOptions}
+            value={values.noi_ha_tra_rong_id}
+            onChange={(v) => set("noi_ha_tra_rong_id", v)}
+            placeholder="Gõ tên hoặc mã địa điểm..."
+          />
         </Field>
       </Section>
 

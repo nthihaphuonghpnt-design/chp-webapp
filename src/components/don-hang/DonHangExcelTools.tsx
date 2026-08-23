@@ -25,12 +25,9 @@ const IMPORT_COLUMNS = [
   { header: "Khách hàng *", key: "khach_hang_id", kind: "khachHang", required: true },
   { header: "Loại đơn hàng", key: "loai_don_hang", kind: "fixed", options: LOAI_DON_HANG },
   { header: "Loại kích cỡ", key: "loai_kich_co", kind: "fixed", options: LOAI_KICH_CO },
-  { header: "Loại container", key: "loai_cont_hang_id", kind: "loaiContainer" },
   { header: "Đơn vị tính", key: "dvt", kind: "fixed", options: DVT },
   { header: "Số vận đơn/booking", key: "so_bl_bk", kind: "text" },
   { header: "Số lô", key: "so_lo", kind: "text" },
-  { header: "Số container", key: "so_cont", kind: "text" },
-  { header: "Số seal", key: "so_seal", kind: "text" },
   { header: "Hàng hóa", key: "hang_hoa_id", kind: "hangHoa" },
   { header: "Khối lượng", key: "khoi_luong", kind: "number" },
   { header: "Kích thước", key: "kich_thuoc", kind: "text" },
@@ -77,11 +74,11 @@ export default function DonHangExcelTools({
     guideRows.push(["Khách hàng", masterData.khachHang.map((k) => k.ten_viet_tat || k.ten_day_du).join(", ")]);
     guideRows.push(["Loại đơn hàng", LOAI_DON_HANG.join(", ")]);
     guideRows.push(["Loại kích cỡ", LOAI_KICH_CO.join(", ")]);
-    guideRows.push(["Loại container", masterData.loaiContainer.map((o) => o.ten).join(", ")]);
     guideRows.push(["Đơn vị tính", DVT.join(", ")]);
     guideRows.push(["Hàng hóa", masterData.hangHoa.map((o) => o.ten).join(", ")]);
     guideRows.push(["Nơi lấy/đóng/hạ", masterData.diaDiem.map((o) => o.ten).join(", ")]);
     guideRows.push(["Ngày tháng", "Gõ theo định dạng yyyy-mm-dd, ví dụ 2026-08-25"]);
+    guideRows.push(["Container/số ký", "Nhập sau ở trang chi tiết đơn hàng (một lô có thể có nhiều container)."]);
     const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
     XLSX.utils.book_append_sheet(wb, wsGuide, "Hướng dẫn");
 
@@ -90,7 +87,7 @@ export default function DonHangExcelTools({
 
   function handleExportExcel() {
     const data = rows.map((row) => {
-      const obj: Record<string, unknown> = { "Số đơn hàng": row.so_don_hang };
+      const obj: Record<string, unknown> = { "Số đơn hàng": row.so_don_hang, "Số container": row.so_cont_label ?? "" };
       for (const col of IMPORT_COLUMNS) {
         const headerNoHint = col.header.replace(/\s*\*.*$/, "").replace(/\s*\(.*\)$/, "");
         obj[headerNoHint] = row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "";
@@ -149,9 +146,9 @@ export default function DonHangExcelTools({
           );
           if (!match) { errors.push(`Dòng ${rowNum}: không tìm thấy khách hàng "${value}".`); hasError = true; continue; }
           record[col.key] = match.id;
-        } else if (col.kind === "loaiContainer" || col.kind === "hangHoa" || col.kind === "diaDiem") {
+        } else if (col.kind === "hangHoa" || col.kind === "diaDiem") {
           if (!value) continue;
-          const list = col.kind === "loaiContainer" ? masterData.loaiContainer : col.kind === "hangHoa" ? masterData.hangHoa : masterData.diaDiem;
+          const list = col.kind === "hangHoa" ? masterData.hangHoa : masterData.diaDiem;
           const match = findByName(list, String(value));
           if (!match) { errors.push(`Dòng ${rowNum}: không tìm thấy "${value}" ở cột "${col.header}".`); hasError = true; continue; }
           record[col.key] = match.id;

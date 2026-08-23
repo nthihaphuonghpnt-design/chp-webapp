@@ -24,7 +24,7 @@ export default async function DonHangSuaPage({ params }: { params: Promise<{ id:
       supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
       supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
       supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-      supabase.from("dia_diem").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+      supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
     ]);
 
   if (!order) notFound();

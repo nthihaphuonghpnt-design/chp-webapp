@@ -103,13 +103,15 @@ export interface HangHoa {
   updated_at: string;
 }
 
-export type LoaiDiaDiem = "Cảng" | "Kho" | "Nơi giao nhận" | "Khác";
+export type LoaiDiaDiem = "Cảng" | "Kho" | "Depot" | "Nơi giao nhận" | "Khác";
 
 export interface DiaDiem {
   id: string;
+  ma_dia_diem: string | null;
   ten: string;
   loai: LoaiDiaDiem | null;
   dia_chi: string | null;
+  khu_vuc: string | null;
   ghi_chu: string | null;
   dang_hoat_dong: boolean;
   created_at: string;
@@ -142,10 +144,7 @@ export interface DonHang {
   dvt: Dvt | null;
   so_bl_bk: string | null;
   so_lo: string | null;
-  so_cont: string | null;
-  so_seal: string | null;
   hang_hoa_id: string | null;
-  khoi_luong: number | null;
   kich_thuoc: string | null;
   noi_lay_cont_hang_id: string | null;
   noi_dong_giao_id: string | null;
@@ -161,6 +160,45 @@ export interface DonHang {
   ops_xac_nhan: boolean;
   cs_xac_nhan: boolean;
   nguoi_tao_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DonHangContainer {
+  id: string;
+  don_hang_id: string;
+  so_cont: string | null;
+  so_seal: string | null;
+  loai_cont_hang_id: string | null;
+  khoi_luong: number | null;
+  ghi_chu: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type LoaiHinhXnk =
+  | "Nhập kinh doanh"
+  | "Nhập ủy thác"
+  | "Xuất kinh doanh"
+  | "Xuất ủy thác"
+  | "Tạm nhập tái xuất"
+  | "Khác";
+export type LuongToKhai = "Xanh" | "Vàng" | "Đỏ";
+export type TrangThaiToKhai = "Đang mở tờ khai" | "Chờ kiểm hóa" | "Đã thông quan" | "Giải phóng hàng";
+
+export interface ToKhaiHaiQuan {
+  id: string;
+  don_hang_id: string;
+  so_to_khai: string | null;
+  ngay_mo_to_khai: string | null;
+  loai_hinh_xnk: LoaiHinhXnk | null;
+  chi_cuc_hai_quan: string | null;
+  luong_to_khai: LuongToKhai | null;
+  thue_nhap_khau: number | null;
+  thue_vat_nk: number | null;
+  thue_khac: number | null;
+  ngay_thong_quan: string | null;
+  trang_thai: TrangThaiToKhai;
   created_at: string;
   updated_at: string;
 }

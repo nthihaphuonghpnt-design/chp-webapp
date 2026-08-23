@@ -45,6 +45,8 @@ interface Props {
   statusLabels?: { active: string; inactive: string };
   /** The field to search/filter by (defaults to the first field). */
   searchField?: string;
+  /** Extra fields to also match when searching (e.g. mã, mã số thuế) besides searchField. */
+  extraSearchFields?: string[];
   /** Tra cứu tự động theo mã số thuế (Khách hàng, Nhà cung cấp, Đối tác thuê ngoài). */
   taxLookup?: TaxLookupConfig;
 }
@@ -58,6 +60,7 @@ export default function DanhMucManager({
   statusField = "dang_hoat_dong",
   statusLabels = { active: "Đang hoạt động", inactive: "Ngừng hoạt động" },
   searchField,
+  extraSearchFields,
   taxLookup,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows);
@@ -75,11 +78,12 @@ export default function DanhMucManager({
   const supabase = useMemo(() => createClient(), []);
   const listFields = fields.filter((f) => f.showInList !== false);
   const primaryField = searchField ?? fields[0]?.key;
+  const searchFieldsAll = [primaryField, ...(extraSearchFields ?? [])];
 
   const filteredRows = rows.filter((r) => {
     if (!query) return true;
-    const value = String(r[primaryField] ?? "").toLowerCase();
-    return value.includes(query.toLowerCase());
+    const q = query.toLowerCase();
+    return searchFieldsAll.some((f) => String(r[f] ?? "").toLowerCase().includes(q));
   });
 
   function openNew() {

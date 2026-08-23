@@ -27,6 +27,7 @@ export default async function KhachHangPage() {
       initialRows={(data ?? []) as Row[]}
       canEdit={user?.phong_ban === "Kế toán"}
       searchField="ten_day_du"
+      extraSearchFields={["ten_viet_tat", "ma_so_thue"]}
       taxLookup={{ taxField: "ma_so_thue", nameField: "ten_day_du", addressField: "dia_chi" }}
     />
   );

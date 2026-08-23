@@ -9,13 +9,13 @@ interface Row {
   id: string;
   so_don_hang: string;
   loai_don_hang: string | null;
-  so_cont: string | null;
   ngay_len_don: string;
   ngay_van_chuyen: string | null;
   trang_thai: string;
   ops_xac_nhan: boolean;
   cs_xac_nhan: boolean;
   khach_hang: { ten_day_du: string; ten_viet_tat: string | null } | { ten_day_du: string; ten_viet_tat: string | null }[] | null;
+  don_hang_container: { so_cont: string | null }[] | null;
 }
 
 const STATUSES = ["Tiếp nhận", "Làm thủ tục", "Thông quan", "Giao hàng", "Hoàn tất"];
@@ -24,6 +24,13 @@ function customerName(row: Row) {
   const kh = Array.isArray(row.khach_hang) ? row.khach_hang[0] : row.khach_hang;
   if (!kh) return "—";
   return kh.ten_viet_tat || kh.ten_day_du;
+}
+
+function containerSummary(row: Row) {
+  const containers = row.don_hang_container ?? [];
+  if (containers.length === 0) return "Chưa có cont";
+  if (containers.length === 1) return containers[0].so_cont || "1 cont";
+  return `${containers.length} cont`;
 }
 
 export default function DonHangList({ initialRows }: { initialRows: Row[] }) {
@@ -38,7 +45,7 @@ export default function DonHangList({ initialRows }: { initialRows: Row[] }) {
     return (
       r.so_don_hang.toLowerCase().includes(q) ||
       customerName(r).toLowerCase().includes(q) ||
-      (r.so_cont ?? "").toLowerCase().includes(q)
+      (r.don_hang_container ?? []).some((c) => (c.so_cont ?? "").toLowerCase().includes(q))
     );
   });
 
@@ -79,7 +86,7 @@ export default function DonHangList({ initialRows }: { initialRows: Row[] }) {
             </div>
             <p className="text-sm text-slate-600">{customerName(row)}</p>
             <p className="mt-1 text-xs text-slate-400">
-              {row.loai_don_hang} · {row.so_cont || "chưa có số cont"} · {row.ngay_len_don}
+              {row.loai_don_hang} · {containerSummary(row)} · {row.ngay_len_don}
             </p>
             <div className="mt-2 flex gap-2 text-xs">
               <span className={row.ops_xac_nhan ? "text-green-600" : "text-slate-400"}>
@@ -121,7 +128,7 @@ export default function DonHangList({ initialRows }: { initialRows: Row[] }) {
                 <td className="px-4 py-3 font-medium text-blue-600">{row.so_don_hang}</td>
                 <td className="px-4 py-3 text-slate-800">{customerName(row)}</td>
                 <td className="px-4 py-3 text-slate-800">{row.loai_don_hang ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-800">{row.so_cont ?? "—"}</td>
+                <td className="px-4 py-3 text-slate-800">{containerSummary(row)}</td>
                 <td className="px-4 py-3 text-slate-800">{row.ngay_len_don}</td>
                 <td className="px-4 py-3">{row.ops_xac_nhan ? "✓" : "—"}</td>
                 <td className="px-4 py-3">{row.cs_xac_nhan ? "✓" : "—"}</td>

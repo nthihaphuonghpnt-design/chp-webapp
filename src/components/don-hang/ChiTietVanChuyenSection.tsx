@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import type { ChiTietVanChuyen } from "@/types/database";
 
 interface DiaDiemOption {
   id: string;
   ten: string;
+  ma_dia_diem?: string | null;
+  dia_chi?: string | null;
+  khu_vuc?: string | null;
 }
 
 const DIEU_DONG = ["Công ty (tự thực hiện)", "Thuê ngoài"];
@@ -157,6 +161,13 @@ function ChiTietForm({
     trang_thai: initial?.trang_thai ?? "Đã duyệt lệnh",
   });
 
+  const diaDiemOptions = diaDiemList.map((d) => ({
+    value: d.id,
+    label: d.ten,
+    code: d.ma_dia_diem,
+    sublabel: [d.khu_vuc, d.dia_chi].filter(Boolean).join(" · "),
+  }));
+
   function set(key: keyof typeof values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
@@ -199,36 +210,30 @@ function ChiTietForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Điểm 1 (lấy)</label>
-            <select value={values.diem_1_id} onChange={(e) => set("diem_1_id", e.target.value)} className={cls}>
-              <option value="">-- Chọn --</option>
-              {diaDiemList.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.ten}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={diaDiemOptions}
+              value={values.diem_1_id}
+              onChange={(v) => set("diem_1_id", v)}
+              placeholder="Gõ tên hoặc mã địa điểm..."
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Điểm 2 (đóng/giao)</label>
-            <select value={values.diem_2_id} onChange={(e) => set("diem_2_id", e.target.value)} className={cls}>
-              <option value="">-- Chọn --</option>
-              {diaDiemList.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.ten}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={diaDiemOptions}
+              value={values.diem_2_id}
+              onChange={(v) => set("diem_2_id", v)}
+              placeholder="Gõ tên hoặc mã địa điểm..."
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Điểm 3 (hạ/trả)</label>
-            <select value={values.diem_3_id} onChange={(e) => set("diem_3_id", e.target.value)} className={cls}>
-              <option value="">-- Chọn --</option>
-              {diaDiemList.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.ten}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={diaDiemOptions}
+              value={values.diem_3_id}
+              onChange={(v) => set("diem_3_id", v)}
+              placeholder="Gõ tên hoặc mã địa điểm..."
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái</label>

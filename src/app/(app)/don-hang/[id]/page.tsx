@@ -5,6 +5,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { canManageDonHang } from "@/lib/permissions";
 import StatusBadge from "@/components/don-hang/StatusBadge";
 import ConfirmButtons from "@/components/don-hang/ConfirmButtons";
+import ContainerSection from "@/components/don-hang/ContainerSection";
+import ToKhaiSection from "@/components/don-hang/ToKhaiSection";
 import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSection";
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
 
@@ -13,23 +15,33 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const [{ data: order }, { data: chiTietRows }, { data: dinhKemRows }, { data: diaDiemList }] = await Promise.all([
+  const [
+    { data: order },
+    { data: containerRows },
+    { data: toKhaiRows },
+    { data: chiTietRows },
+    { data: dinhKemRows },
+    { data: diaDiemList },
+    { data: loaiContainerList },
+  ] = await Promise.all([
     supabase
       .from("don_hang")
       .select(
-        "*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), loai_cont_hang:loai_cont_hang_id(ten), hang_hoa:hang_hoa_id(ten), noi_lay:noi_lay_cont_hang_id(ten), noi_dong:noi_dong_giao_id(ten), noi_ha:noi_ha_tra_rong_id(ten), nguoi_tao:nguoi_tao_id(ho_ten)"
+        "*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), hang_hoa:hang_hoa_id(ten), noi_lay:noi_lay_cont_hang_id(ten), noi_dong:noi_dong_giao_id(ten), noi_ha:noi_ha_tra_rong_id(ten), nguoi_tao:nguoi_tao_id(ho_ten)"
       )
       .eq("id", id)
       .single(),
+    supabase.from("don_hang_container").select("*").eq("don_hang_id", id).order("created_at"),
+    supabase.from("to_khai_hai_quan").select("*").eq("don_hang_id", id).order("created_at"),
     supabase.from("chi_tiet_van_chuyen").select("*").eq("don_hang_id", id).order("ngay_vc"),
     supabase.from("dinh_kem").select("*").eq("don_hang_id", id).order("thoi_gian_upload", { ascending: false }),
-    supabase.from("dia_diem").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
 
   if (!order) notFound();
 
   const kh = Array.isArray(order.khach_hang) ? order.khach_hang[0] : order.khach_hang;
-  const loaiCont = Array.isArray(order.loai_cont_hang) ? order.loai_cont_hang[0] : order.loai_cont_hang;
   const hangHoa = Array.isArray(order.hang_hoa) ? order.hang_hoa[0] : order.hang_hoa;
   const noiLay = Array.isArray(order.noi_lay) ? order.noi_lay[0] : order.noi_lay;
   const noiDong = Array.isArray(order.noi_dong) ? order.noi_dong[0] : order.noi_dong;
@@ -37,6 +49,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const nguoiTao = Array.isArray(order.nguoi_tao) ? order.nguoi_tao[0] : order.nguoi_tao;
 
   const canEditVanChuyen = user?.phong_ban === "Hiện trường" || user?.phong_ban === "Điều phối";
+  const canEditToKhai = user?.phong_ban === "Chứng từ";
+  const canEditContainer = canManageDonHang(user?.phong_ban);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -71,14 +85,10 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       <div className="mb-4 grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
         <Info label="Loại đơn hàng" value={order.loai_don_hang} />
         <Info label="Loại kích cỡ" value={order.loai_kich_co} />
-        <Info label="Loại container" value={loaiCont?.ten} />
         <Info label="Đơn vị tính" value={order.dvt} />
         <Info label="Số vận đơn / booking" value={order.so_bl_bk} />
         <Info label="Số lô" value={order.so_lo} />
-        <Info label="Số container" value={order.so_cont} />
-        <Info label="Số seal" value={order.so_seal} />
         <Info label="Hàng hóa" value={hangHoa?.ten} />
-        <Info label="Khối lượng" value={order.khoi_luong} />
         <Info label="Kích thước" value={order.kich_thuoc} />
         <Info label="Nơi lấy cont/hàng" value={noiLay?.ten} />
         <Info label="Nơi đóng/giao" value={noiDong?.ten} />
@@ -94,6 +104,19 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             <p className="font-medium text-slate-900">{order.ghi_chu_van_chuyen}</p>
           </div>
         )}
+      </div>
+
+      <div className="mb-4">
+        <ContainerSection
+          donHangId={order.id}
+          initialRows={containerRows ?? []}
+          loaiContainerList={loaiContainerList ?? []}
+          canEdit={canEditContainer}
+        />
+      </div>
+
+      <div className="mb-4">
+        <ToKhaiSection donHangId={order.id} initialRows={toKhaiRows ?? []} canEdit={canEditToKhai} />
       </div>
 
       <div className="mb-4">

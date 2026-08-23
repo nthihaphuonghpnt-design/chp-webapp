@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import DanhMucManager, { type FieldConfig, type Row } from "@/components/danh-muc/DanhMucManager";
 
 const fields: FieldConfig[] = [
+  { key: "ma_dia_diem", label: "Mã địa điểm", type: "text" },
   { key: "ten", label: "Tên địa điểm", type: "text", required: true },
   {
     key: "loai",
@@ -11,12 +12,14 @@ const fields: FieldConfig[] = [
     options: [
       { value: "Cảng", label: "Cảng" },
       { value: "Kho", label: "Kho" },
+      { value: "Depot", label: "Depot" },
       { value: "Nơi giao nhận", label: "Nơi giao nhận" },
       { value: "Khác", label: "Khác" },
     ],
   },
+  { key: "khu_vuc", label: "Khu vực", type: "text" },
   { key: "dia_chi", label: "Địa chỉ", type: "text" },
-  { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+  { key: "ghi_chu", label: "Ghi chú", type: "textarea", showInList: false },
 ];
 
 export default async function DiaDiemPage() {
@@ -32,6 +35,8 @@ export default async function DiaDiemPage() {
       fields={fields}
       initialRows={(data ?? []) as Row[]}
       canEdit={user?.phong_ban === "Kế toán"}
+      searchField="ten"
+      extraSearchFields={["ma_dia_diem"]}
     />
   );
 }
