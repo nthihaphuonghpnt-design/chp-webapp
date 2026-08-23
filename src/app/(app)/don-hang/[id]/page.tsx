@@ -86,6 +86,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <Info label="Loại đơn hàng" value={order.loai_don_hang} />
         <Info label="Loại kích cỡ" value={order.loai_kich_co} />
         <Info label="Đơn vị tính" value={order.dvt} />
+        <Info label="Số lượng" value={order.so_luong} />
         <Info label="Số vận đơn / booking" value={order.so_bl_bk} />
         <Info label="Số lô" value={order.so_lo} />
         <Info label="Hàng hóa" value={hangHoa?.ten} />

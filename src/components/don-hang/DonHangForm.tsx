@@ -48,6 +48,7 @@ export default function DonHangForm({
     loai_kich_co: initial?.loai_kich_co ?? "",
     loai_cont_hang_id: initial?.loai_cont_hang_id ?? "",
     dvt: initial?.dvt ?? "",
+    so_luong: initial?.so_luong?.toString() ?? "",
     so_bl_bk: initial?.so_bl_bk ?? "",
     so_lo: initial?.so_lo ?? "",
     hang_hoa_id: initial?.hang_hoa_id ?? "",
@@ -61,6 +62,7 @@ export default function DonHangForm({
     han_lenh_gio: initial?.han_lenh_gio ?? "",
     ghi_chu_van_chuyen: initial?.ghi_chu_van_chuyen ?? "",
     gia: initial?.gia?.toString() ?? "",
+    so_to_khai_ban_dau: "",
   });
 
   function set(key: keyof typeof values, value: string) {
@@ -79,11 +81,14 @@ export default function DonHangForm({
     setSaving(true);
     setError(null);
 
+    const { so_to_khai_ban_dau, ...donHangValues } = values;
+
     const payload: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(values)) {
+    for (const [key, value] of Object.entries(donHangValues)) {
       payload[key] = value === "" ? null : value;
     }
     if (payload.gia) payload.gia = Number(payload.gia);
+    if (payload.so_luong) payload.so_luong = Number(payload.so_luong);
 
     if (initial) {
       const { error: err } = await supabase.from("don_hang").update(payload).eq("id", initial.id);
@@ -109,11 +114,20 @@ export default function DonHangForm({
         .insert({ ...payload, nguoi_tao_id: nv?.id })
         .select()
         .single();
-      setSaving(false);
+
       if (err) {
+        setSaving(false);
         setError(err.message);
         return;
       }
+
+      if (so_to_khai_ban_dau.trim()) {
+        await supabase
+          .from("to_khai_hai_quan")
+          .insert({ don_hang_id: data.id, so_to_khai: so_to_khai_ban_dau.trim() });
+      }
+
+      setSaving(false);
       router.push(`/don-hang/${data.id}`);
       router.refresh();
     }
@@ -177,6 +191,24 @@ export default function DonHangForm({
             ))}
           </select>
         </Field>
+        <Field label="Số lượng" hint="VD: 3 (Cont), 500 (Kg)...">
+          <input
+            type="number"
+            step="any"
+            value={values.so_luong}
+            onChange={(e) => set("so_luong", e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        {!initial && (
+          <Field label="Số tờ khai (nếu đã có sẵn)" hint="Bỏ trống nếu chưa có — Chứng từ sẽ bổ sung sau">
+            <input
+              value={values.so_to_khai_ban_dau}
+              onChange={(e) => set("so_to_khai_ban_dau", e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        )}
       </Section>
 
       <Section title="Số chứng từ">
@@ -321,7 +353,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -329,6 +371,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
         {required && <span className="text-red-500"> *</span>}
       </label>
       {children}
+      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
