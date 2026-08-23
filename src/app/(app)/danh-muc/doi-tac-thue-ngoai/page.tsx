@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import DanhMucManager, { type FieldConfig, type Row } from "@/components/danh-muc/DanhMucManager";
 
 const fields: FieldConfig[] = [
+  { key: "ma_so_thue", label: "Mã số thuế", type: "text", hint: "Nhập rồi rời khỏi ô để tự động tra cứu tên, địa chỉ" },
   { key: "ten", label: "Tên đối tác", type: "text", required: true },
   {
     key: "nhom",
@@ -36,6 +37,7 @@ export default async function DoiTacThueNgoaiPage() {
       fields={fields}
       initialRows={(data ?? []) as Row[]}
       canEdit={user?.phong_ban === "Kế toán"}
+      taxLookup={{ taxField: "ma_so_thue", nameField: "ten", addressField: "dia_chi" }}
     />
   );
 }

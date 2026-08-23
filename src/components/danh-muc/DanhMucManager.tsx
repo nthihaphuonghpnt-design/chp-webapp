@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 
 export type FieldType = "text" | "textarea" | "select" | "tel" | "email";
@@ -18,6 +19,17 @@ export interface FieldConfig {
   options?: SelectOption[];
   /** Show as a column in the list view. Defaults to true. */
   showInList?: boolean;
+  /** Ghi chú nhỏ hiển thị dưới ô nhập trong form. */
+  hint?: string;
+}
+
+export interface TaxLookupConfig {
+  /** field key holding the tax code (mã số thuế) */
+  taxField: string;
+  /** field key to auto-fill with the company's registered name */
+  nameField: string;
+  /** field key to auto-fill with the company's registered address */
+  addressField: string;
 }
 
 export type Row = Record<string, unknown> & { id: string };
@@ -33,6 +45,8 @@ interface Props {
   statusLabels?: { active: string; inactive: string };
   /** The field to search/filter by (defaults to the first field). */
   searchField?: string;
+  /** Tra cứu tự động theo mã số thuế (Khách hàng, Nhà cung cấp, Đối tác thuê ngoài). */
+  taxLookup?: TaxLookupConfig;
 }
 
 export default function DanhMucManager({
@@ -44,6 +58,7 @@ export default function DanhMucManager({
   statusField = "dang_hoat_dong",
   statusLabels = { active: "Đang hoạt động", inactive: "Ngừng hoạt động" },
   searchField,
+  taxLookup,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
@@ -51,6 +66,11 @@ export default function DanhMucManager({
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState<{ success: number; errors: string[] } | null>(
+    null
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const supabase = useMemo(() => createClient(), []);
   const listFields = fields.filter((f) => f.showInList !== false);
@@ -133,19 +153,197 @@ export default function DanhMucManager({
     }
   }
 
+  async function handleDelete(row: Row) {
+    if (!canEdit) return;
+    const label = String(row[primaryField] ?? "mục này");
+    if (!window.confirm(`Xóa hẳn "${label}"? Thao tác này không thể hoàn tác.`)) return;
+
+    const { error: err } = await supabase.from(table).delete().eq("id", row.id);
+    if (err) {
+      if (err.code === "23503") {
+        window.alert(
+          `Không thể xóa "${label}" vì đang được dùng ở nơi khác trong hệ thống. Hãy chuyển sang "${statusLabels.inactive}" thay vì xóa.`
+        );
+      } else {
+        window.alert(`Không thể xóa: ${err.message}`);
+      }
+      return;
+    }
+    setRows((prev) => prev.filter((r) => r.id !== row.id));
+  }
+
+  function handleDownloadTemplate() {
+    const headers = fields.map((f) => f.label);
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Mẫu nhập");
+
+    const selectFields = fields.filter((f) => f.type === "select" && f.options?.length);
+    if (selectFields.length > 0) {
+      const guideRows: (string | undefined)[][] = [["Cột", "Giá trị hợp lệ (gõ đúng như liệt kê)"]];
+      selectFields.forEach((f) => guideRows.push([f.label, f.options?.map((o) => o.label).join(", ")]));
+      const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
+      XLSX.utils.book_append_sheet(wb, wsGuide, "Hướng dẫn");
+    }
+
+    XLSX.writeFile(wb, `mau-nhap-${table}.xlsx`);
+  }
+
+  function handleExportExcel() {
+    const data = filteredRows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      fields.forEach((f) => {
+        obj[f.label] = f.type === "select" ? optionLabel(f, row[f.key]) : (row[f.key] ?? "");
+      });
+      obj["Trạng thái"] = row[statusField] ? statusLabels.active : statusLabels.inactive;
+      return obj;
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Dữ liệu");
+    XLSX.writeFile(wb, `du-lieu-${table}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  async function handleImportFile(file: File) {
+    setImporting(true);
+    setImportSummary(null);
+
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+    const normalizedFields = fields.map((f) => ({ field: f, norm: f.label.trim().toLowerCase() }));
+    const records: Record<string, unknown>[] = [];
+    const rowErrors: string[] = [];
+
+    raw.forEach((rawRow, idx) => {
+      const rowNum = idx + 2;
+      const normalizedRow: Record<string, unknown> = {};
+      for (const key of Object.keys(rawRow)) {
+        normalizedRow[key.trim().toLowerCase()] = rawRow[key];
+      }
+
+      const record: Record<string, unknown> = { [statusField]: true };
+      let hasError = false;
+
+      for (const { field, norm } of normalizedFields) {
+        let value = String(normalizedRow[norm] ?? "").trim();
+
+        if (field.type === "select" && value) {
+          const opt = field.options?.find((o) => o.label.trim().toLowerCase() === value.toLowerCase());
+          if (!opt) {
+            rowErrors.push(`Dòng ${rowNum}: giá trị "${value}" ở cột "${field.label}" không hợp lệ.`);
+            hasError = true;
+            continue;
+          }
+          value = opt.value;
+        }
+
+        if (field.required && !value) {
+          rowErrors.push(`Dòng ${rowNum}: thiếu "${field.label}".`);
+          hasError = true;
+          continue;
+        }
+
+        record[field.key] = value === "" ? null : value;
+      }
+
+      if (!hasError) records.push(record);
+    });
+
+    if (records.length === 0) {
+      setImportSummary({ success: 0, errors: rowErrors.length ? rowErrors : ["File không có dòng dữ liệu hợp lệ."] });
+      setImporting(false);
+      return;
+    }
+
+    const { data, error: err } = await supabase.from(table).insert(records).select();
+    setImporting(false);
+
+    if (err) {
+      setImportSummary({ success: 0, errors: [...rowErrors, `Lỗi khi lưu vào hệ thống: ${err.message}`] });
+      return;
+    }
+
+    setRows((prev) => [...((data as Row[]) ?? []), ...prev]);
+    setImportSummary({ success: data?.length ?? 0, errors: rowErrors });
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {canEdit && (
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={openNew}
-            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm active:bg-blue-700"
+            onClick={handleExportExcel}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
           >
-            + Thêm mới
+            Xuất Excel
           </button>
-        )}
+          {canEdit && (
+            <>
+              <button
+                onClick={handleDownloadTemplate}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+              >
+                Tải mẫu Excel
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+              >
+                {importing ? "Đang nhập..." : "Nhập từ Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImportFile(file);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={openNew}
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm active:bg-blue-700"
+              >
+                + Thêm mới
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      {importSummary && (
+        <div
+          className={`mb-4 rounded-lg border p-3 text-sm ${
+            importSummary.errors.length > 0
+              ? "border-amber-300 bg-amber-50 text-amber-800"
+              : "border-green-300 bg-green-50 text-green-800"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium">
+              Đã nhập thành công {importSummary.success} dòng
+              {importSummary.errors.length > 0 ? `, ${importSummary.errors.length} dòng lỗi:` : "."}
+            </p>
+            <button onClick={() => setImportSummary(null)} className="text-xs underline">
+              Đóng
+            </button>
+          </div>
+          {importSummary.errors.length > 0 && (
+            <ul className="mt-2 list-disc space-y-0.5 pl-5">
+              {importSummary.errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <input
         value={query}
@@ -182,12 +380,20 @@ export default function DanhMucManager({
                 {row[statusField] ? statusLabels.active : statusLabels.inactive}
               </button>
               {canEdit && (
-                <button
-                  onClick={() => openEdit(row)}
-                  className="text-sm font-medium text-blue-600"
-                >
-                  Sửa
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => openEdit(row)}
+                    className="text-sm font-medium text-blue-600"
+                  >
+                    Sửa
+                  </button>
+                  <button
+                    onClick={() => handleDelete(row)}
+                    className="text-sm font-medium text-red-600"
+                  >
+                    Xóa
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -234,12 +440,20 @@ export default function DanhMucManager({
                 </td>
                 {canEdit && (
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => openEdit(row)}
-                      className="text-sm font-medium text-blue-600 hover:underline"
-                    >
-                      Sửa
-                    </button>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => openEdit(row)}
+                        className="text-sm font-medium text-blue-600 hover:underline"
+                      >
+                        Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDelete(row)}
+                        className="text-sm font-medium text-red-600 hover:underline"
+                      >
+                        Xóa
+                      </button>
+                    </div>
                   </td>
                 )}
               </tr>
@@ -261,6 +475,7 @@ export default function DanhMucManager({
           initial={editing}
           saving={saving}
           error={error}
+          taxLookup={taxLookup}
           onCancel={() => {
             setShowForm(false);
             setEditing(null);
@@ -273,11 +488,26 @@ export default function DanhMucManager({
   );
 }
 
+async function lookupTaxCode(taxCode: string): Promise<{ name: string; address: string } | null> {
+  try {
+    const res = await fetch(`https://api.vietqr.io/v2/business/${encodeURIComponent(taxCode)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json?.code === "00" && json?.data) {
+      return { name: json.data.name ?? "", address: json.data.address ?? "" };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function FormModal({
   fields,
   initial,
   saving,
   error,
+  taxLookup,
   onCancel,
   onSubmit,
 }: {
@@ -285,6 +515,7 @@ function FormModal({
   initial: Row | null;
   saving: boolean;
   error: string | null;
+  taxLookup?: TaxLookupConfig;
   onCancel: () => void;
   onSubmit: (values: Record<string, string>) => void;
 }) {
@@ -295,9 +526,33 @@ function FormModal({
     }
     return v;
   });
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupMsg, setLookupMsg] = useState<string | null>(null);
 
   function set(key: string, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleTaxBlur() {
+    if (!taxLookup) return;
+    const code = values[taxLookup.taxField]?.trim();
+    if (!code || !/^\d{10}(\d{3})?$/.test(code)) return;
+
+    setLookingUp(true);
+    setLookupMsg(null);
+    const result = await lookupTaxCode(code);
+    setLookingUp(false);
+
+    if (!result || !result.name) {
+      setLookupMsg("Không tìm thấy thông tin cho mã số thuế này — vui lòng nhập tay.");
+      return;
+    }
+    setValues((prev) => ({
+      ...prev,
+      [taxLookup.nameField]: result.name || prev[taxLookup.nameField],
+      [taxLookup.addressField]: result.address || prev[taxLookup.addressField],
+    }));
+    setLookupMsg("Đã tự động điền tên và địa chỉ — anh kiểm tra lại trước khi lưu.");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -350,8 +605,18 @@ function FormModal({
                   required={f.required}
                   value={values[f.key]}
                   onChange={(e) => set(f.key, e.target.value)}
+                  onBlur={taxLookup?.taxField === f.key ? handleTaxBlur : undefined}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
                 />
+              )}
+              {f.hint && !(taxLookup?.taxField === f.key && (lookingUp || lookupMsg)) && (
+                <p className="mt-1 text-xs text-slate-400">{f.hint}</p>
+              )}
+              {taxLookup?.taxField === f.key && lookingUp && (
+                <p className="mt-1 text-xs text-slate-400">Đang tra cứu...</p>
+              )}
+              {taxLookup?.taxField === f.key && lookupMsg && !lookingUp && (
+                <p className="mt-1 text-xs text-slate-500">{lookupMsg}</p>
               )}
             </div>
           ))}

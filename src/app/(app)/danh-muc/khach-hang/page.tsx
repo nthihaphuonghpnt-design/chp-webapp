@@ -3,9 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import DanhMucManager, { type FieldConfig, type Row } from "@/components/danh-muc/DanhMucManager";
 
 const fields: FieldConfig[] = [
+  { key: "ma_so_thue", label: "Mã số thuế", type: "text", hint: "Nhập rồi rời khỏi ô để tự động tra cứu tên, địa chỉ" },
   { key: "ten_day_du", label: "Tên đầy đủ", type: "text", required: true },
   { key: "ten_viet_tat", label: "Tên viết tắt", type: "text" },
-  { key: "ma_so_thue", label: "Mã số thuế", type: "text" },
   { key: "dia_chi", label: "Địa chỉ", type: "text", showInList: false },
   { key: "nguoi_lien_he", label: "Người liên hệ", type: "text", showInList: false },
   { key: "dien_thoai", label: "Điện thoại", type: "tel" },
@@ -27,6 +27,7 @@ export default async function KhachHangPage() {
       initialRows={(data ?? []) as Row[]}
       canEdit={user?.phong_ban === "Kế toán"}
       searchField="ten_day_du"
+      taxLookup={{ taxField: "ma_so_thue", nameField: "ten_day_du", addressField: "dia_chi" }}
     />
   );
 }

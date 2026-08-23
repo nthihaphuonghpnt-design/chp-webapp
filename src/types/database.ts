@@ -43,6 +43,7 @@ export interface KhachHang {
 export interface NhaCungCap {
   id: string;
   ten: string;
+  ma_so_thue: string | null;
   dia_chi: string | null;
   nguoi_lien_he: string | null;
   dien_thoai: string | null;
@@ -62,6 +63,7 @@ export type NhomDoiTacThueNgoai =
 export interface DoiTacThueNgoai {
   id: string;
   ten: string;
+  ma_so_thue: string | null;
   nhom: NhomDoiTacThueNgoai;
   dia_chi: string | null;
   nguoi_lien_he: string | null;
