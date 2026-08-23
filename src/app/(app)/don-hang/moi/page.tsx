@@ -1,15 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageDonHang } from "@/lib/permissions";
 import DonHangForm from "@/components/don-hang/DonHangForm";
 
 export default async function DonHangMoiPage() {
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  if (user?.phong_ban !== "Sale") {
+  if (!canManageDonHang(user?.phong_ban)) {
     return (
       <div className="mx-auto max-w-xl px-4 py-10 text-center">
-        <p className="text-slate-600">Chỉ Sale mới được tạo đơn hàng mới.</p>
+        <p className="text-slate-600">Bạn không có quyền tạo đơn hàng mới.</p>
       </div>
     );
   }

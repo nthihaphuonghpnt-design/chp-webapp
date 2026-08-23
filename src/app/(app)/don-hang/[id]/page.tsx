@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageDonHang } from "@/lib/permissions";
 import StatusBadge from "@/components/don-hang/StatusBadge";
 import ConfirmButtons from "@/components/don-hang/ConfirmButtons";
 import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSection";
@@ -51,7 +52,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <Link href="/don-hang" className="text-sm font-medium text-blue-600">
           ← Danh sách đơn hàng
         </Link>
-        {user?.phong_ban === "Sale" && (
+        {canManageDonHang(user?.phong_ban) && (
           <Link href={`/don-hang/${order.id}/sua`} className="ml-auto text-sm font-medium text-blue-600">
             Sửa thông tin
           </Link>

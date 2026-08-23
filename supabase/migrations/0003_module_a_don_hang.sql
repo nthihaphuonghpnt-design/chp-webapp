@@ -10,9 +10,15 @@ create table if not exists so_don_hang_seq (
   last_seq int not null default 0
 );
 
+-- Bang noi bo, chi duoc ghi qua trigger generate_so_don_hang() (security definer)
+-- ben duoi — khong cap quyen truy cap truc tiep cho client.
+alter table so_don_hang_seq enable row level security;
+
 create or replace function generate_so_don_hang()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   y int := extract(year from now());
