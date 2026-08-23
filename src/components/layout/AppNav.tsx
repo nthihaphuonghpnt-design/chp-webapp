@@ -16,6 +16,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Trang chủ" },
   { href: "/don-hang", label: "Đơn hàng" },
+  { href: "/chi-phi/dinh-phi-thang", label: "Định phí tháng", roles: ["Kế toán", "Giám đốc"] },
   { href: "/danh-muc", label: "Danh mục dùng chung" },
 ];
 

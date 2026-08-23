@@ -9,6 +9,8 @@ import ContainerSection from "@/components/don-hang/ContainerSection";
 import ToKhaiSection from "@/components/don-hang/ToKhaiSection";
 import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSection";
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
+import ChiPhiSection from "@/components/don-hang/ChiPhiSection";
+import LineItemsSection from "@/components/don-hang/LineItemsSection";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,6 +25,11 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: dinhKemRows },
     { data: diaDiemList },
     { data: loaiContainerList },
+    { data: chiPhiRows },
+    { data: phuThuRows },
+    { data: chiPhiGiaoNhanRows },
+    { data: loaiChiPhiList },
+    { data: nhaCungCapList },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -37,6 +44,11 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("dinh_kem").select("*").eq("don_hang_id", id).order("thoi_gian_upload", { ascending: false }),
     supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("phat_sinh_chi_phi").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
+    supabase.from("phu_thu").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
+    supabase.from("chi_phi_giao_nhan").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
+    supabase.from("loai_chi_phi").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
 
   if (!order) notFound();
@@ -126,6 +138,49 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           initialRows={chiTietRows ?? []}
           diaDiemList={diaDiemList ?? []}
           canEdit={canEditVanChuyen}
+        />
+      </div>
+
+      <div className="mb-4">
+        <ChiPhiSection
+          donHangId={order.id}
+          soDonHang={order.so_don_hang}
+          initialRows={chiPhiRows ?? []}
+          loaiChiPhiList={loaiChiPhiList ?? []}
+          nhaCungCapList={nhaCungCapList ?? []}
+          phongBan={user?.phong_ban ?? ""}
+        />
+      </div>
+
+      <div className="mb-4">
+        <LineItemsSection
+          table="phu_thu"
+          donHangId={order.id}
+          soDonHang={order.so_don_hang}
+          title="Phụ thu khách hàng"
+          fields={[
+            { key: "loai_phu_thu", label: "Loại phụ thu", type: "text", required: true },
+            { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
+            { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+          ]}
+          initialRows={phuThuRows ?? []}
+          canEdit={user?.phong_ban === "Sale" || user?.phong_ban === "Kế toán"}
+        />
+      </div>
+
+      <div className="mb-4">
+        <LineItemsSection
+          table="chi_phi_giao_nhan"
+          donHangId={order.id}
+          soDonHang={order.so_don_hang}
+          title="Chi phí giao nhận / chuyến"
+          fields={[
+            { key: "loai", label: "Loại", type: "text", required: true },
+            { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
+            { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+          ]}
+          initialRows={chiPhiGiaoNhanRows ?? []}
+          canEdit={user?.phong_ban === "Kế toán"}
         />
       </div>
 

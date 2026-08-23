@@ -255,6 +255,62 @@ export interface DinhKem {
   ghi_chu: string | null;
 }
 
+export type TrangThaiChiPhi = "Nháp" | "Chờ duyệt" | "Đã duyệt" | "Từ chối";
+
+export interface PhatSinhChiPhi {
+  id: string;
+  don_hang_id: string;
+  loai_chi_phi_id: string | null;
+  nha_cung_cap_id: string | null;
+  so_luong: number | null;
+  don_gia: number | null;
+  gia_von_buy: number | null;
+  gia_ban_sell: number | null;
+  vat_percent: number | null;
+  tien_thue: number;
+  tong_tien: number;
+  noi_bo: boolean;
+  chi_ho: boolean;
+  tt_thue: boolean;
+  ngay_phat_sinh: string;
+  nguoi_nhap_id: string | null;
+  nguoi_duyet_id: string | null;
+  trang_thai: TrangThaiChiPhi;
+  ghi_chu: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhuThu {
+  id: string;
+  don_hang_id: string;
+  loai_phu_thu: string | null;
+  thanh_tien: number | null;
+  ghi_chu: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChiPhiGiaoNhan {
+  id: string;
+  don_hang_id: string;
+  loai: string | null;
+  thanh_tien: number | null;
+  ghi_chu: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DinhPhiThang {
+  id: string;
+  thang_nam: string;
+  khoan_muc: string;
+  so_tien: number | null;
+  dang_hoat_dong: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Database type so the Supabase client stays type-safe without
 // requiring the full generated schema (can be replaced by `supabase gen types` later).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 
-export type FieldType = "text" | "textarea" | "select" | "tel" | "email";
+export type FieldType = "text" | "textarea" | "select" | "tel" | "email" | "number";
 
 export interface SelectOption {
   value: string;
@@ -606,6 +606,7 @@ function FormModal({
               ) : (
                 <input
                   type={f.type}
+                  step={f.type === "number" ? "any" : undefined}
                   required={f.required}
                   value={values[f.key]}
                   onChange={(e) => set(f.key, e.target.value)}
