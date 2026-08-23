@@ -33,7 +33,7 @@ export default async function XeVanChuyenPage() {
       title="Xe vận chuyển"
       fields={fields}
       initialRows={(rows ?? []) as Row[]}
-      canEdit={user?.phong_ban === "Kế toán"}
+      canEdit={!!user}
       searchField="so_xe"
     />
   );

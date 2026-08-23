@@ -36,7 +36,7 @@ export default async function DoiTacThueNgoaiPage() {
       title="Đối tác thuê ngoài"
       fields={fields}
       initialRows={(data ?? []) as Row[]}
-      canEdit={user?.phong_ban === "Kế toán"}
+      canEdit={!!user}
       taxLookup={{ taxField: "ma_so_thue", nameField: "ten", addressField: "dia_chi" }}
     />
   );

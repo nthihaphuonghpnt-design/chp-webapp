@@ -19,7 +19,7 @@ export default async function LoaiContainerPage() {
       title="Loại container"
       fields={fields}
       initialRows={(data ?? []) as Row[]}
-      canEdit={user?.phong_ban === "Kế toán"}
+      canEdit={!!user}
     />
   );
 }

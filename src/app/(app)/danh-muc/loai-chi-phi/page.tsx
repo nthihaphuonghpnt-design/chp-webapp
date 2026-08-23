@@ -20,7 +20,7 @@ export default async function LoaiChiPhiPage() {
       title="Loại chi phí"
       fields={fields}
       initialRows={(data ?? []) as Row[]}
-      canEdit={user?.phong_ban === "Kế toán"}
+      canEdit={!!user}
     />
   );
 }

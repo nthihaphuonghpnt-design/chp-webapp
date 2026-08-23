@@ -34,7 +34,7 @@ export default async function DiaDiemPage() {
       title="Địa điểm"
       fields={fields}
       initialRows={(data ?? []) as Row[]}
-      canEdit={user?.phong_ban === "Kế toán"}
+      canEdit={!!user}
       searchField="ten"
       extraSearchFields={["ma_dia_diem"]}
     />

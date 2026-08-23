@@ -24,7 +24,7 @@ export default async function NhaCungCapPage() {
       title="Nhà cung cấp / Đối tác"
       fields={fields}
       initialRows={(data ?? []) as Row[]}
-      canEdit={user?.phong_ban === "Kế toán"}
+      canEdit={!!user}
       taxLookup={{ taxField: "ma_so_thue", nameField: "ten", addressField: "dia_chi" }}
     />
   );

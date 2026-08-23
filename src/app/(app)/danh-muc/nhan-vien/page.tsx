@@ -24,6 +24,8 @@ export default async function NhanVienPage() {
     { key: "so_dien_thoai", label: "Số điện thoại", type: "tel" },
   ];
 
+  const canEdit = user?.phong_ban === "Kế toán" || user?.phong_ban === "Giám đốc";
+
   return (
     <div>
       <DanhMucManager
@@ -31,12 +33,12 @@ export default async function NhanVienPage() {
         title="Nhân viên"
         fields={fields}
         initialRows={(rows ?? []) as Row[]}
-        canEdit={user?.phong_ban === "Kế toán"}
+        canEdit={canEdit}
         searchField="ho_ten"
         statusField="dang_lam_viec"
         statusLabels={{ active: "Đang làm việc", inactive: "Nghỉ việc" }}
       />
-      {user?.phong_ban === "Kế toán" && (
+      {canEdit && (
         <p className="mx-auto -mt-2 max-w-5xl px-4 pb-6 text-xs text-slate-400">
           Lưu ý: thêm nhân viên ở đây chỉ tạo hồ sơ. Để nhân viên đăng nhập được, vào Supabase
           Dashboard → Authentication → Add user, tạo tài khoản với đúng email đã nhập ở đây —

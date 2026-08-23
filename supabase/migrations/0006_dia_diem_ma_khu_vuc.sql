@@ -19,7 +19,14 @@ end $$;
 alter table dia_diem add constraint dia_diem_loai_check
   check (loai in ('Cảng', 'Kho', 'Depot', 'Nơi giao nhận', 'Khác'));
 
-create unique index if not exists dia_diem_ma_dia_diem_key on dia_diem (ma_dia_diem) where ma_dia_diem is not null;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'dia_diem_ma_dia_diem_unique'
+  ) then
+    alter table dia_diem add constraint dia_diem_ma_dia_diem_unique unique (ma_dia_diem);
+  end if;
+end $$;
 
 -- ----------------------------------------------------------------------------
 -- Nap danh sach dia diem (kho / cang / depot) thuc te
