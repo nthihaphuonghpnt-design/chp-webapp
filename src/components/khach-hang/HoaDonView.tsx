@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
@@ -316,6 +316,8 @@ function HoaDonForm({
     ghi_chu: initial?.ghi_chu ?? "",
   });
   const [selectedDonHang, setSelectedDonHang] = useState<string[]>(initialDonHangIds);
+  const [goiYTong, setGoiYTong] = useState<number | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   function set(key: keyof typeof values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -324,6 +326,23 @@ function HoaDonForm({
   function toggleDonHang(id: string) {
     setSelectedDonHang((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    if (selectedDonHang.length === 0) {
+      Promise.resolve().then(() => {
+        if (!cancelled) setGoiYTong(null);
+      });
+    } else {
+      supabase.rpc("tong_sell_khong_chi_ho", { p_don_hang_ids: selectedDonHang }).then(({ data }) => {
+        if (!cancelled) setGoiYTong(typeof data === "number" ? data : null);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDonHang.join(",")]);
 
   const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }));
   const donHangCuaKh = donHangList.filter((d) => !values.khach_hang_id || d.khach_hang_id === values.khach_hang_id);
@@ -355,6 +374,16 @@ function HoaDonForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Tổng tiền trước thuế</label>
             <input type="number" step="any" value={values.tong_tien_truoc_thue} onChange={(e) => set("tong_tien_truoc_thue", e.target.value)} className={cls} />
+            {goiYTong !== null && (
+              <p className="mt-1 text-xs text-blue-600">
+                Gợi ý (đã bán cho khách, không gồm chi hộ): {goiYTong.toLocaleString("en-US")}
+                {values.tong_tien_truoc_thue !== String(goiYTong) && (
+                  <button type="button" onClick={() => set("tong_tien_truoc_thue", String(goiYTong))} className="ml-2 underline">
+                    Dùng số này
+                  </button>
+                )}
+              </p>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">VAT %</label>
