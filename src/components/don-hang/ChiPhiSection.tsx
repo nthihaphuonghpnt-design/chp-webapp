@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import ChiPhiBulkForm, { type BulkRowValues } from "@/components/don-hang/ChiPhiBulkForm";
 import type { BangGiaKhachHang, ChiTietVanChuyen, PhatSinhChiPhi } from "@/types/database";
 
 interface Option {
@@ -45,6 +46,7 @@ export default function ChiPhiSection({
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<PhatSinhChiPhi[]>(initialRows);
   const [showForm, setShowForm] = useState(false);
+  const [showBulkForm, setShowBulkForm] = useState(false);
   const [editing, setEditing] = useState<PhatSinhChiPhi | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -112,6 +114,35 @@ export default function ChiPhiSection({
         window.alert(error.message);
       }
     }
+  }
+
+  async function handleBulkSave(bulkRows: BulkRowValues[]) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+
+    const records = bulkRows.map((r) => ({
+      don_hang_id: donHangId,
+      loai_chi_phi_id: r.loai_chi_phi_id,
+      nha_cung_cap_id: r.nha_cung_cap_id,
+      doi_tac_thue_ngoai_id: r.doi_tac_thue_ngoai_id,
+      chi_tiet_van_chuyen_id: r.chi_tiet_van_chuyen_id,
+      gia_von_buy: Number(r.gia_von_buy),
+      gia_ban_sell: r.gia_ban_sell ? Number(r.gia_ban_sell) : null,
+      noi_bo: r.noi_bo,
+      chi_ho: r.chi_ho,
+      nguoi_nhap_id: nv?.id,
+      trang_thai: "Chờ duyệt",
+    }));
+
+    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select();
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setRows((prev) => [...((data as PhatSinhChiPhi[]) ?? []), ...prev]);
+    setShowBulkForm(false);
   }
 
   async function handleDelete(row: PhatSinhChiPhi) {
@@ -308,6 +339,12 @@ export default function ChiPhiSection({
                 />
               </label>
               <button
+                onClick={() => setShowBulkForm(true)}
+                className="rounded-lg border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-700"
+              >
+                Nhập nhanh nhiều chi phí
+              </button>
+              <button
                 onClick={() => {
                   setEditing(null);
                   setShowForm(true);
@@ -407,6 +444,18 @@ export default function ChiPhiSection({
           canSeeSell={canSeeSell}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {showBulkForm && (
+        <ChiPhiBulkForm
+          loaiChiPhiList={loaiChiPhiList}
+          nhaCungCapList={nhaCungCapList}
+          doiTacThueNgoaiList={doiTacThueNgoaiList}
+          chiTietVanChuyenList={chiTietVanChuyenList}
+          canSeeSell={canSeeSell}
+          onCancel={() => setShowBulkForm(false)}
+          onSave={handleBulkSave}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import type { ChiTietVanChuyen } from "@/types/database";
@@ -34,6 +35,7 @@ export default function ChiTietVanChuyenSection({
   goiYDiem?: { diem_1_id: string | null; diem_2_id: string | null; diem_3_id: string | null };
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [rows, setRows] = useState<ChiTietVanChuyen[]>(initialRows);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ChiTietVanChuyen | null>(null);
@@ -64,12 +66,14 @@ export default function ChiTietVanChuyenSection({
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as ChiTietVanChuyen) : r)));
         setShowForm(false);
+        router.refresh();
       }
     } else {
       const { data, error } = await supabase.from("chi_tiet_van_chuyen").insert(payload).select().single();
       if (!error && data) {
         setRows((prev) => [...prev, data as ChiTietVanChuyen]);
         setShowForm(false);
+        router.refresh();
       }
     }
   }
@@ -77,7 +81,10 @@ export default function ChiTietVanChuyenSection({
   async function handleDelete(row: ChiTietVanChuyen) {
     if (!window.confirm("Xóa chặng vận chuyển này?")) return;
     const { error } = await supabase.from("chi_tiet_van_chuyen").delete().eq("id", row.id);
-    if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    if (!error) {
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      router.refresh();
+    }
   }
 
   return (
