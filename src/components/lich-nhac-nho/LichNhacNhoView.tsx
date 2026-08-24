@@ -60,6 +60,7 @@ export default function LichNhacNhoView({
   nhanVienList,
   donHangList,
   currentUserId,
+  currentPhongBan,
 }: {
   thangNam: string;
   phongBanFilter: string;
@@ -68,6 +69,7 @@ export default function LichNhacNhoView({
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
   currentUserId?: string;
+  currentPhongBan?: string;
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -101,7 +103,10 @@ export default function LichNhacNhoView({
   }
 
   function canEditRow(row: Row) {
-    return row.nguoi_phu_trach_id === currentUserId || row.nguoi_tao_id === currentUserId;
+    if (row.nguoi_phu_trach_id === currentUserId || row.nguoi_tao_id === currentUserId) return true;
+    if (currentPhongBan === "Kế toán") return true;
+    const pb = one(row.phong_ban)?.ten ?? phongBanTen(row.phong_ban_id);
+    return pb === currentPhongBan;
   }
 
   function phongBanTen(id: string) {

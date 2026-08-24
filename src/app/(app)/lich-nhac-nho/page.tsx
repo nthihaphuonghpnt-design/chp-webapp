@@ -45,6 +45,7 @@ export default async function LichNhacNhoPage({
       nhanVienList={nhanVienList ?? []}
       donHangList={donHangList ?? []}
       currentUserId={user?.id}
+      currentPhongBan={user?.phong_ban}
     />
   );
 }
