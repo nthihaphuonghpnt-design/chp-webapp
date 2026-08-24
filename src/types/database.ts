@@ -220,10 +220,6 @@ export interface ChiTietVanChuyen {
   diem_1_id: string | null;
   diem_2_id: string | null;
   diem_3_id: string | null;
-  tien_vc_noi_bo: number | null;
-  tien_vc_thue_ngoai: number | null;
-  tien_thue: number | null;
-  phu_thu: number | null;
   trang_thai: TrangThaiVanChuyen;
   created_at: string;
   updated_at: string;
@@ -265,6 +261,8 @@ export interface PhatSinhChiPhi {
   don_hang_id: string;
   loai_chi_phi_id: string | null;
   nha_cung_cap_id: string | null;
+  doi_tac_thue_ngoai_id: string | null;
+  chi_tiet_van_chuyen_id: string | null;
   so_luong: number | null;
   don_gia: number | null;
   gia_von_buy: number | null;
@@ -279,6 +277,8 @@ export interface PhatSinhChiPhi {
   nguoi_nhap_id: string | null;
   nguoi_duyet_id: string | null;
   trang_thai: TrangThaiChiPhi;
+  tinh_trang_thanh_toan: TinhTrangThanhToan;
+  so_tien_da_thanh_toan: number | null;
   ghi_chu: string | null;
   created_at: string;
   updated_at: string;
@@ -317,7 +317,6 @@ export interface DonThueNgoai {
   noi_dung: string | null;
   gia_von_buy: number | null;
   gia_ban_sell: number | null;
-  so_xe_romooc_ben_thue: string | null;
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;
   ngay_thue: string;

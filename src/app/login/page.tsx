@@ -16,17 +16,22 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (err) {
-      setError("Sai email hoặc mật khẩu. Vui lòng thử lại.");
+      if (err) {
+        setError("Sai email hoặc mật khẩu. Vui lòng thử lại.");
+        setLoading(false);
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Không kết nối được tới máy chủ. Kiểm tra lại mạng (Wi-Fi/dữ liệu di động) rồi thử lại.");
       setLoading(false);
-      return;
     }
-
-    router.push("/");
-    router.refresh();
   }
 
   return (

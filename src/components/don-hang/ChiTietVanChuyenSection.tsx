@@ -25,11 +25,13 @@ export default function ChiTietVanChuyenSection({
   initialRows,
   diaDiemList,
   canEdit,
+  goiYDiem,
 }: {
   donHangId: string;
   initialRows: ChiTietVanChuyen[];
   diaDiemList: DiaDiemOption[];
   canEdit: boolean;
+  goiYDiem?: { diem_1_id: string | null; diem_2_id: string | null; diem_3_id: string | null };
 }) {
   const supabase = createClient();
   const [rows, setRows] = useState<ChiTietVanChuyen[]>(initialRows);
@@ -49,11 +51,7 @@ export default function ChiTietVanChuyenSection({
   async function handleSave(values: Record<string, string>) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
     for (const [k, v] of Object.entries(values)) {
-      if (["tien_vc_noi_bo", "tien_vc_thue_ngoai", "tien_thue", "phu_thu"].includes(k)) {
-        payload[k] = v === "" ? null : Number(v);
-      } else {
-        payload[k] = v === "" ? null : v;
-      }
+      payload[k] = v === "" ? null : v;
     }
 
     if (editing) {
@@ -127,6 +125,7 @@ export default function ChiTietVanChuyenSection({
         <ChiTietForm
           initial={editing}
           diaDiemList={diaDiemList}
+          goiYDiem={goiYDiem}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
@@ -138,11 +137,13 @@ export default function ChiTietVanChuyenSection({
 function ChiTietForm({
   initial,
   diaDiemList,
+  goiYDiem,
   onCancel,
   onSave,
 }: {
   initial: ChiTietVanChuyen | null;
   diaDiemList: DiaDiemOption[];
+  goiYDiem?: { diem_1_id: string | null; diem_2_id: string | null; diem_3_id: string | null };
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
@@ -151,13 +152,9 @@ function ChiTietForm({
     dieu_dong_xe: initial?.dieu_dong_xe ?? "",
     so_xe: initial?.so_xe ?? "",
     tai_xe_cty_thue: initial?.tai_xe_cty_thue ?? "",
-    diem_1_id: initial?.diem_1_id ?? "",
-    diem_2_id: initial?.diem_2_id ?? "",
-    diem_3_id: initial?.diem_3_id ?? "",
-    tien_vc_noi_bo: initial?.tien_vc_noi_bo?.toString() ?? "",
-    tien_vc_thue_ngoai: initial?.tien_vc_thue_ngoai?.toString() ?? "",
-    tien_thue: initial?.tien_thue?.toString() ?? "",
-    phu_thu: initial?.phu_thu?.toString() ?? "",
+    diem_1_id: initial?.diem_1_id ?? goiYDiem?.diem_1_id ?? "",
+    diem_2_id: initial?.diem_2_id ?? goiYDiem?.diem_2_id ?? "",
+    diem_3_id: initial?.diem_3_id ?? goiYDiem?.diem_3_id ?? "",
     trang_thai: initial?.trang_thai ?? "Đã duyệt lệnh",
   });
 
@@ -245,23 +242,12 @@ function ChiTietForm({
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tiền VC nội bộ</label>
-            <input type="number" step="any" value={values.tien_vc_noi_bo} onChange={(e) => set("tien_vc_noi_bo", e.target.value)} className={cls} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tiền VC thuê ngoài</label>
-            <input type="number" step="any" value={values.tien_vc_thue_ngoai} onChange={(e) => set("tien_vc_thue_ngoai", e.target.value)} className={cls} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tiền thuê</label>
-            <input type="number" step="any" value={values.tien_thue} onChange={(e) => set("tien_thue", e.target.value)} className={cls} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Phụ thu</label>
-            <input type="number" step="any" value={values.phu_thu} onChange={(e) => set("phu_thu", e.target.value)} className={cls} />
-          </div>
         </div>
+
+        <p className="mt-3 text-xs text-slate-400">
+          Tiền cước/phí của chặng này (nội bộ hoặc thuê ngoài) nhập ở mục &quot;Chi phí phát
+          sinh&quot; bên dưới — chọn &quot;Gắn với chặng vận chuyển&quot; đúng chặng vừa lưu.
+        </p>
 
         <div className="mt-6 flex gap-3">
           <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">

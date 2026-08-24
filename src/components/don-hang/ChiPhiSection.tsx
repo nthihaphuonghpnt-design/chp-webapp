@@ -4,13 +4,15 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
-import type { BangGiaKhachHang, PhatSinhChiPhi } from "@/types/database";
+import type { BangGiaKhachHang, ChiTietVanChuyen, PhatSinhChiPhi } from "@/types/database";
 
 interface Option {
   id: string;
   ten: string;
   ma?: string | null;
 }
+
+const TT_THANH_TOAN = ["Chưa thanh toán", "Một phần", "Đã đủ"];
 
 const TRANG_THAI_COLOR: Record<string, string> = {
   "Nháp": "bg-slate-200 text-slate-600",
@@ -25,6 +27,8 @@ export default function ChiPhiSection({
   initialRows,
   loaiChiPhiList,
   nhaCungCapList,
+  doiTacThueNgoaiList,
+  chiTietVanChuyenList,
   bangGiaList,
   phongBan,
 }: {
@@ -33,6 +37,8 @@ export default function ChiPhiSection({
   initialRows: PhatSinhChiPhi[];
   loaiChiPhiList: Option[];
   nhaCungCapList: Option[];
+  doiTacThueNgoaiList: Option[];
+  chiTietVanChuyenList: ChiTietVanChuyen[];
   bangGiaList: BangGiaKhachHang[];
   phongBan: string;
 }) {
@@ -55,13 +61,20 @@ export default function ChiPhiSection({
   function nccTen(id: string | null) {
     return nhaCungCapList.find((n) => n.id === id)?.ten ?? "—";
   }
+  function doiTacTen(id: string | null) {
+    return doiTacThueNgoaiList.find((d) => d.id === id)?.ten ?? "—";
+  }
+  function changTen(id: string | null) {
+    const c = chiTietVanChuyenList.find((c) => c.id === id);
+    return c ? `${c.ngay_vc ?? "?"} · ${c.so_xe || c.tai_xe_cty_thue || "chặng"}` : null;
+  }
 
   async function handleSave(values: Record<string, string | boolean>) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
     for (const [k, v] of Object.entries(values)) {
       if (typeof v === "boolean") {
         payload[k] = v;
-      } else if (["so_luong", "don_gia", "gia_von_buy", "gia_ban_sell", "vat_percent"].includes(k)) {
+      } else if (["so_luong", "don_gia", "gia_von_buy", "gia_ban_sell", "vat_percent", "so_tien_da_thanh_toan"].includes(k)) {
         payload[k] = v === "" ? null : Number(v);
       } else {
         payload[k] = v === "" ? null : v;
@@ -130,7 +143,9 @@ export default function ChiPhiSection({
     const data = rows.map((r) => {
       const obj: Record<string, unknown> = {
         "Loại chi phí": loaiTen(r.loai_chi_phi_id),
-        "Nhà cung cấp": nccTen(r.nha_cung_cap_id),
+        "Nhà cung cấp": r.nha_cung_cap_id ? nccTen(r.nha_cung_cap_id) : "",
+        "Đối tác thuê ngoài": r.doi_tac_thue_ngoai_id ? doiTacTen(r.doi_tac_thue_ngoai_id) : "",
+        "Chặng vận chuyển": changTen(r.chi_tiet_van_chuyen_id) ?? "",
         "Số lượng": r.so_luong ?? "",
         "Đơn giá": r.don_gia ?? "",
         "Giá vốn (buy)": r.gia_von_buy ?? "",
@@ -144,6 +159,8 @@ export default function ChiPhiSection({
       obj["Có hóa đơn thuế"] = r.tt_thue ? "Có" : "Không";
       obj["Ngày phát sinh"] = r.ngay_phat_sinh;
       obj["Trạng thái"] = r.trang_thai;
+      obj["Tình trạng thanh toán"] = r.tinh_trang_thanh_toan;
+      obj["Đã thanh toán"] = r.so_tien_da_thanh_toan ?? "";
       obj["Ghi chú"] = r.ghi_chu ?? "";
       return obj;
     });
@@ -157,6 +174,7 @@ export default function ChiPhiSection({
     const headers = [
       "Loại chi phí *",
       "Nhà cung cấp",
+      "Đối tác thuê ngoài",
       "Số lượng",
       "Đơn giá",
       "Giá vốn (buy) *",
@@ -175,6 +193,7 @@ export default function ChiPhiSection({
       ["Cột", "Giá trị hợp lệ"],
       ["Loại chi phí", loaiChiPhiList.map((l) => l.ten).join(", ")],
       ["Nhà cung cấp", nhaCungCapList.map((n) => n.ten).join(", ")],
+      ["Đối tác thuê ngoài", doiTacThueNgoaiList.map((d) => d.ten).join(", ")],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guideRows), "Hướng dẫn");
     XLSX.writeFile(wb, `mau-nhap-chi-phi-${soDonHang}.xlsx`);
@@ -211,6 +230,8 @@ export default function ChiPhiSection({
       }
       const nccName = get("Nhà cung cấp");
       const ncc = nccName ? nhaCungCapList.find((n) => n.ten.toLowerCase() === nccName.toLowerCase()) : null;
+      const doiTacName = get("Đối tác thuê ngoài");
+      const doiTac = doiTacName ? doiTacThueNgoaiList.find((d) => d.ten.toLowerCase() === doiTacName.toLowerCase()) : null;
 
       const giaVon = get("Giá vốn (buy) *") || get("Giá vốn (buy)");
       if (!giaVon) {
@@ -222,6 +243,7 @@ export default function ChiPhiSection({
         don_hang_id: donHangId,
         loai_chi_phi_id: loai.id,
         nha_cung_cap_id: ncc?.id ?? null,
+        doi_tac_thue_ngoai_id: doiTac?.id ?? null,
         so_luong: get("Số lượng") ? Number(get("Số lượng")) : null,
         don_gia: get("Đơn giá") ? Number(get("Đơn giá")) : null,
         gia_von_buy: Number(giaVon),
@@ -255,6 +277,7 @@ export default function ChiPhiSection({
 
   const tongBuy = rows.filter((r) => r.noi_bo).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
   const tongSell = rows.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
+  const tongPhaiTra = rows.reduce((s, r) => s + (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0), 0);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -310,11 +333,19 @@ export default function ChiPhiSection({
               </span>
             </div>
             <p className="text-slate-500">
-              {nccTen(row.nha_cung_cap_id)} · Buy: {(row.gia_von_buy ?? 0).toLocaleString("en-US")}
+              {row.nha_cung_cap_id ? nccTen(row.nha_cung_cap_id) : doiTacTen(row.doi_tac_thue_ngoai_id)} · Buy:{" "}
+              {(row.gia_von_buy ?? 0).toLocaleString("en-US")}
               {canSeeSell && ` · Sell: ${(row.gia_ban_sell ?? 0).toLocaleString("en-US")}`}
               {" · "}
               {row.noi_bo ? "Nội bộ" : row.chi_ho ? "Chi hộ" : "—"}
+              {changTen(row.chi_tiet_van_chuyen_id) ? ` · Chặng: ${changTen(row.chi_tiet_van_chuyen_id)}` : ""}
             </p>
+            {canApprove && (
+              <p className="text-slate-500">
+                Thanh toán: {row.tinh_trang_thanh_toan}
+                {row.so_tien_da_thanh_toan ? ` (đã trả ${row.so_tien_da_thanh_toan.toLocaleString("en-US")})` : ""}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-3">
               {canEditRow && (
                 <button
@@ -356,6 +387,11 @@ export default function ChiPhiSection({
               {" · "}Tổng Sell: <strong>{tongSell.toLocaleString("en-US")}</strong>
             </>
           )}
+          {canApprove && (
+            <>
+              {" · "}Còn phải trả NCC/đối tác: <strong>{tongPhaiTra.toLocaleString("en-US")}</strong>
+            </>
+          )}
         </div>
       )}
 
@@ -364,6 +400,8 @@ export default function ChiPhiSection({
           initial={editing}
           loaiChiPhiList={loaiChiPhiList}
           nhaCungCapList={nhaCungCapList}
+          doiTacThueNgoaiList={doiTacThueNgoaiList}
+          chiTietVanChuyenList={chiTietVanChuyenList}
           bangGiaList={bangGiaList}
           phongBan={phongBan}
           canSeeSell={canSeeSell}
@@ -379,6 +417,8 @@ function ChiPhiForm({
   initial,
   loaiChiPhiList,
   nhaCungCapList,
+  doiTacThueNgoaiList,
+  chiTietVanChuyenList,
   bangGiaList,
   phongBan,
   canSeeSell,
@@ -388,6 +428,8 @@ function ChiPhiForm({
   initial: PhatSinhChiPhi | null;
   loaiChiPhiList: Option[];
   nhaCungCapList: Option[];
+  doiTacThueNgoaiList: Option[];
+  chiTietVanChuyenList: ChiTietVanChuyen[];
   bangGiaList: BangGiaKhachHang[];
   phongBan: string;
   canSeeSell: boolean;
@@ -395,6 +437,7 @@ function ChiPhiForm({
   onSave: (values: Record<string, string | boolean>) => void;
 }) {
   const isSaleOnly = phongBan === "Sale";
+  const isKeToan = phongBan === "Kế toán";
   const [giaGoiY, setGiaGoiY] = useState<BangGiaKhachHang | null>(
     () => bangGiaList.find((b) => b.loai_chi_phi_id === initial?.loai_chi_phi_id) ?? null
   );
@@ -402,6 +445,10 @@ function ChiPhiForm({
   const [values, setValues] = useState({
     loai_chi_phi_id: initial?.loai_chi_phi_id ?? "",
     nha_cung_cap_id: initial?.nha_cung_cap_id ?? "",
+    doi_tac_thue_ngoai_id: initial?.doi_tac_thue_ngoai_id ?? "",
+    chi_tiet_van_chuyen_id: initial?.chi_tiet_van_chuyen_id ?? "",
+    tinh_trang_thanh_toan: initial?.tinh_trang_thanh_toan ?? "Chưa thanh toán",
+    so_tien_da_thanh_toan: initial?.so_tien_da_thanh_toan?.toString() ?? "",
     so_luong: initial?.so_luong?.toString() ?? "",
     don_gia: initial?.don_gia?.toString() ?? "",
     gia_von_buy: initial?.gia_von_buy?.toString() ?? "",
@@ -437,6 +484,11 @@ function ChiPhiForm({
 
   const loaiChiPhiOptions = loaiChiPhiList.map((o) => ({ value: o.id, label: o.ten, code: o.ma }));
   const nhaCungCapOptions = nhaCungCapList.map((o) => ({ value: o.id, label: o.ten, code: o.ma }));
+  const doiTacOptions = doiTacThueNgoaiList.map((o) => ({ value: o.id, label: o.ten }));
+  const changOptions = chiTietVanChuyenList.map((c) => ({
+    value: c.id,
+    label: `${c.ngay_vc ?? "?"} · ${c.so_xe || c.tai_xe_cty_thue || "chặng"}`,
+  }));
 
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 
@@ -467,6 +519,27 @@ function ChiPhiForm({
               options={nhaCungCapOptions}
               value={values.nha_cung_cap_id}
               onChange={(v) => set("nha_cung_cap_id", v)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Đối tác thuê ngoài <span className="font-normal text-slate-400">(nếu bên vận tải trả chi hộ)</span>
+            </label>
+            <SearchableSelect
+              disabled={isSaleOnly}
+              options={doiTacOptions}
+              value={values.doi_tac_thue_ngoai_id}
+              onChange={(v) => set("doi_tac_thue_ngoai_id", v)}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Gắn với chặng vận chuyển</label>
+            <SearchableSelect
+              disabled={isSaleOnly}
+              options={changOptions}
+              value={values.chi_tiet_van_chuyen_id}
+              onChange={(v) => set("chi_tiet_van_chuyen_id", v)}
+              placeholder="-- Không gắn chặng nào --"
             />
           </div>
           <div>
@@ -510,6 +583,34 @@ function ChiPhiForm({
             <label className="mb-1 block text-sm font-medium text-slate-700">Ngày phát sinh</label>
             <input disabled={isSaleOnly} type="date" value={values.ngay_phat_sinh} onChange={(e) => set("ngay_phat_sinh", e.target.value)} className={cls} />
           </div>
+          {isKeToan && (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Tình trạng thanh toán</label>
+                <select
+                  value={values.tinh_trang_thanh_toan}
+                  onChange={(e) => set("tinh_trang_thanh_toan", e.target.value as typeof values.tinh_trang_thanh_toan)}
+                  className={cls}
+                >
+                  {TT_THANH_TOAN.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Đã thanh toán</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={values.so_tien_da_thanh_toan}
+                  onChange={(e) => set("so_tien_da_thanh_toan", e.target.value)}
+                  className={cls}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap gap-4 text-sm">

@@ -114,7 +114,6 @@ export default function ThueNgoaiSection({
       "Nội dung": r.noi_dung ?? "",
       "Giá vốn (buy)": r.gia_von_buy ?? "",
       "Giá bán (sell)": r.gia_ban_sell ?? "",
-      "Số xe/rơ moóc bên thuê": r.so_xe_romooc_ben_thue ?? "",
       "Tình trạng thanh toán": r.tinh_trang_thanh_toan,
       "Đã thanh toán": r.so_tien_da_thanh_toan ?? "",
       "Còn phải trả": (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0),
@@ -134,7 +133,6 @@ export default function ThueNgoaiSection({
       "Nội dung",
       "Giá vốn (buy) *",
       "Giá bán (sell)",
-      "Số xe/rơ moóc bên thuê",
       "Ngày thuê (yyyy-mm-dd)",
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
@@ -195,7 +193,6 @@ export default function ThueNgoaiSection({
         noi_dung: get("Nội dung") || null,
         gia_von_buy: Number(giaVon),
         gia_ban_sell: get("Giá bán (sell)") ? Number(get("Giá bán (sell)")) : null,
-        so_xe_romooc_ben_thue: get("Số xe/rơ moóc bên thuê") || null,
         ngay_thue: get("Ngày thuê (yyyy-mm-dd)") || new Date().toISOString().slice(0, 10),
         nguoi_nhap_id: nv?.id,
       });
@@ -222,7 +219,7 @@ export default function ThueNgoaiSection({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-900">Thuê vận tải ngoài / mua cước ngoài</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Thuê dịch vụ ngoài / mua cước ngoài</h2>
         <div className="flex flex-wrap gap-2">
           <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700">
             Xuất Excel
@@ -341,7 +338,6 @@ function ThueNgoaiForm({
     noi_dung: initial?.noi_dung ?? "",
     gia_von_buy: initial?.gia_von_buy?.toString() ?? "",
     gia_ban_sell: initial?.gia_ban_sell?.toString() ?? "",
-    so_xe_romooc_ben_thue: initial?.so_xe_romooc_ben_thue ?? "",
     tinh_trang_thanh_toan: initial?.tinh_trang_thanh_toan ?? "Chưa thanh toán",
     so_tien_da_thanh_toan: initial?.so_tien_da_thanh_toan?.toString() ?? "",
     ngay_thue: initial?.ngay_thue ?? new Date().toISOString().slice(0, 10),
@@ -391,10 +387,6 @@ function ThueNgoaiForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán (sell)</label>
             <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Số xe/rơ moóc bên thuê</label>
-            <input value={values.so_xe_romooc_ben_thue} onChange={(e) => set("so_xe_romooc_ben_thue", e.target.value)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Ngày thuê</label>

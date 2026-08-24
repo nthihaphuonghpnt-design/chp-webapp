@@ -206,6 +206,11 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           initialRows={chiTietRows ?? []}
           diaDiemList={diaDiemList ?? []}
           canEdit={canEditVanChuyen}
+          goiYDiem={{
+            diem_1_id: order.noi_lay_cont_hang_id,
+            diem_2_id: order.noi_dong_giao_id,
+            diem_3_id: order.noi_ha_tra_rong_id,
+          }}
         />
       </div>
 
@@ -216,6 +221,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           initialRows={chiPhiRows ?? []}
           loaiChiPhiList={loaiChiPhiList ?? []}
           nhaCungCapList={nhaCungCapList ?? []}
+          doiTacThueNgoaiList={doiTacList ?? []}
+          chiTietVanChuyenList={chiTietRows ?? []}
           bangGiaList={bangGiaList}
           phongBan={user?.phong_ban ?? ""}
         />
