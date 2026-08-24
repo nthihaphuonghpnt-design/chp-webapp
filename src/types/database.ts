@@ -386,6 +386,46 @@ export interface TamUngGiaiChi {
   updated_at: string;
 }
 
+export type LoaiHopDong = "Dịch vụ logistics" | "Ủy thác XNK" | "Khác";
+
+export interface HopDongKhachHang {
+  id: string;
+  khach_hang_id: string;
+  so_hop_dong: string | null;
+  loai_hop_dong: LoaiHopDong | null;
+  ngay_hieu_luc: string | null;
+  ngay_het_han: string | null;
+  ghi_chu: string | null;
+  nguoi_tao_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TrangThaiThuTien = "Chưa thu" | "Thu một phần" | "Đã thu đủ";
+
+export interface HoaDonXuat {
+  id: string;
+  khach_hang_id: string;
+  so_hoa_don: string | null;
+  ngay_xuat: string;
+  tong_tien_truoc_thue: number | null;
+  vat_percent: number | null;
+  tien_vat: number;
+  tong_tien: number;
+  trang_thai_thanh_toan: TrangThaiThuTien;
+  so_tien_da_thu: number | null;
+  ghi_chu: string | null;
+  nguoi_tao_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HoaDonDonHang {
+  id: string;
+  hoa_don_id: string;
+  don_hang_id: string;
+}
+
 // Minimal Database type so the Supabase client stays type-safe without
 // requiring the full generated schema (can be replaced by `supabase gen types` later).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
