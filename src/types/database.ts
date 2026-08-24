@@ -363,6 +363,28 @@ export interface LichNhacNho {
   updated_at: string;
 }
 
+export type LoaiTamUng = "Tạm ứng" | "Giải chi";
+export type DoiTuongTamUng = "Nhân viên" | "Tài xế";
+export type TrangThaiTamUng = "Đề nghị" | "Đã duyệt" | "Từ chối";
+
+export interface TamUngGiaiChi {
+  id: string;
+  loai: LoaiTamUng;
+  ngay_thuc_hien: string;
+  doi_tuong: DoiTuongTamUng;
+  nhan_vien_id: string | null;
+  ten_tai_xe: string | null;
+  lan: number | null;
+  so_tien: number;
+  muc_tam_ung_toi_da: number | null;
+  so_phieu: string | null;
+  ghi_chu: string | null;
+  trang_thai: TrangThaiTamUng;
+  nguoi_de_nghi_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Database type so the Supabase client stays type-safe without
 // requiring the full generated schema (can be replaced by `supabase gen types` later).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
