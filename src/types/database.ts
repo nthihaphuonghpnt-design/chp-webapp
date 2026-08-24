@@ -233,7 +233,9 @@ export type LienKetToi =
   | "Hoàn tất"
   | "Chi phí phát sinh"
   | "Chi tiết vận chuyển"
-  | "Thuê ngoài";
+  | "Thuê ngoài"
+  | "Hợp đồng"
+  | "Hóa đơn";
 
 export type LoaiDinhKem =
   | "Ảnh hàng hóa tại cảng"
@@ -245,6 +247,8 @@ export type LoaiDinhKem =
 export interface DinhKem {
   id: string;
   don_hang_id: string | null;
+  hop_dong_id: string | null;
+  hoa_don_id: string | null;
   lien_ket_toi: LienKetToi | null;
   loai_dinh_kem: LoaiDinhKem | null;
   duong_dan_file: string;

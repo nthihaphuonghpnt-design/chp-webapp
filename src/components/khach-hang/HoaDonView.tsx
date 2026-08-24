@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import FileAttachSection from "@/components/common/FileAttachSection";
+import type { DinhKem } from "@/types/database";
 
 interface KhachHang {
   id: string;
@@ -54,15 +56,19 @@ export default function HoaDonView({
   khachHangList,
   donHangList,
   lienKetAll,
+  dinhKemRows,
   canEdit,
   canDelete,
+  currentUserId,
 }: {
   initialRows: Row[];
   khachHangList: KhachHang[];
   donHangList: DonHangOpt[];
   lienKetAll: LienKet[];
+  dinhKemRows: DinhKem[];
   canEdit: boolean;
   canDelete: boolean;
+  currentUserId?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
@@ -238,6 +244,15 @@ export default function HoaDonView({
               <p className="text-slate-500">Đơn hàng: {donHangCuaHoaDon(row.id).map((d) => d.so_don_hang).join(", ")}</p>
             )}
             {row.ghi_chu && <p className="text-slate-500">{row.ghi_chu}</p>}
+            <FileAttachSection
+              parentField="hoa_don_id"
+              parentId={row.id}
+              pathPrefix="hoa-don"
+              lienKetToi="Hóa đơn"
+              initialRows={dinhKemRows.filter((d) => d.hoa_don_id === row.id)}
+              canUpload={canEdit}
+              currentUserId={currentUserId}
+            />
             {canEdit && (
               <div className="mt-2 flex gap-3">
                 <button

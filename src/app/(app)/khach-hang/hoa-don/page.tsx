@@ -15,15 +15,17 @@ export default async function HoaDonPage() {
     );
   }
 
-  const [{ data: rows }, { data: khachHangList }, { data: donHangList }, { data: lienKetAll }] = await Promise.all([
-    supabase
-      .from("hoa_don_xuat")
-      .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
-      .order("ngay_xuat", { ascending: false }),
-    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
-    supabase.from("don_hang").select("id, so_don_hang, khach_hang_id").order("created_at", { ascending: false }).limit(500),
-    supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id"),
-  ]);
+  const [{ data: rows }, { data: khachHangList }, { data: donHangList }, { data: lienKetAll }, { data: dinhKemRows }] =
+    await Promise.all([
+      supabase
+        .from("hoa_don_xuat")
+        .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
+        .order("ngay_xuat", { ascending: false }),
+      supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
+      supabase.from("don_hang").select("id, so_don_hang, khach_hang_id").order("created_at", { ascending: false }).limit(500),
+      supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id"),
+      supabase.from("dinh_kem").select("*").not("hoa_don_id", "is", null).order("thoi_gian_upload", { ascending: false }),
+    ]);
 
   const canEdit = user?.phong_ban === "Chứng từ" || user?.phong_ban === "Kế toán";
   const canDelete = user?.phong_ban === "Kế toán";
@@ -35,8 +37,11 @@ export default async function HoaDonPage() {
       khachHangList={khachHangList ?? []}
       donHangList={donHangList ?? []}
       lienKetAll={lienKetAll ?? []}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      dinhKemRows={(dinhKemRows ?? []) as any[]}
       canEdit={canEdit}
       canDelete={canDelete}
+      currentUserId={user?.id}
     />
   );
 }

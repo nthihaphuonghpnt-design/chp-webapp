@@ -15,12 +15,13 @@ export default async function HopDongPage() {
     );
   }
 
-  const [{ data: rows }, { data: khachHangList }] = await Promise.all([
+  const [{ data: rows }, { data: khachHangList }, { data: dinhKemRows }] = await Promise.all([
     supabase
       .from("hop_dong_khach_hang")
       .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
       .order("created_at", { ascending: false }),
     supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
+    supabase.from("dinh_kem").select("*").not("hop_dong_id", "is", null).order("thoi_gian_upload", { ascending: false }),
   ]);
 
   const canEdit = user?.phong_ban === "Chứng từ" || user?.phong_ban === "Kế toán";
@@ -31,8 +32,11 @@ export default async function HopDongPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       initialRows={(rows ?? []) as any[]}
       khachHangList={khachHangList ?? []}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      dinhKemRows={(dinhKemRows ?? []) as any[]}
       canEdit={canEdit}
       canDelete={canDelete}
+      currentUserId={user?.id}
     />
   );
 }

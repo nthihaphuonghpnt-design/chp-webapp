@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import FileAttachSection from "@/components/common/FileAttachSection";
+import type { DinhKem } from "@/types/database";
 
 interface KhachHang {
   id: string;
@@ -42,13 +44,17 @@ function trangThaiHieuLuc(row: Row) {
 export default function HopDongView({
   initialRows,
   khachHangList,
+  dinhKemRows,
   canEdit,
   canDelete,
+  currentUserId,
 }: {
   initialRows: Row[];
   khachHangList: KhachHang[];
+  dinhKemRows: DinhKem[];
   canEdit: boolean;
   canDelete: boolean;
+  currentUserId?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
@@ -273,6 +279,15 @@ export default function HopDongView({
                 {row.loai_hop_dong ?? "—"} · Hiệu lực: {row.ngay_hieu_luc ?? "—"} → {row.ngay_het_han ?? "—"}
               </p>
               {row.ghi_chu && <p className="text-slate-500">{row.ghi_chu}</p>}
+              <FileAttachSection
+                parentField="hop_dong_id"
+                parentId={row.id}
+                pathPrefix="hop-dong"
+                lienKetToi="Hợp đồng"
+                initialRows={dinhKemRows.filter((d) => d.hop_dong_id === row.id)}
+                canUpload={canEdit}
+                currentUserId={currentUserId}
+              />
               {canEdit && (
                 <div className="mt-2 flex gap-3">
                   <button
