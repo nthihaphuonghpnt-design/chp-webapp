@@ -348,6 +348,21 @@ export interface DinhPhiThang {
   updated_at: string;
 }
 
+export type TrangThaiNhacNho = "Chưa thực hiện" | "Đã thực hiện";
+
+export interface LichNhacNho {
+  id: string;
+  phong_ban_id: string;
+  don_hang_id: string | null;
+  noi_dung: string;
+  nguoi_phu_trach_id: string | null;
+  nguoi_tao_id: string | null;
+  ngay_du_kien: string;
+  trang_thai: TrangThaiNhacNho;
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Database type so the Supabase client stays type-safe without
 // requiring the full generated schema (can be replaced by `supabase gen types` later).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
