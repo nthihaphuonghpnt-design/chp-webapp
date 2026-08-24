@@ -302,6 +302,28 @@ export interface ChiPhiGiaoNhan {
   updated_at: string;
 }
 
+export type LoaiDichVuThue = "Vận tải nội địa thuê ngoài" | "Cước đường biển" | "Dịch vụ bên thứ 3 khác";
+export type TinhTrangThanhToan = "Chưa thanh toán" | "Một phần" | "Đã đủ";
+export type TrangThaiThueNgoai = "Chờ duyệt" | "Đã duyệt" | "Từ chối";
+
+export interface DonThueNgoai {
+  id: string;
+  don_hang_id: string;
+  loai_dich_vu_thue: LoaiDichVuThue | null;
+  doi_tac_thue_ngoai_id: string | null;
+  noi_dung: string | null;
+  gia_von_buy: number | null;
+  gia_ban_sell: number | null;
+  so_xe_romooc_ben_thue: string | null;
+  tinh_trang_thanh_toan: TinhTrangThanhToan;
+  so_tien_da_thanh_toan: number | null;
+  ngay_thue: string;
+  trang_thai: TrangThaiThueNgoai;
+  nguoi_nhap_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BangGiaKhachHang {
   id: string;
   khach_hang_id: string;

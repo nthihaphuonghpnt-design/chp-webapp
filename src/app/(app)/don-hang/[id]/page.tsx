@@ -11,6 +11,7 @@ import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSecti
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
 import ChiPhiSection from "@/components/don-hang/ChiPhiSection";
 import LineItemsSection from "@/components/don-hang/LineItemsSection";
+import ThueNgoaiSection from "@/components/don-hang/ThueNgoaiSection";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +32,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: loaiChiPhiList },
     { data: nhaCungCapList },
     { data: bangGiaAll },
+    { data: thueNgoaiRows },
+    { data: doiTacList },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -51,15 +54,16 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("loai_chi_phi").select("id, ten, ma:ma_loai_chi_phi").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("bang_gia_khach_hang").select("*").eq("dang_hoat_dong", true),
+    supabase.from("don_thue_ngoai").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
+    supabase.from("doi_tac_thue_ngoai").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
 
   if (!order) notFound();
 
   const bangGiaList = (bangGiaAll ?? []).filter((b) => b.khach_hang_id === order.khach_hang_id);
 
-  // Loi nhuan so bo: Sell - Buy(noi bo) - Chi phi giao nhan/chung tu - Dinh phi phan bo,
-  // sau do chia hoa hong Sale 4/10 - Cong ty 6/10. (Chua gom chi phi thue ngoai - Module E,
-  // se cong vao khi module do duoc xay.)
+  // Loi nhuan so bo: Sell - Buy(noi bo) - Chi phi giao nhan/chung tu - Chi phi thue ngoai
+  // (Module E) - Dinh phi phan bo, sau do chia hoa hong Sale 4/10 - Cong ty 6/10.
   const monthKey = order.ngay_len_don.slice(0, 7);
   const [monthYear, monthNum] = monthKey.split("-").map(Number);
   const monthStart = `${monthKey}-01`;
@@ -80,10 +84,12 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const tongBuyNoiBo = (chiPhiRows ?? []).filter((r) => r.noi_bo).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
   const tongSell =
     (chiPhiRows ?? []).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0) +
-    (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
+    (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0) +
+    (thueNgoaiRows ?? []).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongChiPhiGiaoNhan = (chiPhiGiaoNhanRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
+  const tongChiPhiThueNgoai = (thueNgoaiRows ?? []).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
 
-  const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - dinhPhiPhanBo;
+  const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - tongChiPhiThueNgoai - dinhPhiPhanBo;
   const chiPhiSale = loiNhuanTruocHoaHong * 0.4;
   const loiNhuanCongTy = loiNhuanTruocHoaHong - chiPhiSale;
 
@@ -223,6 +229,16 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         />
       </div>
 
+      <div className="mb-4">
+        <ThueNgoaiSection
+          donHangId={order.id}
+          soDonHang={order.so_don_hang}
+          initialRows={thueNgoaiRows ?? []}
+          doiTacList={doiTacList ?? []}
+          phongBan={user?.phong_ban ?? ""}
+        />
+      </div>
+
       {canSeeLoiNhuan && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Lợi nhuận sơ bộ</h2>
@@ -230,6 +246,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             <Info label="Tổng Sell (+ phụ thu)" value={tongSell.toLocaleString("en-US")} />
             <Info label="Tổng Buy (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
             <Info label="Chi phí giao nhận/chuyến" value={tongChiPhiGiaoNhan.toLocaleString("en-US")} />
+            <Info label="Chi phí thuê ngoài (Module E)" value={tongChiPhiThueNgoai.toLocaleString("en-US")} />
             <Info
               label="Định phí phân bổ/lô"
               value={`${dinhPhiPhanBo.toLocaleString("en-US")} (${soLoTrongThang ?? 0} lô trong tháng ${monthKey})`}
@@ -244,9 +261,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             Lợi nhuận công ty (6/10): {loiNhuanCongTy.toLocaleString("en-US")}
           </p>
           <p className="mt-2 text-xs text-slate-400">
-            * Số liệu sơ bộ, chưa gồm chi phí thuê vận tải/mua cước ngoài (sẽ cộng vào khi module đó
-            được xây). Chỉ tính các dòng chi phí đã ở trạng thái &quot;Đã duyệt&quot; hoặc &quot;Chờ
-            duyệt&quot;/&quot;Nháp&quot; đều được cộng — kiểm tra lại số liệu trước khi chốt sổ.
+            * Số liệu sơ bộ — tính cả các dòng chưa duyệt (Nháp/Chờ duyệt), kiểm tra lại trước khi
+            chốt sổ chính thức cuối tháng.
           </p>
         </div>
       )}
