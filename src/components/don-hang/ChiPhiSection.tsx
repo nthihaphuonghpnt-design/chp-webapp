@@ -3,11 +3,13 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import type { BangGiaKhachHang, PhatSinhChiPhi } from "@/types/database";
 
 interface Option {
   id: string;
   ten: string;
+  ma?: string | null;
 }
 
 const TRANG_THAI_COLOR: Record<string, string> = {
@@ -325,7 +327,7 @@ export default function ChiPhiSection({
                   Sửa
                 </button>
               )}
-              {canApprove && row.trang_thai === "Chờ duyệt" && (
+              {canApprove && ["Nháp", "Chờ duyệt"].includes(row.trang_thai) && (
                 <>
                   <button onClick={() => handleApprove(row, "Đã duyệt")} className="text-xs font-medium text-green-600">
                     Duyệt
@@ -425,6 +427,17 @@ function ChiPhiForm({
     }
   }
 
+  function handleNoiBoChange(checked: boolean) {
+    setValues((prev) => ({ ...prev, noi_bo: checked, chi_ho: checked ? false : prev.chi_ho }));
+  }
+
+  function handleChiHoChange(checked: boolean) {
+    setValues((prev) => ({ ...prev, chi_ho: checked, noi_bo: checked ? false : prev.noi_bo }));
+  }
+
+  const loaiChiPhiOptions = loaiChiPhiList.map((o) => ({ value: o.id, label: o.ten, code: o.ma }));
+  const nhaCungCapOptions = nhaCungCapList.map((o) => ({ value: o.id, label: o.ten, code: o.ma }));
+
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 
   return (
@@ -440,25 +453,21 @@ function ChiPhiForm({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Loại chi phí</label>
-            <select disabled={isSaleOnly} value={values.loai_chi_phi_id} onChange={(e) => handleLoaiChiPhiChange(e.target.value)} className={cls}>
-              <option value="">-- Chọn --</option>
-              {loaiChiPhiList.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.ten}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              disabled={isSaleOnly}
+              options={loaiChiPhiOptions}
+              value={values.loai_chi_phi_id}
+              onChange={handleLoaiChiPhiChange}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Nhà cung cấp</label>
-            <select disabled={isSaleOnly} value={values.nha_cung_cap_id} onChange={(e) => set("nha_cung_cap_id", e.target.value)} className={cls}>
-              <option value="">-- Chọn --</option>
-              {nhaCungCapList.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.ten}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              disabled={isSaleOnly}
+              options={nhaCungCapOptions}
+              value={values.nha_cung_cap_id}
+              onChange={(v) => set("nha_cung_cap_id", v)}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số lượng</label>
@@ -505,11 +514,21 @@ function ChiPhiForm({
 
         <div className="mt-3 flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-1.5">
-            <input disabled={isSaleOnly} type="checkbox" checked={values.noi_bo} onChange={(e) => set("noi_bo", e.target.checked)} />
+            <input
+              disabled={isSaleOnly || values.chi_ho}
+              type="checkbox"
+              checked={values.noi_bo}
+              onChange={(e) => handleNoiBoChange(e.target.checked)}
+            />
             Nội bộ (tính lãi/lỗ)
           </label>
           <label className="flex items-center gap-1.5">
-            <input disabled={isSaleOnly} type="checkbox" checked={values.chi_ho} onChange={(e) => set("chi_ho", e.target.checked)} />
+            <input
+              disabled={isSaleOnly || values.noi_bo}
+              type="checkbox"
+              checked={values.chi_ho}
+              onChange={(e) => handleChiHoChange(e.target.checked)}
+            />
             Chi hộ khách hàng
           </label>
           <label className="flex items-center gap-1.5">

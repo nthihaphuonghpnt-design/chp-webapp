@@ -48,7 +48,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("phat_sinh_chi_phi").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("phu_thu").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("chi_phi_giao_nhan").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
-    supabase.from("loai_chi_phi").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("loai_chi_phi").select("id, ten, ma:ma_loai_chi_phi").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("bang_gia_khach_hang").select("*").eq("dang_hoat_dong", true),
   ]);
@@ -64,7 +64,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const noiHa = Array.isArray(order.noi_ha) ? order.noi_ha[0] : order.noi_ha;
   const nguoiTao = Array.isArray(order.nguoi_tao) ? order.nguoi_tao[0] : order.nguoi_tao;
 
-  const canEditVanChuyen = user?.phong_ban === "Hiện trường" || user?.phong_ban === "Điều phối";
+  const canEditVanChuyen = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán"].includes(user?.phong_ban ?? "");
   const canEditToKhai = user?.phong_ban === "Chứng từ";
   const canEditContainer = canManageDonHang(user?.phong_ban);
 

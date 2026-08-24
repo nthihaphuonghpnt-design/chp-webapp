@@ -15,12 +15,14 @@ export default function SearchableSelect({
   onChange,
   placeholder = "-- Chọn --",
   className = "",
+  disabled = false,
 }: {
   options: SearchableOption[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -56,13 +58,15 @@ export default function SearchableSelect({
         value={open ? query : selected ? `${selected.code ? `${selected.code} — ` : ""}${selected.label}` : ""}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => {
+          if (disabled) return;
           setOpen(true);
           setQuery("");
         }}
+        disabled={disabled}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
       />
-      {selected && !open && (
+      {selected && !open && !disabled && (
         <button
           type="button"
           onClick={() => onChange("")}

@@ -29,6 +29,7 @@ export default async function DinhPhiThangPage() {
         canEdit={canEdit}
         searchField="thang_nam"
         extraSearchFields={["khoan_muc"]}
+        statusLabels={{ active: "Chưa phân bổ", inactive: "Đã phân bổ" }}
       />
       {canEdit && (
         <p className="mx-auto -mt-2 max-w-5xl px-4 pb-6 text-xs text-slate-400">
