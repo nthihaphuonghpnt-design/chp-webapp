@@ -34,11 +34,12 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: bangGiaAll },
     { data: thueNgoaiRows },
     { data: doiTacList },
+    { data: nhanVienList },
   ] = await Promise.all([
     supabase
       .from("don_hang")
       .select(
-        "*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), hang_hoa:hang_hoa_id(ten), noi_lay:noi_lay_cont_hang_id(ten), noi_dong:noi_dong_giao_id(ten), noi_ha:noi_ha_tra_rong_id(ten), nguoi_tao:nguoi_tao_id(ho_ten), sale_phu_trach:sale_phu_trach_id(ho_ten)"
+        "*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), hang_hoa:hang_hoa_id(ten), noi_lay:noi_lay_cont_hang_id(ten), noi_dong:noi_dong_giao_id(ten), noi_ha:noi_ha_tra_rong_id(ten), nguoi_tao:nguoi_tao_id(ho_ten), sale_phu_trach:sale_phu_trach_id(ho_ten), hien_truong_phu_trach:hien_truong_phu_trach_id(ho_ten), chung_tu_phu_trach:chung_tu_phu_trach_id(ho_ten)"
       )
       .eq("id", id)
       .single(),
@@ -56,6 +57,11 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("bang_gia_khach_hang").select("*").eq("dang_hoat_dong", true),
     supabase.from("don_thue_ngoai").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("doi_tac_thue_ngoai").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase
+      .from("nhan_vien")
+      .select("id, ho_ten, phong_ban:phong_ban_id(ten)")
+      .eq("dang_lam_viec", true)
+      .order("ho_ten"),
   ]);
 
   if (!order) notFound();
@@ -93,7 +99,19 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const chiPhiSale = loiNhuanTruocHoaHong * 0.4;
   const loiNhuanCongTy = loiNhuanTruocHoaHong - chiPhiSale;
 
+  const loiNhuanTruocDinhPhi = loiNhuanTruocHoaHong + dinhPhiPhanBo;
+
   const canSeeLoiNhuan = ["Kế toán", "Giám đốc", "Sale"].includes(user?.phong_ban ?? "");
+
+  const nhanVienGiaoNhanOptions = (nhanVienList ?? [])
+    .filter((nv) => {
+      const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
+      return pb?.ten === "Hiện trường" || pb?.ten === "Chứng từ";
+    })
+    .map((nv) => {
+      const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
+      return { value: nv.id, label: `${nv.ho_ten} (${pb?.ten ?? ""})` };
+    });
 
   const kh = Array.isArray(order.khach_hang) ? order.khach_hang[0] : order.khach_hang;
   const hangHoa = Array.isArray(order.hang_hoa) ? order.hang_hoa[0] : order.hang_hoa;
@@ -102,6 +120,10 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const noiHa = Array.isArray(order.noi_ha) ? order.noi_ha[0] : order.noi_ha;
   const nguoiTao = Array.isArray(order.nguoi_tao) ? order.nguoi_tao[0] : order.nguoi_tao;
   const salePhuTrach = Array.isArray(order.sale_phu_trach) ? order.sale_phu_trach[0] : order.sale_phu_trach;
+  const hienTruongPhuTrach = Array.isArray(order.hien_truong_phu_trach)
+    ? order.hien_truong_phu_trach[0]
+    : order.hien_truong_phu_trach;
+  const chungTuPhuTrach = Array.isArray(order.chung_tu_phu_trach) ? order.chung_tu_phu_trach[0] : order.chung_tu_phu_trach;
 
   const canEditVanChuyen = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán"].includes(user?.phong_ban ?? "");
   const canEditToKhai = user?.phong_ban === "Chứng từ";
@@ -139,6 +161,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
 
       <div className="mb-4 grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
         <Info label="Sale phụ trách" value={salePhuTrach?.ho_ten} />
+        <Info label="Hiện trường phụ trách" value={hienTruongPhuTrach?.ho_ten} />
+        <Info label="Chứng từ phụ trách" value={chungTuPhuTrach?.ho_ten} />
         <Info label="Loại đơn hàng" value={order.loai_don_hang} />
         <Info label="Loại kích cỡ" value={order.loai_kich_co} />
         <Info label="Đơn vị tính" value={order.dvt} />
@@ -220,6 +244,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           soDonHang={order.so_don_hang}
           title="Chi phí giao nhận / chuyến"
           fields={[
+            { key: "nhan_vien_id", label: "Nhân viên", type: "select", required: true, options: nhanVienGiaoNhanOptions },
             { key: "loai", label: "Loại", type: "text", required: true },
             { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
             { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
@@ -247,6 +272,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             <Info label="Tổng Buy (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
             <Info label="Chi phí giao nhận/chuyến" value={tongChiPhiGiaoNhan.toLocaleString("en-US")} />
             <Info label="Chi phí thuê ngoài (Module E)" value={tongChiPhiThueNgoai.toLocaleString("en-US")} />
+            <Info label="Lợi nhuận trước định phí" value={loiNhuanTruocDinhPhi.toLocaleString("en-US")} />
             <Info
               label="Định phí phân bổ/lô"
               value={`${dinhPhiPhanBo.toLocaleString("en-US")} (${soLoTrongThang ?? 0} lô trong tháng ${monthKey})`}

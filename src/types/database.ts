@@ -162,6 +162,8 @@ export interface DonHang {
   cs_xac_nhan: boolean;
   nguoi_tao_id: string | null;
   sale_phu_trach_id: string | null;
+  hien_truong_phu_trach_id: string | null;
+  chung_tu_phu_trach_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -296,6 +298,7 @@ export interface ChiPhiGiaoNhan {
   id: string;
   don_hang_id: string;
   loai: string | null;
+  nhan_vien_id: string | null;
   thanh_tien: number | null;
   ghi_chu: string | null;
   created_at: string;

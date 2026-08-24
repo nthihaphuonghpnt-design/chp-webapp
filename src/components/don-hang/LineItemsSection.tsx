@@ -7,8 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 export interface LineItemField {
   key: string;
   label: string;
-  type: "text" | "number" | "textarea";
+  type: "text" | "number" | "textarea" | "select";
   required?: boolean;
+  options?: { value: string; label: string }[];
 }
 
 type Row = Record<string, unknown> & { id: string };
@@ -37,6 +38,10 @@ export default function LineItemsSection({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  function optionLabel(f: LineItemField, value: unknown) {
+    return f.options?.find((o) => o.value === value)?.label ?? String(value ?? "");
+  }
 
   async function handleSave(values: Record<string, string>) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
@@ -68,7 +73,7 @@ export default function LineItemsSection({
   function handleExportExcel() {
     const data = rows.map((r) => {
       const obj: Record<string, unknown> = {};
-      fields.forEach((f) => (obj[f.label] = r[f.key] ?? ""));
+      fields.forEach((f) => (obj[f.label] = f.type === "select" ? optionLabel(f, r[f.key]) : (r[f.key] ?? "")));
       return obj;
     });
     const ws = XLSX.utils.json_to_sheet(data);
@@ -82,6 +87,16 @@ export default function LineItemsSection({
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Mẫu nhập");
+
+    const selectFields = fields.filter((f) => f.type === "select" && f.options?.length);
+    if (selectFields.length > 0) {
+      const guideRows = [
+        ["Cột", "Giá trị hợp lệ"],
+        ...selectFields.map((f) => [f.label, f.options!.map((o) => o.label).join(", ")]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guideRows), "Hướng dẫn");
+    }
+
     XLSX.writeFile(wb, `mau-nhap-${table}.xlsx`);
   }
 
@@ -108,6 +123,16 @@ export default function LineItemsSection({
         if (f.required && !value && value !== 0) {
           errors.push(`Dòng ${rowNum}: thiếu "${f.label}".`);
           hasError = true;
+          continue;
+        }
+        if (f.type === "select" && value) {
+          const opt = f.options?.find((o) => o.label.trim().toLowerCase() === String(value).trim().toLowerCase());
+          if (!opt) {
+            errors.push(`Dòng ${rowNum}: giá trị "${value}" không hợp lệ ở cột "${f.label}".`);
+            hasError = true;
+            continue;
+          }
+          record[f.key] = opt.value;
           continue;
         }
         record[f.key] = value === "" || value === undefined ? null : f.type === "number" ? Number(value) : value;
@@ -184,7 +209,7 @@ export default function LineItemsSection({
               {fields.map((f) => (
                 <span key={f.key} className="mr-3 text-slate-700">
                   <span className="text-slate-400">{f.label}: </span>
-                  {String(row[f.key] ?? "—")}
+                  {f.type === "select" ? optionLabel(f, row[f.key]) : String(row[f.key] ?? "—")}
                 </span>
               ))}
             </div>
@@ -266,6 +291,20 @@ function LineItemForm({
                   onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                   className={cls}
                 />
+              ) : f.type === "select" ? (
+                <select
+                  required={f.required}
+                  value={values[f.key]}
+                  onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                  className={cls}
+                >
+                  <option value="">-- Chọn --</option>
+                  {f.options?.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
               ) : (
                 <input
                   type={f.type === "number" ? "number" : "text"}
