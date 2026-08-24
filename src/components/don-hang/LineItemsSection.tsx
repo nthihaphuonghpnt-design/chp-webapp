@@ -211,7 +211,7 @@ export default function LineItemsSection({
 
       {rows.length > 0 && (
         <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-          Tổng: <strong>{total.toLocaleString("vi-VN")}</strong>
+          Tổng: <strong>{total.toLocaleString("en-US")}</strong>
         </p>
       )}
 

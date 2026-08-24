@@ -24,6 +24,7 @@ interface MasterData {
   loaiContainer: Option[];
   hangHoa: Option[];
   diaDiem: DiaDiemOption[];
+  saleList: Option[];
 }
 
 const LOAI_DON_HANG = ["Xuất", "Nhập", "Khác"];
@@ -33,9 +34,13 @@ const DVT = ["Cont", "Chuyến", "Kiện", "Khối", "Tấn", "Kg", "2x20"];
 export default function DonHangForm({
   masterData,
   initial,
+  currentUserId,
+  currentPhongBan,
 }: {
   masterData: MasterData;
   initial?: DonHang | null;
+  currentUserId?: string;
+  currentPhongBan?: string;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -62,6 +67,7 @@ export default function DonHangForm({
     han_lenh_gio: initial?.han_lenh_gio ?? "",
     ghi_chu_van_chuyen: initial?.ghi_chu_van_chuyen ?? "",
     gia: initial?.gia?.toString() ?? "",
+    sale_phu_trach_id: initial?.sale_phu_trach_id ?? (currentPhongBan === "Sale" ? currentUserId ?? "" : ""),
     so_to_khai_ban_dau: "",
   });
 
@@ -147,6 +153,21 @@ export default function DonHangForm({
             {masterData.khachHang.map((k) => (
               <option key={k.id} value={k.id}>
                 {k.ten_viet_tat || k.ten_day_du}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Sale phụ trách" required hint="Người nhận hoa hồng của đơn này">
+          <select
+            required
+            value={values.sale_phu_trach_id}
+            onChange={(e) => set("sale_phu_trach_id", e.target.value)}
+            className={inputClass}
+          >
+            <option value="">-- Chọn --</option>
+            {masterData.saleList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.ten}
               </option>
             ))}
           </select>

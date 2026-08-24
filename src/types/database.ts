@@ -161,6 +161,7 @@ export interface DonHang {
   ops_xac_nhan: boolean;
   cs_xac_nhan: boolean;
   nguoi_tao_id: string | null;
+  sale_phu_trach_id: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -310,8 +310,8 @@ export default function ChiPhiSection({
               </span>
             </div>
             <p className="text-slate-500">
-              {nccTen(row.nha_cung_cap_id)} · Buy: {(row.gia_von_buy ?? 0).toLocaleString("vi-VN")}
-              {canSeeSell && ` · Sell: ${(row.gia_ban_sell ?? 0).toLocaleString("vi-VN")}`}
+              {nccTen(row.nha_cung_cap_id)} · Buy: {(row.gia_von_buy ?? 0).toLocaleString("en-US")}
+              {canSeeSell && ` · Sell: ${(row.gia_ban_sell ?? 0).toLocaleString("en-US")}`}
               {" · "}
               {row.noi_bo ? "Nội bộ" : row.chi_ho ? "Chi hộ" : "—"}
             </p>
@@ -350,10 +350,10 @@ export default function ChiPhiSection({
 
       {rows.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-          Tổng Buy (nội bộ): <strong>{tongBuy.toLocaleString("vi-VN")}</strong>
+          Tổng Buy (nội bộ): <strong>{tongBuy.toLocaleString("en-US")}</strong>
           {canSeeSell && (
             <>
-              {" · "}Tổng Sell: <strong>{tongSell.toLocaleString("vi-VN")}</strong>
+              {" · "}Tổng Sell: <strong>{tongSell.toLocaleString("en-US")}</strong>
             </>
           )}
         </div>
@@ -487,7 +487,7 @@ function ChiPhiForm({
               <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
               {giaGoiY && (
                 <p className="mt-1 text-xs text-blue-600">
-                  Giá theo bảng giá khách hàng: {(giaGoiY.don_gia ?? 0).toLocaleString("vi-VN")}
+                  Giá theo bảng giá khách hàng: {(giaGoiY.don_gia ?? 0).toLocaleString("en-US")}
                   {giaGoiY.don_vi ?? ""}
                   {values.gia_ban_sell !== String(giaGoiY.don_gia ?? "") && (
                     <button

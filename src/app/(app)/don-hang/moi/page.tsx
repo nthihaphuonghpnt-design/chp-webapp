@@ -15,12 +15,21 @@ export default async function DonHangMoiPage() {
     );
   }
 
-  const [{ data: khachHang }, { data: loaiContainer }, { data: hangHoa }, { data: diaDiem }] = await Promise.all([
-    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
-    supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-    supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-    supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
-  ]);
+  const { data: phongBanSale } = await supabase.from("phong_ban").select("id").eq("ten", "Sale").single();
+
+  const [{ data: khachHang }, { data: loaiContainer }, { data: hangHoa }, { data: diaDiem }, { data: saleList }] =
+    await Promise.all([
+      supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
+      supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+      supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+      supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
+      supabase
+        .from("nhan_vien")
+        .select("id, ten:ho_ten")
+        .eq("phong_ban_id", phongBanSale?.id ?? "")
+        .eq("dang_lam_viec", true)
+        .order("ho_ten"),
+    ]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -31,7 +40,10 @@ export default async function DonHangMoiPage() {
           loaiContainer: loaiContainer ?? [],
           hangHoa: hangHoa ?? [],
           diaDiem: diaDiem ?? [],
+          saleList: saleList ?? [],
         }}
+        currentUserId={user?.id}
+        currentPhongBan={user?.phong_ban}
       />
     </div>
   );
