@@ -381,6 +381,7 @@ export interface TamUngGiaiChi {
   ghi_chu: string | null;
   trang_thai: TrangThaiTamUng;
   nguoi_de_nghi_id: string | null;
+  don_hang_id: string | null;
   created_at: string;
   updated_at: string;
 }

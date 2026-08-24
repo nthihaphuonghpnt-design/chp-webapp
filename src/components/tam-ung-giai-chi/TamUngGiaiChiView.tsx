@@ -3,10 +3,16 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import SearchableSelect from "@/components/common/SearchableSelect";
 
 interface NhanVien {
   id: string;
   ho_ten: string;
+}
+
+interface DonHangOpt {
+  id: string;
+  so_don_hang: string;
 }
 
 interface Row {
@@ -23,8 +29,10 @@ interface Row {
   ghi_chu: string | null;
   trang_thai: "Đề nghị" | "Đã duyệt" | "Từ chối";
   nguoi_de_nghi_id: string | null;
+  don_hang_id: string | null;
   nhan_vien: { ho_ten: string } | { ho_ten: string }[] | null;
   nguoi_de_nghi: { ho_ten: string } | { ho_ten: string }[] | null;
+  don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -52,11 +60,13 @@ function monthRange() {
 export default function TamUngGiaiChiView({
   initialRows,
   nhanVienList,
+  donHangList,
   currentUserId,
   currentPhongBan,
 }: {
   initialRows: Row[];
   nhanVienList: NhanVien[];
+  donHangList: DonHangOpt[];
   currentUserId?: string;
   currentPhongBan: string;
 }) {
@@ -73,6 +83,7 @@ export default function TamUngGiaiChiView({
   const [tuNgay, setTuNgay] = useState(defaultRange.start);
   const [denNgay, setDenNgay] = useState(defaultRange.end);
   const [nhanVienFilter, setNhanVienFilter] = useState("");
+  const [donHangFilter, setDonHangFilter] = useState("");
 
   const isKeToan = currentPhongBan === "Kế toán";
   const isGiamDoc = currentPhongBan === "Giám đốc";
@@ -82,9 +93,24 @@ export default function TamUngGiaiChiView({
     return row.doi_tuong === "Tài xế" ? `tx:${row.ten_tai_xe}` : `nv:${row.nhan_vien_id}`;
   }
 
-  const filteredByPerson = nhanVienFilter ? rows.filter((r) => r.nhan_vien_id === nhanVienFilter) : rows;
+  const filteredByPerson = rows
+    .filter((r) => !nhanVienFilter || r.nhan_vien_id === nhanVienFilter)
+    .filter((r) => !donHangFilter || r.don_hang_id === donHangFilter);
 
   const detailRows = filteredByPerson.filter((r) => r.ngay_thuc_hien >= tuNgay && r.ngay_thuc_hien <= denNgay);
+
+  const byOrderSummary = useMemo(() => {
+    const map = new Map<string, { ten: string; tamUng: number; giaiChi: number }>();
+    for (const r of detailRows) {
+      if (r.trang_thai !== "Đã duyệt" || !r.don_hang_id) continue;
+      const ten = one(r.don_hang)?.so_don_hang ?? donHangList.find((d) => d.id === r.don_hang_id)?.so_don_hang ?? "—";
+      if (!map.has(r.don_hang_id)) map.set(r.don_hang_id, { ten, tamUng: 0, giaiChi: 0 });
+      const s = map.get(r.don_hang_id)!;
+      if (r.loai === "Tạm ứng") s.tamUng += r.so_tien;
+      else s.giaiChi += r.so_tien;
+    }
+    return Array.from(map.values());
+  }, [detailRows, donHangList]);
 
   const summary = useMemo(() => {
     const map = new Map<string, { ten: string; dauKy: number; tamUng: number; giaiChi: number }>();
@@ -117,6 +143,7 @@ export default function TamUngGiaiChiView({
       so_phieu: values.so_phieu || null,
       ghi_chu: values.ghi_chu || null,
       trang_thai: values.trang_thai || "Đề nghị",
+      don_hang_id: values.don_hang_id || null,
     };
 
     if (editing) {
@@ -124,7 +151,7 @@ export default function TamUngGiaiChiView({
         .from("tam_ung_giai_chi")
         .update(payload)
         .eq("id", editing.id)
-        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten)")
+        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
         .single();
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
@@ -141,7 +168,7 @@ export default function TamUngGiaiChiView({
       const { data, error } = await supabase
         .from("tam_ung_giai_chi")
         .insert({ ...payload, nguoi_de_nghi_id: nv?.id })
-        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten)")
+        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
         .single();
       if (!error && data) {
         setRows((prev) => [data as Row, ...prev]);
@@ -158,7 +185,7 @@ export default function TamUngGiaiChiView({
       .from("tam_ung_giai_chi")
       .update({ trang_thai: trangThai })
       .eq("id", row.id)
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten)")
+      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
       .single();
     if (!error && data) setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
     else if (error) window.alert(error.message);
@@ -180,6 +207,7 @@ export default function TamUngGiaiChiView({
       "Số tiền": r.so_tien,
       "Mức tạm ứng tối đa": r.muc_tam_ung_toi_da ?? "",
       "Số phiếu": r.so_phieu ?? "",
+      "Đơn hàng liên quan": one(r.don_hang)?.so_don_hang ?? "",
       "Trạng thái": r.trang_thai,
       "Ghi chú": r.ghi_chu ?? "",
     }));
@@ -201,7 +229,17 @@ export default function TamUngGiaiChiView({
   }
 
   function handleDownloadTemplate() {
-    const headers = ["Loại * (Tạm ứng/Giải chi)", "Ngày thực hiện (yyyy-mm-dd) *", "Đối tượng * (Nhân viên/Tài xế)", "Tên *", "Lần", "Số tiền *", "Số phiếu", "Ghi chú"];
+    const headers = [
+      "Loại * (Tạm ứng/Giải chi)",
+      "Ngày thực hiện (yyyy-mm-dd) *",
+      "Đối tượng * (Nhân viên/Tài xế)",
+      "Tên *",
+      "Lần",
+      "Số tiền *",
+      "Số phiếu",
+      "Đơn hàng liên quan (số đơn)",
+      "Ghi chú",
+    ];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Mẫu nhập");
@@ -275,6 +313,9 @@ export default function TamUngGiaiChiView({
         nhanVienId = match.id;
       }
 
+      const donHangSo = get("Đơn hàng liên quan (số đơn)");
+      const donHang = donHangSo ? donHangList.find((d) => d.so_don_hang.toLowerCase() === donHangSo.toLowerCase()) : null;
+
       records.push({
         loai,
         ngay_thuc_hien: ngay,
@@ -283,6 +324,7 @@ export default function TamUngGiaiChiView({
         ten_tai_xe: doiTuong === "Tài xế" ? ten : null,
         lan: get("Lần") ? Number(get("Lần")) : null,
         so_tien: Number(soTien),
+        don_hang_id: donHang?.id ?? null,
         so_phieu: get("Số phiếu") || null,
         ghi_chu: get("Ghi chú") || null,
         nguoi_de_nghi_id: nv?.id,
@@ -299,7 +341,7 @@ export default function TamUngGiaiChiView({
     const { data, error } = await supabase
       .from("tam_ung_giai_chi")
       .insert(records)
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten)");
+      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)");
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
@@ -361,6 +403,15 @@ export default function TamUngGiaiChiView({
             </select>
           </div>
         )}
+        <div className="w-48">
+          <label className="mb-1 block text-xs text-slate-500">Đơn hàng</label>
+          <SearchableSelect
+            options={donHangList.map((d) => ({ value: d.id, label: d.so_don_hang }))}
+            value={donHangFilter}
+            onChange={setDonHangFilter}
+            placeholder="Tất cả"
+          />
+        </div>
         <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
           Xuất Excel
         </button>
@@ -428,6 +479,30 @@ export default function TamUngGiaiChiView({
         </div>
       )}
 
+      {canSeeSummary && byOrderSummary.length > 0 && (
+        <div className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <p className="px-4 pt-3 text-xs font-medium text-slate-500">Theo đơn hàng (trong khoảng ngày đang lọc)</p>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">Đơn hàng</th>
+                <th className="px-4 py-3 font-medium">Tạm ứng</th>
+                <th className="px-4 py-3 font-medium">Giải chi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byOrderSummary.map((s) => (
+                <tr key={s.ten} className="border-t border-slate-100">
+                  <td className="px-4 py-2">{s.ten}</td>
+                  <td className="px-4 py-2">{s.tamUng.toLocaleString("en-US")}</td>
+                  <td className="px-4 py-2">{s.giaiChi.toLocaleString("en-US")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         {detailRows.map((row) => (
           <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
@@ -441,6 +516,7 @@ export default function TamUngGiaiChiView({
               {row.ngay_thuc_hien}
               {row.lan ? ` · Lần ${row.lan}` : ""} · {row.so_tien.toLocaleString("en-US")}
               {row.so_phieu ? ` · Phiếu: ${row.so_phieu}` : ""}
+              {one(row.don_hang)?.so_don_hang ? ` · Đơn: ${one(row.don_hang)?.so_don_hang}` : ""}
             </p>
             {row.ghi_chu && <p className="text-slate-500">{row.ghi_chu}</p>}
             <div className="mt-2 flex flex-wrap gap-3">
@@ -482,6 +558,7 @@ export default function TamUngGiaiChiView({
           initial={editing}
           proposing={proposing}
           nhanVienList={nhanVienList}
+          donHangList={donHangList}
           currentUserId={currentUserId}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
@@ -495,6 +572,7 @@ function TamUngForm({
   initial,
   proposing,
   nhanVienList,
+  donHangList,
   currentUserId,
   onCancel,
   onSave,
@@ -502,6 +580,7 @@ function TamUngForm({
   initial: Row | null;
   proposing: boolean;
   nhanVienList: NhanVien[];
+  donHangList: DonHangOpt[];
   currentUserId?: string;
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
@@ -516,6 +595,7 @@ function TamUngForm({
     so_tien: initial?.so_tien?.toString() ?? "",
     muc_tam_ung_toi_da: initial?.muc_tam_ung_toi_da?.toString() ?? "",
     so_phieu: initial?.so_phieu ?? "",
+    don_hang_id: initial?.don_hang_id ?? "",
     ghi_chu: initial?.ghi_chu ?? "",
     trang_thai: initial?.trang_thai ?? "Đề nghị",
   });
@@ -590,6 +670,14 @@ function TamUngForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số phiếu</label>
             <input value={values.so_phieu} onChange={(e) => set("so_phieu", e.target.value)} className={cls} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (tùy chọn)</label>
+            <SearchableSelect
+              options={donHangList.map((d) => ({ value: d.id, label: d.so_don_hang }))}
+              value={values.don_hang_id}
+              onChange={(v) => set("don_hang_id", v)}
+            />
           </div>
           {!proposing && (
             <div>

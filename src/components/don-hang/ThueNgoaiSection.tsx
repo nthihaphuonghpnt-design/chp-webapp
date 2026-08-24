@@ -44,6 +44,7 @@ export default function ThueNgoaiSection({
   const canInsert = ["Hiện trường", "Điều phối", "Kế toán"].includes(phongBan);
   const canApprove = phongBan === "Kế toán";
   const canEditRow = ["Hiện trường", "Điều phối", "Kế toán"].includes(phongBan);
+  const canSeeSell = !["Hiện trường", "Điều phối"].includes(phongBan);
 
   function doiTacTen(id: string | null) {
     return doiTacList.find((d) => d.id === id)?.ten ?? "—";
@@ -113,7 +114,7 @@ export default function ThueNgoaiSection({
       "Đối tác thuê ngoài": doiTacTen(r.doi_tac_thue_ngoai_id),
       "Nội dung": r.noi_dung ?? "",
       "Giá vốn (buy)": r.gia_von_buy ?? "",
-      "Giá bán (sell)": r.gia_ban_sell ?? "",
+      ...(canSeeSell ? { "Giá bán (sell)": r.gia_ban_sell ?? "" } : {}),
       "Tình trạng thanh toán": r.tinh_trang_thanh_toan,
       "Đã thanh toán": r.so_tien_da_thanh_toan ?? "",
       "Còn phải trả": (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0),
@@ -132,7 +133,7 @@ export default function ThueNgoaiSection({
       "Đối tác thuê ngoài *",
       "Nội dung",
       "Giá vốn (buy) *",
-      "Giá bán (sell)",
+      ...(canSeeSell ? ["Giá bán (sell)"] : []),
       "Ngày thuê (yyyy-mm-dd)",
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
@@ -192,7 +193,7 @@ export default function ThueNgoaiSection({
         doi_tac_thue_ngoai_id: doiTac.id,
         noi_dung: get("Nội dung") || null,
         gia_von_buy: Number(giaVon),
-        gia_ban_sell: get("Giá bán (sell)") ? Number(get("Giá bán (sell)")) : null,
+        gia_ban_sell: canSeeSell && get("Giá bán (sell)") ? Number(get("Giá bán (sell)")) : null,
         ngay_thue: get("Ngày thuê (yyyy-mm-dd)") || new Date().toISOString().slice(0, 10),
         nguoi_nhap_id: nv?.id,
       });
@@ -269,7 +270,7 @@ export default function ThueNgoaiSection({
             </div>
             <p className="text-slate-500">
               {doiTacTen(row.doi_tac_thue_ngoai_id)} · Buy: {(row.gia_von_buy ?? 0).toLocaleString("en-US")}
-              {row.gia_ban_sell ? ` · Sell: ${row.gia_ban_sell.toLocaleString("en-US")}` : ""}
+              {canSeeSell && row.gia_ban_sell ? ` · Sell: ${row.gia_ban_sell.toLocaleString("en-US")}` : ""}
             </p>
             <p className="text-slate-500">
               Thanh toán: {row.tinh_trang_thanh_toan}
@@ -315,7 +316,13 @@ export default function ThueNgoaiSection({
       )}
 
       {showForm && (
-        <ThueNgoaiForm initial={editing} doiTacList={doiTacList} onCancel={() => setShowForm(false)} onSave={handleSave} />
+        <ThueNgoaiForm
+          initial={editing}
+          doiTacList={doiTacList}
+          canSeeSell={canSeeSell}
+          onCancel={() => setShowForm(false)}
+          onSave={handleSave}
+        />
       )}
     </div>
   );
@@ -324,11 +331,13 @@ export default function ThueNgoaiSection({
 function ThueNgoaiForm({
   initial,
   doiTacList,
+  canSeeSell,
   onCancel,
   onSave,
 }: {
   initial: DonThueNgoai | null;
   doiTacList: Option[];
+  canSeeSell: boolean;
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
@@ -384,10 +393,12 @@ function ThueNgoaiForm({
             <label className="mb-1 block text-sm font-medium text-slate-700">Giá vốn (buy)</label>
             <input required type="number" step="any" value={values.gia_von_buy} onChange={(e) => set("gia_von_buy", e.target.value)} className={cls} />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán (sell)</label>
-            <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
-          </div>
+          {canSeeSell && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán (sell)</label>
+              <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Ngày thuê</label>
             <input type="date" value={values.ngay_thue} onChange={(e) => set("ngay_thue", e.target.value)} className={cls} />
