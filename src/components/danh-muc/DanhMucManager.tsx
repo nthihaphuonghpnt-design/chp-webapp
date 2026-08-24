@@ -106,6 +106,14 @@ export default function DanhMucManager({
     return field.options?.find((o) => o.value === value)?.label ?? String(value ?? "");
   }
 
+  function displayValue(field: FieldConfig, value: unknown) {
+    if (field.type === "select") return optionLabel(field, value);
+    if (field.type === "number" && value !== null && value !== undefined && value !== "") {
+      return Number(value).toLocaleString("en-US");
+    }
+    return String(value ?? "—");
+  }
+
   async function handleSubmit(formValues: Record<string, string>) {
     setSaving(true);
     setError(null);
@@ -375,7 +383,7 @@ export default function DanhMucManager({
               <div key={f.key} className="mb-1 flex justify-between gap-2 text-sm">
                 <span className="text-slate-500">{f.label}</span>
                 <span className="text-right font-medium text-slate-900">
-                  {f.type === "select" ? optionLabel(f, row[f.key]) : String(row[f.key] ?? "—")}
+                  {displayValue(f, row[f.key])}
                 </span>
               </div>
             ))}
@@ -434,7 +442,7 @@ export default function DanhMucManager({
               <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
                 {listFields.map((f) => (
                   <td key={f.key} className="px-4 py-3 text-slate-800">
-                    {f.type === "select" ? optionLabel(f, row[f.key]) : String(row[f.key] ?? "—")}
+                    {displayValue(f, row[f.key])}
                   </td>
                 ))}
                 <td className="px-4 py-3">
