@@ -313,7 +313,12 @@ export default function ChiPhiSection({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-900">Chi phí phát sinh</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Chi phí phát sinh</h2>
+          {["Hiện trường", "Chứng từ"].includes(phongBan) && (
+            <p className="text-xs text-slate-400">Chỉ hiện các dòng do chính bạn nhập.</p>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700">
             Xuất Excel
