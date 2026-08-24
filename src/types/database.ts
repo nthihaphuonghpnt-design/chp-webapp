@@ -301,6 +301,18 @@ export interface ChiPhiGiaoNhan {
   updated_at: string;
 }
 
+export interface BangGiaKhachHang {
+  id: string;
+  khach_hang_id: string;
+  loai_chi_phi_id: string;
+  don_gia: number | null;
+  don_vi: string | null;
+  ghi_chu: string | null;
+  dang_hoat_dong: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DinhPhiThang {
   id: string;
   thang_nam: string;

@@ -83,7 +83,11 @@ export default function DanhMucManager({
   const filteredRows = rows.filter((r) => {
     if (!query) return true;
     const q = query.toLowerCase();
-    return searchFieldsAll.some((f) => String(r[f] ?? "").toLowerCase().includes(q));
+    return searchFieldsAll.some((key) => {
+      const field = fields.find((f) => f.key === key);
+      const value = field?.type === "select" ? optionLabel(field, r[key]) : String(r[key] ?? "");
+      return value.toLowerCase().includes(q);
+    });
   });
 
   function openNew() {
@@ -159,7 +163,11 @@ export default function DanhMucManager({
 
   async function handleDelete(row: Row) {
     if (!canEdit) return;
-    const label = String(row[primaryField] ?? "mục này");
+    const primaryFieldConfig = fields.find((f) => f.key === primaryField);
+    const label =
+      primaryFieldConfig?.type === "select"
+        ? optionLabel(primaryFieldConfig, row[primaryField])
+        : String(row[primaryField] ?? "mục này");
     if (!window.confirm(`Xóa hẳn "${label}"? Thao tác này không thể hoàn tác.`)) return;
 
     const { error: err } = await supabase.from(table).delete().eq("id", row.id);

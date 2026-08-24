@@ -30,6 +30,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: chiPhiGiaoNhanRows },
     { data: loaiChiPhiList },
     { data: nhaCungCapList },
+    { data: bangGiaAll },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -49,9 +50,12 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("chi_phi_giao_nhan").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("loai_chi_phi").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("bang_gia_khach_hang").select("*").eq("dang_hoat_dong", true),
   ]);
 
   if (!order) notFound();
+
+  const bangGiaList = (bangGiaAll ?? []).filter((b) => b.khach_hang_id === order.khach_hang_id);
 
   const kh = Array.isArray(order.khach_hang) ? order.khach_hang[0] : order.khach_hang;
   const hangHoa = Array.isArray(order.hang_hoa) ? order.hang_hoa[0] : order.hang_hoa;
@@ -148,6 +152,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           initialRows={chiPhiRows ?? []}
           loaiChiPhiList={loaiChiPhiList ?? []}
           nhaCungCapList={nhaCungCapList ?? []}
+          bangGiaList={bangGiaList}
           phongBan={user?.phong_ban ?? ""}
         />
       </div>

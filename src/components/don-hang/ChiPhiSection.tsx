@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
-import type { PhatSinhChiPhi } from "@/types/database";
+import type { BangGiaKhachHang, PhatSinhChiPhi } from "@/types/database";
 
 interface Option {
   id: string;
@@ -23,6 +23,7 @@ export default function ChiPhiSection({
   initialRows,
   loaiChiPhiList,
   nhaCungCapList,
+  bangGiaList,
   phongBan,
 }: {
   donHangId: string;
@@ -30,6 +31,7 @@ export default function ChiPhiSection({
   initialRows: PhatSinhChiPhi[];
   loaiChiPhiList: Option[];
   nhaCungCapList: Option[];
+  bangGiaList: BangGiaKhachHang[];
   phongBan: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -360,6 +362,7 @@ export default function ChiPhiSection({
           initial={editing}
           loaiChiPhiList={loaiChiPhiList}
           nhaCungCapList={nhaCungCapList}
+          bangGiaList={bangGiaList}
           phongBan={phongBan}
           canSeeSell={canSeeSell}
           onCancel={() => setShowForm(false)}
@@ -374,6 +377,7 @@ function ChiPhiForm({
   initial,
   loaiChiPhiList,
   nhaCungCapList,
+  bangGiaList,
   phongBan,
   canSeeSell,
   onCancel,
@@ -382,12 +386,16 @@ function ChiPhiForm({
   initial: PhatSinhChiPhi | null;
   loaiChiPhiList: Option[];
   nhaCungCapList: Option[];
+  bangGiaList: BangGiaKhachHang[];
   phongBan: string;
   canSeeSell: boolean;
   onCancel: () => void;
   onSave: (values: Record<string, string | boolean>) => void;
 }) {
   const isSaleOnly = phongBan === "Sale";
+  const [giaGoiY, setGiaGoiY] = useState<BangGiaKhachHang | null>(
+    () => bangGiaList.find((b) => b.loai_chi_phi_id === initial?.loai_chi_phi_id) ?? null
+  );
 
   const [values, setValues] = useState({
     loai_chi_phi_id: initial?.loai_chi_phi_id ?? "",
@@ -408,6 +416,15 @@ function ChiPhiForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  function handleLoaiChiPhiChange(loaiChiPhiId: string) {
+    set("loai_chi_phi_id", loaiChiPhiId);
+    const match = bangGiaList.find((b) => b.loai_chi_phi_id === loaiChiPhiId);
+    setGiaGoiY(match ?? null);
+    if (match?.don_gia && !values.gia_ban_sell) {
+      set("gia_ban_sell", String(match.don_gia));
+    }
+  }
+
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 
   return (
@@ -423,7 +440,7 @@ function ChiPhiForm({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Loại chi phí</label>
-            <select disabled={isSaleOnly} value={values.loai_chi_phi_id} onChange={(e) => set("loai_chi_phi_id", e.target.value)} className={cls}>
+            <select disabled={isSaleOnly} value={values.loai_chi_phi_id} onChange={(e) => handleLoaiChiPhiChange(e.target.value)} className={cls}>
               <option value="">-- Chọn --</option>
               {loaiChiPhiList.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -459,6 +476,21 @@ function ChiPhiForm({
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán (sell)</label>
               <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
+              {giaGoiY && (
+                <p className="mt-1 text-xs text-blue-600">
+                  Giá theo bảng giá khách hàng: {(giaGoiY.don_gia ?? 0).toLocaleString("vi-VN")}
+                  {giaGoiY.don_vi ?? ""}
+                  {values.gia_ban_sell !== String(giaGoiY.don_gia ?? "") && (
+                    <button
+                      type="button"
+                      onClick={() => set("gia_ban_sell", String(giaGoiY.don_gia ?? ""))}
+                      className="ml-2 underline"
+                    >
+                      Dùng giá này
+                    </button>
+                  )}
+                </p>
+              )}
             </div>
           )}
           <div>
