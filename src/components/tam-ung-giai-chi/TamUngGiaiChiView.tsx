@@ -61,12 +61,14 @@ export default function TamUngGiaiChiView({
   initialRows,
   nhanVienList,
   donHangList,
+  daChiTheoNguoiVaLo,
   currentUserId,
   currentPhongBan,
 }: {
   initialRows: Row[];
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
+  daChiTheoNguoiVaLo: Record<string, number>;
   currentUserId?: string;
   currentPhongBan: string;
 }) {
@@ -75,6 +77,12 @@ export default function TamUngGiaiChiView({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [proposing, setProposing] = useState(false);
+  const [giaiChiPrefill, setGiaiChiPrefill] = useState<{
+    nhan_vien_id: string;
+    don_hang_id: string;
+    so_tien: string;
+    ghi_chu: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -91,6 +99,24 @@ export default function TamUngGiaiChiView({
 
   function personKey(row: Row) {
     return row.doi_tuong === "Tài xế" ? `tx:${row.ten_tai_xe}` : `nv:${row.nhan_vien_id}`;
+  }
+
+  function daChiChoLo(row: Row): number | null {
+    if (!row.nhan_vien_id || !row.don_hang_id) return null;
+    return daChiTheoNguoiVaLo[`${row.nhan_vien_id}:${row.don_hang_id}`] ?? 0;
+  }
+
+  function openGiaiChiNhanh(row: Row) {
+    const daChi = daChiChoLo(row) ?? 0;
+    setEditing(null);
+    setProposing(false);
+    setGiaiChiPrefill({
+      nhan_vien_id: row.nhan_vien_id ?? "",
+      don_hang_id: row.don_hang_id ?? "",
+      so_tien: daChi.toString(),
+      ghi_chu: `Quyết toán tạm ứng lô ${one(row.don_hang)?.so_don_hang ?? ""} (đã tạm ứng ${row.so_tien.toLocaleString("en-US")}, đã chi ${daChi.toLocaleString("en-US")})`,
+    });
+    setShowForm(true);
   }
 
   const filteredByPerson = rows
@@ -360,6 +386,7 @@ export default function TamUngGiaiChiView({
             onClick={() => {
               setEditing(null);
               setProposing(true);
+              setGiaiChiPrefill(null);
               setShowForm(true);
             }}
             className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm"
@@ -371,6 +398,7 @@ export default function TamUngGiaiChiView({
               onClick={() => {
                 setEditing(null);
                 setProposing(false);
+                setGiaiChiPrefill(null);
                 setShowForm(true);
               }}
               className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-700"
@@ -519,6 +547,16 @@ export default function TamUngGiaiChiView({
               {one(row.don_hang)?.so_don_hang ? ` · Đơn: ${one(row.don_hang)?.so_don_hang}` : ""}
             </p>
             {row.ghi_chu && <p className="text-slate-500">{row.ghi_chu}</p>}
+            {row.loai === "Tạm ứng" && row.don_hang_id && daChiChoLo(row) !== null && (
+              <p className="mt-1 text-slate-600">
+                Đã chi cho lô này: <strong>{daChiChoLo(row)!.toLocaleString("en-US")}</strong> ·{" "}
+                {row.so_tien - daChiChoLo(row)! >= 0 ? (
+                  <span className="text-green-700">Còn dư: {(row.so_tien - daChiChoLo(row)!).toLocaleString("en-US")}</span>
+                ) : (
+                  <span className="text-red-700">Còn thiếu: {(daChiChoLo(row)! - row.so_tien).toLocaleString("en-US")}</span>
+                )}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-3">
               {isKeToan && (
                 <>
@@ -526,6 +564,7 @@ export default function TamUngGiaiChiView({
                     onClick={() => {
                       setEditing(row);
                       setProposing(false);
+                      setGiaiChiPrefill(null);
                       setShowForm(true);
                     }}
                     className="text-xs font-medium text-blue-600"
@@ -542,6 +581,11 @@ export default function TamUngGiaiChiView({
                       </button>
                     </>
                   )}
+                  {row.loai === "Tạm ứng" && row.don_hang_id && row.trang_thai === "Đã duyệt" && (
+                    <button onClick={() => openGiaiChiNhanh(row)} className="text-xs font-medium text-purple-700">
+                      Giải chi nhanh
+                    </button>
+                  )}
                   <button onClick={() => handleDelete(row)} className="text-xs font-medium text-red-600">
                     Xóa
                   </button>
@@ -557,6 +601,7 @@ export default function TamUngGiaiChiView({
         <TamUngForm
           initial={editing}
           proposing={proposing}
+          giaiChiPrefill={giaiChiPrefill}
           nhanVienList={nhanVienList}
           donHangList={donHangList}
           currentUserId={currentUserId}
@@ -571,6 +616,7 @@ export default function TamUngGiaiChiView({
 function TamUngForm({
   initial,
   proposing,
+  giaiChiPrefill,
   nhanVienList,
   donHangList,
   currentUserId,
@@ -579,6 +625,7 @@ function TamUngForm({
 }: {
   initial: Row | null;
   proposing: boolean;
+  giaiChiPrefill: { nhan_vien_id: string; don_hang_id: string; so_tien: string; ghi_chu: string } | null;
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
   currentUserId?: string;
@@ -586,17 +633,17 @@ function TamUngForm({
   onSave: (values: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState({
-    loai: initial?.loai ?? "Tạm ứng",
+    loai: initial?.loai ?? (giaiChiPrefill ? "Giải chi" : "Tạm ứng"),
     ngay_thuc_hien: initial?.ngay_thuc_hien ?? new Date().toISOString().slice(0, 10),
     doi_tuong: initial?.doi_tuong ?? "Nhân viên",
-    nhan_vien_id: initial?.nhan_vien_id ?? (proposing ? currentUserId ?? "" : ""),
+    nhan_vien_id: initial?.nhan_vien_id ?? giaiChiPrefill?.nhan_vien_id ?? (proposing ? currentUserId ?? "" : ""),
     ten_tai_xe: initial?.ten_tai_xe ?? "",
     lan: initial?.lan?.toString() ?? "",
-    so_tien: initial?.so_tien?.toString() ?? "",
+    so_tien: initial?.so_tien?.toString() ?? giaiChiPrefill?.so_tien ?? "",
     muc_tam_ung_toi_da: initial?.muc_tam_ung_toi_da?.toString() ?? "",
     so_phieu: initial?.so_phieu ?? "",
-    don_hang_id: initial?.don_hang_id ?? "",
-    ghi_chu: initial?.ghi_chu ?? "",
+    don_hang_id: initial?.don_hang_id ?? giaiChiPrefill?.don_hang_id ?? "",
+    ghi_chu: initial?.ghi_chu ?? giaiChiPrefill?.ghi_chu ?? "",
     trang_thai: initial?.trang_thai ?? "Đề nghị",
   });
 
