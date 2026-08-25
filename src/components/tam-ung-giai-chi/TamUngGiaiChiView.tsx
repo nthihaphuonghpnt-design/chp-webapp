@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import MoneyInput from "@/components/common/MoneyInput";
 import SearchableSelect from "@/components/common/SearchableSelect";
 
 interface NhanVien {
@@ -708,11 +709,11 @@ function TamUngForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số tiền</label>
-            <input required type="number" step="any" value={values.so_tien} onChange={(e) => set("so_tien", e.target.value)} className={cls} />
+            <MoneyInput required value={values.so_tien} onChange={(v) => set("so_tien", v)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Mức tạm ứng tối đa</label>
-            <input type="number" step="any" value={values.muc_tam_ung_toi_da} onChange={(e) => set("muc_tam_ung_toi_da", e.target.value)} className={cls} />
+            <MoneyInput value={values.muc_tam_ung_toi_da} onChange={(v) => set("muc_tam_ung_toi_da", v)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số phiếu</label>

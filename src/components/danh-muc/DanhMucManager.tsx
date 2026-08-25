@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import MoneyInput from "@/components/common/MoneyInput";
 
 export type FieldType = "text" | "textarea" | "select" | "tel" | "email" | "number";
 
@@ -619,10 +620,16 @@ function FormModal({
                     </option>
                   ))}
                 </select>
+              ) : f.type === "number" ? (
+                <MoneyInput
+                  required={f.required}
+                  value={values[f.key]}
+                  onChange={(v) => set(f.key, v)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                />
               ) : (
                 <input
                   type={f.type}
-                  step={f.type === "number" ? "any" : undefined}
                   required={f.required}
                   value={values[f.key]}
                   onChange={(e) => set(f.key, e.target.value)}

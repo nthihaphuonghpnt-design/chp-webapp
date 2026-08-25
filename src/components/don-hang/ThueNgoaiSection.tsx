@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import MoneyInput from "@/components/common/MoneyInput";
 import type { DonThueNgoai } from "@/types/database";
 
 interface Option {
@@ -391,12 +392,12 @@ function ThueNgoaiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Giá vốn (buy)</label>
-            <input required type="number" step="any" value={values.gia_von_buy} onChange={(e) => set("gia_von_buy", e.target.value)} className={cls} />
+            <MoneyInput required value={values.gia_von_buy} onChange={(v) => set("gia_von_buy", v)} className={cls} />
           </div>
           {canSeeSell && (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán (sell)</label>
-              <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
+              <MoneyInput value={values.gia_ban_sell} onChange={(v) => set("gia_ban_sell", v)} className={cls} />
             </div>
           )}
           <div>
@@ -415,7 +416,7 @@ function ThueNgoaiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đã thanh toán</label>
-            <input type="number" step="any" value={values.so_tien_da_thanh_toan} onChange={(e) => set("so_tien_da_thanh_toan", e.target.value)} className={cls} />
+            <MoneyInput value={values.so_tien_da_thanh_toan} onChange={(v) => set("so_tien_da_thanh_toan", v)} className={cls} />
           </div>
         </div>
 

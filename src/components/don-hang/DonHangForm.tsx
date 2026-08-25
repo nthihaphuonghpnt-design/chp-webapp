@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import MoneyInput from "@/components/common/MoneyInput";
 import type { DonHang } from "@/types/database";
 
 interface Option {
@@ -336,7 +337,7 @@ export default function DonHangForm({
           />
         </Field>
         <Field label="Giá bán cho khách">
-          <input type="number" step="any" value={values.gia} onChange={(e) => set("gia", e.target.value)} className={inputClass} />
+          <MoneyInput value={values.gia} onChange={(v) => set("gia", v)} className={inputClass} />
         </Field>
       </Section>
 

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import MoneyInput from "@/components/common/MoneyInput";
 import ChiPhiBulkForm, { type BulkRowValues } from "@/components/don-hang/ChiPhiBulkForm";
 import type { BangGiaKhachHang, ChiTietVanChuyen, PhatSinhChiPhi } from "@/types/database";
 
@@ -602,16 +603,16 @@ function ChiPhiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đơn giá</label>
-            <input disabled={isSaleOnly} type="number" step="any" value={values.don_gia} onChange={(e) => set("don_gia", e.target.value)} className={cls} />
+            <MoneyInput disabled={isSaleOnly} value={values.don_gia} onChange={(v) => set("don_gia", v)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Giá vốn (buy)</label>
-            <input disabled={isSaleOnly} type="number" step="any" value={values.gia_von_buy} onChange={(e) => set("gia_von_buy", e.target.value)} className={cls} />
+            <MoneyInput disabled={isSaleOnly} value={values.gia_von_buy} onChange={(v) => set("gia_von_buy", v)} className={cls} />
           </div>
           {canSeeSell && (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán (sell)</label>
-              <input type="number" step="any" value={values.gia_ban_sell} onChange={(e) => set("gia_ban_sell", e.target.value)} className={cls} />
+              <MoneyInput value={values.gia_ban_sell} onChange={(v) => set("gia_ban_sell", v)} className={cls} />
               {giaGoiY && (
                 <p className="mt-1 text-xs text-blue-600">
                   Giá theo bảng giá khách hàng: {(giaGoiY.don_gia ?? 0).toLocaleString("en-US")}

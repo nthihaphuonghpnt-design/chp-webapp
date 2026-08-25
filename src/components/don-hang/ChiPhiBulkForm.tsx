@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SearchableSelect, { type SearchableOption } from "@/components/common/SearchableSelect";
+import MoneyInput from "@/components/common/MoneyInput";
 import type { ChiTietVanChuyen } from "@/types/database";
 
 interface Option {
@@ -152,23 +153,11 @@ export default function ChiPhiBulkForm({
                   />
                 </div>
                 <div className="col-span-1">
-                  <input
-                    type="number"
-                    step="any"
-                    value={r.gia_von_buy}
-                    onChange={(e) => update(r.key, { gia_von_buy: e.target.value })}
-                    className={cls}
-                  />
+                  <MoneyInput value={r.gia_von_buy} onChange={(v) => update(r.key, { gia_von_buy: v })} className={cls} />
                 </div>
                 {canSeeSell && (
                   <div className="col-span-1">
-                    <input
-                      type="number"
-                      step="any"
-                      value={r.gia_ban_sell}
-                      onChange={(e) => update(r.key, { gia_ban_sell: e.target.value })}
-                      className={cls}
-                    />
+                    <MoneyInput value={r.gia_ban_sell} onChange={(v) => update(r.key, { gia_ban_sell: v })} className={cls} />
                   </div>
                 )}
                 <div className={`flex items-center gap-3 text-xs ${canSeeSell ? "col-span-2" : "col-span-3"}`}>

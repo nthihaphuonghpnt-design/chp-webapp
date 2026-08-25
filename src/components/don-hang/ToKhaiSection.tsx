@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import MoneyInput from "@/components/common/MoneyInput";
 import type { ToKhaiHaiQuan } from "@/types/database";
 
 const LOAI_HINH = ["Nhập kinh doanh", "Nhập ủy thác", "Xuất kinh doanh", "Xuất ủy thác", "Tạm nhập tái xuất", "Khác"];
@@ -222,15 +223,15 @@ function ToKhaiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Thuế nhập khẩu</label>
-            <input type="number" step="any" value={values.thue_nhap_khau} onChange={(e) => set("thue_nhap_khau", e.target.value)} className={cls} />
+            <MoneyInput value={values.thue_nhap_khau} onChange={(v) => set("thue_nhap_khau", v)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Thuế VAT NK</label>
-            <input type="number" step="any" value={values.thue_vat_nk} onChange={(e) => set("thue_vat_nk", e.target.value)} className={cls} />
+            <MoneyInput value={values.thue_vat_nk} onChange={(v) => set("thue_vat_nk", v)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Thuế khác</label>
-            <input type="number" step="any" value={values.thue_khac} onChange={(e) => set("thue_khac", e.target.value)} className={cls} />
+            <MoneyInput value={values.thue_khac} onChange={(v) => set("thue_khac", v)} className={cls} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Ngày thông quan</label>

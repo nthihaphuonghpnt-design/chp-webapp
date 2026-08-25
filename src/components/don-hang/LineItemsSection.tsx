@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import MoneyInput from "@/components/common/MoneyInput";
 
 export interface LineItemField {
   key: string;
@@ -305,10 +306,16 @@ function LineItemForm({
                     </option>
                   ))}
                 </select>
+              ) : f.type === "number" ? (
+                <MoneyInput
+                  required={f.required}
+                  value={values[f.key]}
+                  onChange={(v) => setValues((prev) => ({ ...prev, [f.key]: v }))}
+                  className={cls}
+                />
               ) : (
                 <input
-                  type={f.type === "number" ? "number" : "text"}
-                  step={f.type === "number" ? "any" : undefined}
+                  type="text"
                   required={f.required}
                   value={values[f.key]}
                   onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}

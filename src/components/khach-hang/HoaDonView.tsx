@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
+import MoneyInput from "@/components/common/MoneyInput";
 import type { DinhKem } from "@/types/database";
 
 interface KhachHang {
@@ -373,7 +374,7 @@ function HoaDonForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Tổng tiền trước thuế</label>
-            <input type="number" step="any" value={values.tong_tien_truoc_thue} onChange={(e) => set("tong_tien_truoc_thue", e.target.value)} className={cls} />
+            <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} />
             {goiYTong !== null && (
               <p className="mt-1 text-xs text-blue-600">
                 Gợi ý (đã bán cho khách, không gồm chi hộ): {goiYTong.toLocaleString("en-US")}
@@ -401,7 +402,7 @@ function HoaDonForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đã thu</label>
-            <input type="number" step="any" value={values.so_tien_da_thu} onChange={(e) => set("so_tien_da_thu", e.target.value)} className={cls} />
+            <MoneyInput value={values.so_tien_da_thu} onChange={(v) => set("so_tien_da_thu", v)} className={cls} />
           </div>
         </div>
 
