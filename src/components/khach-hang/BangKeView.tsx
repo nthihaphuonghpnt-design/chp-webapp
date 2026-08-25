@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 
@@ -9,6 +10,13 @@ interface KhachHang {
   id: string;
   ten_day_du: string;
   ten_viet_tat: string | null;
+}
+interface DonHangOpt {
+  id: string;
+  so_don_hang: string;
+  ngay_len_don: string;
+  loai_kich_co: string | null;
+  so_luong: number | null;
 }
 interface ChiPhiRow {
   id: string;
@@ -34,25 +42,37 @@ function one<T>(v: T | T[] | null): T | null {
 export default function BangKeView({
   khachHangList,
   khachHangIdChon,
+  donHangList,
   chiPhiRows: initialChiPhi,
   phuThuRows: initialPhuThu,
 }: {
   khachHangList: KhachHang[];
   khachHangIdChon: string;
+  donHangList: DonHangOpt[];
   chiPhiRows: ChiPhiRow[];
   phuThuRows: PhuThuRow[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const [chiPhiRows, setChiPhiRows] = useState<ChiPhiRow[]>(initialChiPhi);
-  const [phuThuRows] = useState<PhuThuRow[]>(initialPhuThu);
-  const [chonChiPhi, setChonChiPhi] = useState<Set<string>>(new Set(initialChiPhi.map((r) => r.id)));
-  const [chonPhuThu, setChonPhuThu] = useState<Set<string>>(new Set(initialPhuThu.map((r) => r.id)));
+  const [chiPhiRowsAll, setChiPhiRows] = useState<ChiPhiRow[]>(initialChiPhi);
+  const [phuThuRowsAll] = useState<PhuThuRow[]>(initialPhuThu);
+  const [donHangFilter, setDonHangFilter] = useState("");
   const [vatPercent, setVatPercent] = useState("");
   const [soHoaDon, setSoHoaDon] = useState("");
   const [dangXuat, setDangXuat] = useState(false);
 
+  const chiPhiRows = donHangFilter ? chiPhiRowsAll.filter((r) => r.don_hang_id === donHangFilter) : chiPhiRowsAll;
+  const phuThuRows = donHangFilter ? phuThuRowsAll.filter((r) => r.don_hang_id === donHangFilter) : phuThuRowsAll;
+
+  const [chonChiPhi, setChonChiPhi] = useState<Set<string>>(new Set(initialChiPhi.map((r) => r.id)));
+  const [chonPhuThu, setChonPhuThu] = useState<Set<string>>(new Set(initialPhuThu.map((r) => r.id)));
+
   const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }));
+  const donHangOptions = donHangList.map((d) => ({
+    value: d.id,
+    label: `${d.so_don_hang} · ${d.ngay_len_don}${d.loai_kich_co ? ` · ${d.so_luong ?? 1}x${d.loai_kich_co}` : ""}`,
+  }));
+  const donHangChon = donHangList.find((d) => d.id === donHangFilter) ?? null;
 
   function chonKhachHang(id: string) {
     const params = new URLSearchParams();
@@ -90,6 +110,89 @@ export default function BangKeView({
   const tongTruocThue = tongGiaBanChiPhi + tongPhuThu;
   const tienVat = Math.round((tongTruocThue * (Number(vatPercent) || 0)) / 100);
   const tongCong = tongTruocThue + tienVat + tongChiHo;
+
+  const chiTietBangKe = useMemo(() => {
+    const vat = Number(vatPercent) || 0;
+    const rows: {
+      dienGiai: string;
+      donHang: string;
+      donGia: number;
+      soLuong: number;
+      thanhTien: number;
+      vatPercent: number;
+      tienVat: number;
+      tongSauVat: number;
+      ghiChu: string;
+    }[] = [];
+    for (const r of chiPhiRows) {
+      const soTien = r.chi_ho ? r.gia_von_buy ?? 0 : r.gia_ban_sell ?? 0;
+      const vatDong = r.chi_ho ? 0 : vat;
+      const tienVatDong = r.chi_ho ? 0 : Math.round((soTien * vatDong) / 100);
+      rows.push({
+        dienGiai: one(r.loai_chi_phi)?.ten ?? "—",
+        donHang: one(r.don_hang)?.so_don_hang ?? "—",
+        donGia: soTien,
+        soLuong: 1,
+        thanhTien: soTien,
+        vatPercent: vatDong,
+        tienVat: tienVatDong,
+        tongSauVat: soTien + tienVatDong,
+        ghiChu: r.chi_ho ? "Chi hộ" : "Xuất HĐ",
+      });
+    }
+    for (const r of phuThuRows) {
+      const soTien = r.thanh_tien ?? 0;
+      const tienVatDong = Math.round((soTien * vat) / 100);
+      rows.push({
+        dienGiai: `Phụ thu: ${r.loai_phu_thu ?? "—"}`,
+        donHang: one(r.don_hang)?.so_don_hang ?? "—",
+        donGia: soTien,
+        soLuong: 1,
+        thanhTien: soTien,
+        vatPercent: vat,
+        tienVat: tienVatDong,
+        tongSauVat: soTien + tienVatDong,
+        ghiChu: "Xuất HĐ (Phụ thu)",
+      });
+    }
+    return rows;
+  }, [chiPhiRows, phuThuRows, vatPercent]);
+
+  function handleXuatExcelBangKe() {
+    const khTen = khachHangList.find((k) => k.id === khachHangIdChon);
+    const data = chiTietBangKe.map((r, i) => ({
+      No: i + 1,
+      "Charge Descriptions": r.dienGiai,
+      "Đơn hàng": r.donHang,
+      Currency: "VNĐ",
+      "Unit Price": r.donGia,
+      Volume: r.soLuong,
+      Total: r.thanhTien,
+      "VAT (%)": r.vatPercent,
+      "Tiền VAT": r.tienVat,
+      "Total (sau VAT)": r.tongSauVat,
+      "Ghi chú": r.ghiChu,
+    }));
+    data.push({
+      No: 0,
+      "Charge Descriptions": "TỔNG CỘNG",
+      "Đơn hàng": "",
+      Currency: "",
+      "Unit Price": 0,
+      Volume: 0,
+      Total: chiTietBangKe.reduce((s, r) => s + r.thanhTien, 0),
+      "VAT (%)": 0,
+      "Tiền VAT": chiTietBangKe.reduce((s, r) => s + r.tienVat, 0),
+      "Total (sau VAT)": chiTietBangKe.reduce((s, r) => s + r.tongSauVat, 0),
+      "Ghi chú": "",
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Bảng kê");
+    const ten = (khTen?.ten_viet_tat || khTen?.ten_day_du || "khach-hang").replace(/[^\p{L}\p{N}]+/gu, "-");
+    const donSuffix = donHangChon ? `-${donHangChon.so_don_hang}` : "";
+    XLSX.writeFile(wb, `bang-ke-${ten}${donSuffix}.xlsx`);
+  }
 
   async function handleXuatHoaDon() {
     if (!khachHangIdChon) return;
@@ -152,15 +255,101 @@ export default function BangKeView({
     <div className="mx-auto max-w-5xl px-4 py-6">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Bảng kê chi phí khách hàng</h1>
 
-      <div className="mb-6 w-full sm:w-80">
-        <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
-        <SearchableSelect options={khOptions} value={khachHangIdChon} onChange={chonKhachHang} placeholder="-- Chọn khách hàng --" />
+      <div className="mb-6 flex flex-wrap gap-4">
+        <div className="w-full sm:w-80">
+          <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
+          <SearchableSelect options={khOptions} value={khachHangIdChon} onChange={chonKhachHang} placeholder="-- Chọn khách hàng --" />
+        </div>
+        {khachHangIdChon && (
+          <div className="w-full sm:w-80">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng (tùy chọn)</label>
+            <SearchableSelect
+              options={donHangOptions}
+              value={donHangFilter}
+              onChange={setDonHangFilter}
+              placeholder="-- Tất cả đơn hàng --"
+            />
+          </div>
+        )}
       </div>
 
       {!khachHangIdChon && <p className="text-sm text-slate-400">Chọn khách hàng để xem bảng kê chi phí chưa xuất hóa đơn.</p>}
 
       {khachHangIdChon && (
         <>
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Bảng kê chi tiết{donHangChon ? ` — Đơn ${donHangChon.so_don_hang}` : " — Tất cả đơn hàng chưa xuất hóa đơn"}
+                </h2>
+                {donHangChon && (
+                  <p className="text-xs text-slate-500">
+                    Ngày: {donHangChon.ngay_len_don}
+                    {donHangChon.loai_kich_co ? ` · Khối lượng: ${donHangChon.so_luong ?? 1} x ${donHangChon.loai_kich_co}` : ""}
+                  </p>
+                )}
+              </div>
+              <button onClick={handleXuatExcelBangKe} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                Xuất Excel bảng kê
+              </button>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-slate-100">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
+                  <tr>
+                    {["No", "Charge Descriptions", "Đơn hàng", "Đơn giá", "SL", "Total", "VAT (%)", "Tiền VAT", "Total (sau VAT)", "Ghi chú"].map((h) => (
+                      <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {chiTietBangKe.map((r, i) => (
+                    <tr key={i} className="border-t border-slate-100">
+                      <td className="px-3 py-2">{i + 1}</td>
+                      <td className="px-3 py-2">{r.dienGiai}</td>
+                      <td className="px-3 py-2">{r.donHang}</td>
+                      <td className="px-3 py-2">{r.donGia.toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2">{r.soLuong}</td>
+                      <td className="px-3 py-2">{r.thanhTien.toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2">{r.vatPercent || ""}</td>
+                      <td className="px-3 py-2">{r.tienVat ? r.tienVat.toLocaleString("en-US") : ""}</td>
+                      <td className="px-3 py-2 font-medium">{r.tongSauVat.toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.ghiChu}</td>
+                    </tr>
+                  ))}
+                  {chiTietBangKe.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-3 py-6 text-center text-slate-400">
+                        Không có dòng nào.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {chiTietBangKe.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
+                      <td className="px-3 py-2" colSpan={5}>
+                        TỔNG CỘNG
+                      </td>
+                      <td className="px-3 py-2">{chiTietBangKe.reduce((s, r) => s + r.thanhTien, 0).toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2"></td>
+                      <td className="px-3 py-2">{chiTietBangKe.reduce((s, r) => s + r.tienVat, 0).toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2">{chiTietBangKe.reduce((s, r) => s + r.tongSauVat, 0).toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2"></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Nhập VAT % ở khung &quot;Tạo hóa đơn&quot; bên dưới để bảng này tự tính lại tiền VAT cho các dòng &quot;Xuất HĐ&quot;
+              (dòng &quot;Chi hộ&quot; không tính VAT).
+            </p>
+          </div>
+
           <Section title={`Chi hộ (thu lại đúng số tiền, không VAT) — ${dongChiHo.length} dòng`}>
             {dongChiHo.map((r) => (
               <RowItem

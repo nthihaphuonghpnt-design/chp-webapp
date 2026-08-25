@@ -26,11 +26,17 @@ export default async function BangKePage({
     .order("ten_day_du");
 
   let donHangIds: string[] = [];
+  let donHangList: unknown[] = [];
   let chiPhiRows: unknown[] = [];
   let phuThuRows: unknown[] = [];
 
   if (khach_hang) {
-    const { data: donHang } = await supabase.from("don_hang").select("id, so_don_hang").eq("khach_hang_id", khach_hang);
+    const { data: donHang } = await supabase
+      .from("don_hang")
+      .select("id, so_don_hang, ngay_len_don, loai_kich_co, so_luong")
+      .eq("khach_hang_id", khach_hang)
+      .order("ngay_len_don", { ascending: false });
+    donHangList = donHang ?? [];
     donHangIds = (donHang ?? []).map((d) => d.id);
 
     if (donHangIds.length > 0) {
@@ -58,6 +64,8 @@ export default async function BangKePage({
     <BangKeView
       khachHangList={khachHangList ?? []}
       khachHangIdChon={khach_hang ?? ""}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      donHangList={donHangList as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       chiPhiRows={chiPhiRows as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

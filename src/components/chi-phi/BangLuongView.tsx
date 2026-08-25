@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import MoneyInput from "@/components/common/MoneyInput";
 
 interface PhongBan {
   ten: string;
@@ -43,6 +44,14 @@ interface ThueNgoai {
 interface DinhPhi {
   thang_nam: string;
   so_tien: number | null;
+}
+interface LuongDaTra {
+  id: string;
+  nhan_vien_id: string;
+  thang_luong: string;
+  so_tien: number;
+  phuong_thuc: "Tiền mặt" | "Tài khoản công ty";
+  ngay_tra: string;
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -109,6 +118,7 @@ export default function BangLuongView({
   phuThuList,
   thueNgoaiList,
   dinhPhiList,
+  luongDaTraList,
 }: {
   nhanVienList: NhanVien[];
   chiPhiGiaoNhanList: ChiPhiGiaoNhan[];
@@ -117,11 +127,17 @@ export default function BangLuongView({
   phuThuList: PhuThu[];
   thueNgoaiList: ThueNgoai[];
   dinhPhiList: DinhPhi[];
+  luongDaTraList: LuongDaTra[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [thangLuong, setThangLuong] = useState(monthRange());
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [daTraList, setDaTraList] = useState<LuongDaTra[]>(luongDaTraList);
+  const [traForm, setTraForm] = useState<{ nhanVienId: string; soTien: string } | null>(null);
+  const [traPhuongThuc, setTraPhuongThuc] = useState<"Tiền mặt" | "Tài khoản công ty">("Tài khoản công ty");
+  const [traNgay, setTraNgay] = useState(new Date().toISOString().slice(0, 10));
+  const [dangTra, setDangTra] = useState(false);
 
   const thangHoatDong = thangTruoc(thangLuong);
   const payday = ngayTraLuong(thangLuong);
@@ -191,6 +207,48 @@ export default function BangLuongView({
   const tongBhxhCt = bangLuong.reduce((s, r) => s + r.bhxhCt, 0);
   const tongChiPhiNhanSu = tongLuong + tongBhxhCt;
 
+  function daTraCuaThang(nhanVienId: string) {
+    return daTraList.find((d) => d.nhan_vien_id === nhanVienId && d.thang_luong === thangLuong) ?? null;
+  }
+
+  function moFormTra(nhanVienId: string, thucLanh: number) {
+    setTraForm({ nhanVienId, soTien: Math.round(thucLanh).toString() });
+    setTraPhuongThuc("Tài khoản công ty");
+    setTraNgay(new Date().toISOString().slice(0, 10));
+  }
+
+  async function xacNhanTra() {
+    if (!traForm) return;
+    setDangTra(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+
+    const { data, error } = await supabase
+      .from("luong_da_tra")
+      .upsert(
+        {
+          nhan_vien_id: traForm.nhanVienId,
+          thang_luong: thangLuong,
+          so_tien: Number(traForm.soTien),
+          phuong_thuc: traPhuongThuc,
+          ngay_tra: traNgay,
+          nguoi_tra_id: nv?.id,
+        },
+        { onConflict: "nhan_vien_id,thang_luong" }
+      )
+      .select()
+      .single();
+    setDangTra(false);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setDaTraList((prev) => [...prev.filter((d) => d.id !== data.id), data as LuongDaTra]);
+    setTraForm(null);
+  }
+
   async function themVaoDinhPhi() {
     setSaving(true);
     setSavedMsg(null);
@@ -256,7 +314,7 @@ export default function BangLuongView({
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
-              {["Họ tên", "Phòng ban", "Lương cố định", "Lương theo lô", "Tổng thu nhập", "BHXH (NV đóng)", "BHXH (Cty đóng)", "Thuế TNCN", "Thực lãnh"].map((h) => (
+              {["Họ tên", "Phòng ban", "Lương cố định", "Lương theo lô", "Tổng thu nhập", "BHXH (NV đóng)", "BHXH (Cty đóng)", "Thuế TNCN", "Thực lãnh", "Trạng thái"].map((h) => (
                 <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">
                   {h}
                 </th>
@@ -275,11 +333,25 @@ export default function BangLuongView({
                 <td className="px-3 py-2">{fmt(r.bhxhCt)}</td>
                 <td className="px-3 py-2">{fmt(r.thueTncn)}</td>
                 <td className="px-3 py-2 font-semibold text-slate-900">{fmt(r.thucLanh)}</td>
+                <td className="px-3 py-2">
+                  {daTraCuaThang(r.nv.id) ? (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      Đã trả · {daTraCuaThang(r.nv.id)!.phuong_thuc} · {daTraCuaThang(r.nv.id)!.ngay_tra}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => moFormTra(r.nv.id, r.thucLanh)}
+                      className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700"
+                    >
+                      Đánh dấu đã trả
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {bangLuong.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
                   Chưa có nhân viên nào.
                 </td>
               </tr>
@@ -295,7 +367,7 @@ export default function BangLuongView({
                 <td className="px-3 py-2" colSpan={2}>
                   BHXH công ty đóng: {fmt(tongBhxhCt)}
                 </td>
-                <td className="px-3 py-2" colSpan={2}></td>
+                <td className="px-3 py-2" colSpan={3}></td>
               </tr>
             </tfoot>
           )}
@@ -321,6 +393,61 @@ export default function BangLuongView({
         11.000.000đ (chưa tính người phụ thuộc). BHXH: nhân viên 10,5%, công ty 21,5% trên Mức đóng
         BHXH. Kiểm tra lại trước khi trả lương chính thức.
       </p>
+
+      {traForm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-sm sm:rounded-2xl">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Xác nhận đã trả lương</h2>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Số tiền đã trả</label>
+                <MoneyInput
+                  value={traForm.soTien}
+                  onChange={(v) => setTraForm((prev) => (prev ? { ...prev, soTien: v } : prev))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức</label>
+                <select
+                  value={traPhuongThuc}
+                  onChange={(e) => setTraPhuongThuc(e.target.value as "Tiền mặt" | "Tài khoản công ty")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="Tài khoản công ty">Tài khoản công ty</option>
+                  <option value="Tiền mặt">Tiền mặt</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Ngày trả</label>
+                <input
+                  type="date"
+                  value={traNgay}
+                  onChange={(e) => setTraNgay(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTraForm(null)}
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={dangTra}
+                onClick={xacNhanTra}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {dangTra ? "Đang lưu..." : "Xác nhận đã trả"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

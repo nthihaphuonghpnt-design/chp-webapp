@@ -23,6 +23,7 @@ export default async function BangLuongPage() {
     { data: phuThuList },
     { data: thueNgoaiList },
     { data: dinhPhiList },
+    { data: luongDaTraList },
   ] = await Promise.all([
     supabase
       .from("nhan_vien")
@@ -37,6 +38,7 @@ export default async function BangLuongPage() {
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
     supabase.from("don_thue_ngoai").select("don_hang_id, gia_von_buy, gia_ban_sell"),
     supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
+    supabase.from("luong_da_tra").select("*"),
   ]);
 
   return (
@@ -49,6 +51,8 @@ export default async function BangLuongPage() {
       phuThuList={phuThuList ?? []}
       thueNgoaiList={thueNgoaiList ?? []}
       dinhPhiList={dinhPhiList ?? []}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      luongDaTraList={(luongDaTraList ?? []) as any[]}
     />
   );
 }

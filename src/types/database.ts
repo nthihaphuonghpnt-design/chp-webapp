@@ -456,6 +456,19 @@ export interface SoQuy {
   updated_at: string;
 }
 
+export interface LuongDaTra {
+  id: string;
+  nhan_vien_id: string;
+  thang_luong: string;
+  so_tien: number;
+  phuong_thuc: "Tiền mặt" | "Tài khoản công ty";
+  ngay_tra: string;
+  ghi_chu: string | null;
+  nguoi_tra_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface HoaDonDonHang {
   id: string;
   hoa_don_id: string;
