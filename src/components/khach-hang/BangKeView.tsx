@@ -23,6 +23,7 @@ interface ChiPhiRow {
   don_hang_id: string;
   gia_von_buy: number | null;
   gia_ban_sell: number | null;
+  vat_percent: number | null;
   chi_ho: boolean;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
   loai_chi_phi: { ten: string } | { ten: string }[] | null;
@@ -126,7 +127,9 @@ export default function BangKeView({
     }[] = [];
     for (const r of chiPhiRows) {
       const soTien = r.chi_ho ? r.gia_von_buy ?? 0 : r.gia_ban_sell ?? 0;
-      const vatDong = r.chi_ho ? 0 : vat;
+      // Ưu tiên VAT% nhập tay ở khung "Tạo hóa đơn" (áp cho cả bảng); nếu chưa nhập,
+      // dùng VAT% đã lưu sẵn theo từng dòng chi phí lúc tạo ở Đơn hàng.
+      const vatDong = r.chi_ho ? 0 : vat || r.vat_percent || 0;
       const tienVatDong = r.chi_ho ? 0 : Math.round((soTien * vatDong) / 100);
       rows.push({
         dienGiai: one(r.loai_chi_phi)?.ten ?? "—",

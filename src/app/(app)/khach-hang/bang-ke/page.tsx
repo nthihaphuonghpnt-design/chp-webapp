@@ -62,6 +62,8 @@ export default async function BangKePage({
 
   return (
     <BangKeView
+      // remount khi đổi khách hàng để state nội bộ (danh sách chi phí đã chọn, filter đơn hàng...) reset đúng
+      key={khach_hang ?? "none"}
       khachHangList={khachHangList ?? []}
       khachHangIdChon={khach_hang ?? ""}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
