@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import DanhMucManager, { type FieldConfig, type Row } from "@/components/danh-muc/DanhMucManager";
@@ -21,6 +22,13 @@ export default async function DinhPhiThangPage() {
 
   return (
     <div>
+      {canEdit && (
+        <div className="mx-auto max-w-5xl px-4 pt-4">
+          <Link href="/chi-phi/bang-luong" className="text-sm font-medium text-blue-600 underline">
+            → Xem Bảng lương (tính lương + BHXH + thuế TNCN từng nhân viên)
+          </Link>
+        </div>
+      )}
       <DanhMucManager
         table="dinh_phi_thang"
         title="Định phí tháng"
