@@ -198,55 +198,31 @@ export default function BangKeView({
 
     const columns: ExcelColumn[] = [
       { header: "No", key: "no", width: 5 },
-      { header: "Charge Descriptions", key: "dienGiai", width: 28 },
-      { header: "Đơn hàng", key: "donHang", width: 12 },
-      { header: "Loại hàng", key: "loaiHang", width: 16 },
-      { header: "Kích cỡ / SL", key: "kichCo", width: 14 },
-      { header: "Ngày vận chuyển", key: "ngayVc", width: 14 },
-      { header: "Số BL/BK", key: "soBl", width: 12 },
-      { header: "Số lô", key: "soLo", width: 10 },
-      { header: "Biển kiểm soát", key: "bienSo", width: 14 },
-      { header: "Đơn giá", key: "donGia", width: 12 },
+      { header: "Charge Descriptions", key: "dienGiai", width: 32 },
+      { header: "Đơn giá", key: "donGia", width: 14, numFmt: "#,##0" },
       { header: "SL", key: "sl", width: 6 },
-      { header: "Total", key: "total", width: 14 },
+      { header: "Total", key: "total", width: 14, numFmt: "#,##0" },
       { header: "VAT (%)", key: "vat", width: 8 },
-      { header: "Tiền VAT", key: "tienVat", width: 12 },
-      { header: "Total (sau VAT)", key: "tongSauVat", width: 14 },
+      { header: "Tiền VAT", key: "tienVat", width: 14, numFmt: "#,##0" },
+      { header: "Total (sau VAT)", key: "tongSauVat", width: 16, numFmt: "#,##0" },
       { header: "Ghi chú", key: "ghiChu", width: 14 },
     ];
 
-    const rows = chiTietBangKe.map((r, i) => {
-      const dh = donHangMap.get(r.donHangId);
-      return [
-        i + 1,
-        r.dienGiai,
-        r.donHang,
-        one(dh?.hang_hoa ?? null)?.ten ?? "",
-        dh ? `${dh.so_luong ?? 1}${dh.dvt ? ` ${dh.dvt}` : ""}${dh.loai_kich_co ? ` ${dh.loai_kich_co}` : ""}` : "",
-        dh?.ngay_van_chuyen ?? "",
-        dh?.so_bl_bk ?? "",
-        dh?.so_lo ?? "",
-        dh?.bien_so?.join(", ") ?? "",
-        r.donGia,
-        r.soLuong,
-        r.thanhTien,
-        r.vatPercent || "",
-        r.tienVat || "",
-        r.tongSauVat,
-        r.ghiChu,
-      ];
-    });
+    const rows = chiTietBangKe.map((r, i) => [
+      i + 1,
+      r.dienGiai,
+      r.donGia,
+      r.soLuong,
+      r.thanhTien,
+      r.vatPercent || "",
+      r.tienVat || "",
+      r.tongSauVat,
+      r.ghiChu,
+    ]);
 
     const totalRow = [
       "",
       "TỔNG CỘNG",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
       "",
       "",
       chiTietBangKe.reduce((s, r) => s + r.thanhTien, 0),
@@ -256,20 +232,35 @@ export default function BangKeView({
       "",
     ];
 
+    // Dong "Don hang" o khung thong tin chung: 1 don duoc chon thi ghi ro so + ngay,
+    // con xem gop nhieu don thi liet ke danh sach so don hang lien quan.
+    const donHangLienQuan = donHangChon
+      ? `Đơn hàng: ${donHangChon.so_don_hang}  ·  Ngày lên đơn: ${donHangChon.ngay_len_don}`
+      : (() => {
+          const soDon = Array.from(new Set(chiTietBangKe.map((r) => donHangMap.get(r.donHangId)?.so_don_hang).filter(Boolean)));
+          return soDon.length > 0 ? `Đơn hàng: ${soDon.join(", ")}` : "";
+        })();
+
     const ten = (khTen?.ten_viet_tat || khTen?.ten_day_du || "khach-hang").replace(/[^\p{L}\p{N}]+/gu, "-");
     const donSuffix = donHangChon ? `-${donHangChon.so_don_hang}` : "";
     const logo = await taiLogoCongTy();
     await xuatExcelKeO(`bang-ke-${ten}${donSuffix}.xlsx`, {
       sheetName: "Bảng kê",
-      logo: logo ?? undefined,
+      logo: logo ? { ...logo, cols: 2 } : undefined,
       headerLines: [
+        // Cot C tro di (sau logo 2 cot A-B), hang 1-5
         ...CONG_TY_HEADER_LINES,
-        "",
-        { text: "BẢNG KÊ CHI PHÍ KHÁCH HÀNG", bold: true, size: 12 },
-        `Khách hàng: ${khachHangChiTiet?.ten_day_du ?? khTen?.ten_day_du ?? ""}`,
-        `Địa chỉ: ${khachHangChiTiet?.dia_chi ?? ""}`,
-        `MST: ${khachHangChiTiet?.ma_so_thue ?? ""}    Người liên hệ: ${khachHangChiTiet?.nguoi_lien_he ?? ""}    SĐT: ${khachHangChiTiet?.dien_thoai ?? ""}`,
-        donHangChon ? `Đơn hàng: ${donHangChon.so_don_hang}  ·  Ngày lên đơn: ${donHangChon.ngay_len_don}` : "",
+        "", // dong 6 trang
+        // Cot B tro di, tu hang 7
+        { text: "DEBIT NOTE", bold: true, color: "FFDC2626", size: 16, col: 2 },
+        "", // dong 8 trang
+        { text: `Khách hàng: ${khachHangChiTiet?.ten_day_du ?? khTen?.ten_day_du ?? ""}`, col: 2 },
+        { text: `Địa chỉ: ${khachHangChiTiet?.dia_chi ?? ""}`, col: 2 },
+        {
+          text: `MST: ${khachHangChiTiet?.ma_so_thue ?? ""}    Người liên hệ: ${khachHangChiTiet?.nguoi_lien_he ?? ""}    SĐT: ${khachHangChiTiet?.dien_thoai ?? ""}`,
+          col: 2,
+        },
+        donHangLienQuan ? { text: donHangLienQuan, col: 2 } : "",
       ],
       columns,
       rows,

@@ -12,6 +12,8 @@ export interface ExcelColumn {
   header: string;
   key: string;
   width?: number;
+  /** Dinh dang so Excel, vi du "#,##0" de co dau phan cach hang nghin. */
+  numFmt?: string;
 }
 
 export interface DongTieuDe {
@@ -21,7 +23,10 @@ export interface DongTieuDe {
   /** Ma mau ARGB, vi du "FF1E3A5F" (xanh navy). Bo trong = den mac dinh. */
   color?: string;
   size?: number;
+  /** Cot bat dau (1 = A, 2 = B...). Bo trong = mac dinh ngay sau logo. */
+  col?: number;
 }
+/** Chuoi rong hoac "" = 1 dong trang (dung de gian cach cho de nhin). */
 type HeaderLine = string | DongTieuDe | null | undefined;
 
 export interface KeOSheetOptions {
@@ -89,23 +94,33 @@ export function themSheetKeO(wb: ExcelJS.Workbook, opts: KeOSheetOptions) {
   const ws = wb.addWorksheet(opts.sheetName ?? "Sheet1");
   const colCount = opts.columns.length;
 
-  const headerLines = (opts.headerLines ?? [])
-    .map((l) => (typeof l === "string" ? { text: l } : l))
-    .filter((l): l is DongTieuDe => !!l && l.text.trim().length > 0);
+  // Chuan hoa: string -> DongTieuDe, chuoi rong/null/undefined -> null (nghia la 1 dong trang).
+  const headerLines: (DongTieuDe | null)[] = (opts.headerLines ?? []).map((l) => {
+    if (l == null) return null;
+    const line = typeof l === "string" ? { text: l } : l;
+    return line.text.trim() ? line : null;
+  });
 
   const logoCols = opts.logo?.cols ?? 3;
   const logoRows = opts.logo?.rows ?? 5;
   const textStartCol = opts.logo ? logoCols + 1 : 1;
 
   const firstHeaderRow = ws.rowCount + 1;
+  let lastLineWasBlank = headerLines.length === 0;
   for (const line of headerLines) {
     const row = ws.addRow([]);
-    const cell = row.getCell(textStartCol);
-    cell.value = line.text;
-    cell.font = { bold: line.bold ?? false, italic: line.italic ?? false, size: line.size ?? 11, color: line.color ? { argb: line.color } : undefined };
-    ws.mergeCells(row.number, textStartCol, row.number, Math.max(textStartCol, colCount));
+    if (line) {
+      const col = line.col ?? textStartCol;
+      const cell = row.getCell(col);
+      cell.value = line.text;
+      cell.font = { bold: line.bold ?? false, italic: line.italic ?? false, size: line.size ?? 11, color: line.color ? { argb: line.color } : undefined };
+      ws.mergeCells(row.number, col, row.number, Math.max(col, colCount));
+      lastLineWasBlank = false;
+    } else {
+      lastLineWasBlank = true;
+    }
   }
-  if (headerLines.length > 0) ws.addRow([]);
+  if (headerLines.length > 0 && !lastLineWasBlank) ws.addRow([]);
 
   if (opts.logo) {
     const imageId = wb.addImage({ base64: typeof opts.logo.data === "string" ? opts.logo.data : undefined, buffer: typeof opts.logo.data !== "string" ? opts.logo.data : undefined, extension: opts.logo.extension } as ExcelJS.Image);
@@ -131,6 +146,8 @@ export function themSheetKeO(wb: ExcelJS.Workbook, opts: KeOSheetOptions) {
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       if (colNumber > colCount) return;
       cell.border = BORDER_ALL;
+      const numFmt = opts.columns[colNumber - 1]?.numFmt;
+      if (numFmt && typeof cell.value === "number") cell.numFmt = numFmt;
     });
   }
 
@@ -140,6 +157,8 @@ export function themSheetKeO(wb: ExcelJS.Workbook, opts: KeOSheetOptions) {
       if (colNumber > colCount) return;
       cell.border = BORDER_ALL;
       cell.font = { bold: true };
+      const numFmt = opts.columns[colNumber - 1]?.numFmt;
+      if (numFmt && typeof cell.value === "number") cell.numFmt = numFmt;
     });
   }
 
