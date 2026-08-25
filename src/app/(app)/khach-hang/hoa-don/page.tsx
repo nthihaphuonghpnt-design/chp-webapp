@@ -27,6 +27,21 @@ export default async function HoaDonPage() {
       supabase.from("dinh_kem").select("*").not("hoa_don_id", "is", null).order("thoi_gian_upload", { ascending: false }),
     ]);
 
+  const hoaDonIds = (rows ?? []).map((r) => r.id);
+  const [{ data: chiPhiRows }, { data: phuThuRows }] =
+    hoaDonIds.length > 0
+      ? await Promise.all([
+          supabase
+            .from("phat_sinh_chi_phi")
+            .select("id, hoa_don_id, don_hang_id, chi_ho, gia_von_buy, gia_ban_sell, vat_percent, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+            .in("hoa_don_id", hoaDonIds),
+          supabase
+            .from("phu_thu")
+            .select("id, hoa_don_id, don_hang_id, loai_phu_thu, thanh_tien, don_hang:don_hang_id(so_don_hang)")
+            .in("hoa_don_id", hoaDonIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+
   const canEdit = user?.phong_ban === "Chứng từ" || user?.phong_ban === "Kế toán";
   const canDelete = user?.phong_ban === "Kế toán";
 
@@ -39,6 +54,10 @@ export default async function HoaDonPage() {
       lienKetAll={lienKetAll ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dinhKemRows={(dinhKemRows ?? []) as any[]}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      chiPhiRows={(chiPhiRows ?? []) as any[]}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      phuThuRows={(phuThuRows ?? []) as any[]}
       canEdit={canEdit}
       canDelete={canDelete}
       currentUserId={user?.id}

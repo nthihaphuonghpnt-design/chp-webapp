@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -210,19 +211,19 @@ export default function DanhMucManager({
     XLSX.writeFile(wb, `mau-nhap-${table}.xlsx`);
   }
 
-  function handleExportExcel() {
-    const data = filteredRows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      fields.forEach((f) => {
-        obj[f.label] = f.type === "select" ? optionLabel(f, row[f.key]) : (row[f.key] ?? "");
-      });
-      obj["Trạng thái"] = row[statusField] ? statusLabels.active : statusLabels.inactive;
-      return obj;
+  async function handleExportExcel() {
+    const v = (x: unknown): string | number => (typeof x === "number" ? x : String(x ?? ""));
+    const columns: ExcelColumn[] = [...fields.map((f) => ({ header: f.label, key: f.key, width: 16 })), { header: "Trạng thái", key: "trangThai", width: 14 }];
+    const exportRows = filteredRows.map((row) => [
+      ...fields.map((f) => v(f.type === "select" ? optionLabel(f, row[f.key]) : (row[f.key] ?? ""))),
+      row[statusField] ? statusLabels.active : statusLabels.inactive,
+    ]);
+    await xuatExcelKeO(`du-lieu-${table}-${new Date().toISOString().slice(0, 10)}.xlsx`, {
+      sheetName: "Dữ liệu",
+      headerLines: [title.toUpperCase()],
+      columns,
+      rows: exportRows,
     });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Dữ liệu");
-    XLSX.writeFile(wb, `du-lieu-${table}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function handleImportFile(file: File) {

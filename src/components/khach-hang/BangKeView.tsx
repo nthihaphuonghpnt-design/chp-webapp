@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 
 interface KhachHang {
   id: string;
@@ -36,13 +36,6 @@ interface DonHangOpt {
   bien_so: string[];
 }
 
-const CONG_TY = {
-  tenViet: "CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VẬN TẢI CHÂU HOÀNG PHÁT",
-  tenAnh: "CHAU HOANG PHAT TRANSPORT TRADING SERVICE CO., LTD",
-  mst: "0316928901",
-  diaChi: "197/27/34/16 Đường TL 15, P. An Phú Đông, TP. Hồ Chí Minh, Việt Nam",
-  email: "info@chauhoangphat.com",
-};
 interface ChiPhiRow {
   id: string;
   don_hang_id: string;
@@ -137,7 +130,15 @@ export default function BangKeView({
   const tongGiaBanChiPhi = dongGiaBan.filter((r) => chonChiPhi.has(r.id)).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongPhuThu = phuThuRows.filter((r) => chonPhuThu.has(r.id)).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
   const tongTruocThue = tongGiaBanChiPhi + tongPhuThu;
-  const tienVat = Math.round((tongTruocThue * (Number(vatPercent) || 0)) / 100);
+  // Cong don VAT tung dong (giong het cach tinh o bang "Bang ke chi tiet" phia
+  // tren), thay vi ap 1 ty le chung cho ca tong — de so tien hoa don luon khop
+  // voi Bang ke chi tiet du khung "VAT %" duoi day co nhap hay khong.
+  const vatChungNhapTay = Number(vatPercent) || 0;
+  const tienVat =
+    dongGiaBan
+      .filter((r) => chonChiPhi.has(r.id))
+      .reduce((s, r) => s + Math.round(((r.gia_ban_sell ?? 0) * (vatChungNhapTay || r.vat_percent || 0)) / 100), 0) +
+    phuThuRows.filter((r) => chonPhuThu.has(r.id)).reduce((s, r) => s + Math.round(((r.thanh_tien ?? 0) * vatChungNhapTay) / 100), 0);
   const tongCong = tongTruocThue + tienVat + tongChiHo;
 
   const chiTietBangKe = useMemo(() => {
@@ -192,55 +193,29 @@ export default function BangKeView({
     return rows;
   }, [chiPhiRows, phuThuRows, vatPercent]);
 
-  function handleXuatExcelBangKe() {
+  async function handleXuatExcelBangKe() {
     const khTen = khachHangList.find((k) => k.id === khachHangIdChon);
-    const COT = 16; // tổng số cột của bảng, dùng để merge các dòng tiêu đề
 
-    const header: (string | number)[][] = [
-      [CONG_TY.tenViet],
-      [CONG_TY.tenAnh],
-      [`MST/Tax code: ${CONG_TY.mst}`],
-      [`Địa chỉ/Address: ${CONG_TY.diaChi}`],
-      [`Email: ${CONG_TY.email}`],
-      [],
-      ["BẢNG KÊ CHI PHÍ KHÁCH HÀNG"],
-      [`Khách hàng: ${khachHangChiTiet?.ten_day_du ?? khTen?.ten_day_du ?? ""}`],
-      [`Địa chỉ: ${khachHangChiTiet?.dia_chi ?? ""}`],
-      [
-        `MST: ${khachHangChiTiet?.ma_so_thue ?? ""}    Người liên hệ: ${khachHangChiTiet?.nguoi_lien_he ?? ""}    SĐT: ${khachHangChiTiet?.dien_thoai ?? ""}`,
-      ],
+    const columns: ExcelColumn[] = [
+      { header: "No", key: "no", width: 5 },
+      { header: "Charge Descriptions", key: "dienGiai", width: 28 },
+      { header: "Đơn hàng", key: "donHang", width: 12 },
+      { header: "Loại hàng", key: "loaiHang", width: 16 },
+      { header: "Kích cỡ / SL", key: "kichCo", width: 14 },
+      { header: "Ngày vận chuyển", key: "ngayVc", width: 14 },
+      { header: "Số BL/BK", key: "soBl", width: 12 },
+      { header: "Số lô", key: "soLo", width: 10 },
+      { header: "Biển kiểm soát", key: "bienSo", width: 14 },
+      { header: "Đơn giá", key: "donGia", width: 12 },
+      { header: "SL", key: "sl", width: 6 },
+      { header: "Total", key: "total", width: 14 },
+      { header: "VAT (%)", key: "vat", width: 8 },
+      { header: "Tiền VAT", key: "tienVat", width: 12 },
+      { header: "Total (sau VAT)", key: "tongSauVat", width: 14 },
+      { header: "Ghi chú", key: "ghiChu", width: 14 },
     ];
-    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = header
-      .map((row, r) => (row.length > 0 ? { s: { r, c: 0 }, e: { r, c: COT - 1 } } : null))
-      .filter((m): m is { s: { r: number; c: number }; e: { r: number; c: number } } => m !== null);
 
-    if (donHangChon) {
-      header.push([`Đơn hàng: ${donHangChon.so_don_hang}  ·  Ngày lên đơn: ${donHangChon.ngay_len_don}`]);
-      merges.push({ s: { r: header.length - 1, c: 0 }, e: { r: header.length - 1, c: COT - 1 } });
-    }
-    header.push([]);
-
-    const colHeaders = [
-      "No",
-      "Charge Descriptions",
-      "Đơn hàng",
-      "Loại hàng",
-      "Kích cỡ / SL",
-      "Ngày vận chuyển",
-      "Số BL/BK",
-      "Số lô",
-      "Biển kiểm soát",
-      "Đơn giá",
-      "SL",
-      "Total",
-      "VAT (%)",
-      "Tiền VAT",
-      "Total (sau VAT)",
-      "Ghi chú",
-    ];
-    header.push(colHeaders);
-
-    const dataRows = chiTietBangKe.map((r, i) => {
+    const rows = chiTietBangKe.map((r, i) => {
       const dh = donHangMap.get(r.donHangId);
       return [
         i + 1,
@@ -262,7 +237,7 @@ export default function BangKeView({
       ];
     });
 
-    const tongRow = [
+    const totalRow = [
       "",
       "TỔNG CỘNG",
       "",
@@ -281,32 +256,25 @@ export default function BangKeView({
       "",
     ];
 
-    const aoa = [...header, ...dataRows, tongRow];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!merges"] = merges;
-    ws["!cols"] = [
-      { wch: 5 },
-      { wch: 28 },
-      { wch: 12 },
-      { wch: 16 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 10 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 6 },
-      { wch: 14 },
-      { wch: 8 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 14 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Bảng kê");
     const ten = (khTen?.ten_viet_tat || khTen?.ten_day_du || "khach-hang").replace(/[^\p{L}\p{N}]+/gu, "-");
     const donSuffix = donHangChon ? `-${donHangChon.so_don_hang}` : "";
-    XLSX.writeFile(wb, `bang-ke-${ten}${donSuffix}.xlsx`);
+    const logo = await taiLogoCongTy();
+    await xuatExcelKeO(`bang-ke-${ten}${donSuffix}.xlsx`, {
+      sheetName: "Bảng kê",
+      logo: logo ?? undefined,
+      headerLines: [
+        ...CONG_TY_HEADER_LINES,
+        "",
+        { text: "BẢNG KÊ CHI PHÍ KHÁCH HÀNG", bold: true, size: 12 },
+        `Khách hàng: ${khachHangChiTiet?.ten_day_du ?? khTen?.ten_day_du ?? ""}`,
+        `Địa chỉ: ${khachHangChiTiet?.dia_chi ?? ""}`,
+        `MST: ${khachHangChiTiet?.ma_so_thue ?? ""}    Người liên hệ: ${khachHangChiTiet?.nguoi_lien_he ?? ""}    SĐT: ${khachHangChiTiet?.dien_thoai ?? ""}`,
+        donHangChon ? `Đơn hàng: ${donHangChon.so_don_hang}  ·  Ngày lên đơn: ${donHangChon.ngay_len_don}` : "",
+      ],
+      columns,
+      rows,
+      totalRow,
+    });
   }
 
   async function handleXuatHoaDon() {
@@ -333,6 +301,7 @@ export default function BangKeView({
         ngay_xuat: new Date().toISOString().slice(0, 10),
         tong_tien_truoc_thue: tongTruocThue,
         vat_percent: vatPercent ? Number(vatPercent) : null,
+        tien_vat: tienVat,
         tien_chi_ho: tongChiHo || null,
         nguoi_tao_id: nv?.id,
       })

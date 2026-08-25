@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
@@ -191,35 +192,55 @@ export default function ChiPhiSection({
     }
   }
 
-  function handleExportExcel() {
-    const data = rows.map((r) => {
-      const obj: Record<string, unknown> = {
-        "Loại chi phí": loaiTen(r.loai_chi_phi_id),
-        "Nhà cung cấp": r.nha_cung_cap_id ? nccTen(r.nha_cung_cap_id) : "",
-        "Đối tác thuê ngoài": r.doi_tac_thue_ngoai_id ? doiTacTen(r.doi_tac_thue_ngoai_id) : "",
-        "Chặng vận chuyển": changTen(r.chi_tiet_van_chuyen_id) ?? "",
-        "Số lượng": r.so_luong ?? "",
-        "Đơn giá": r.don_gia ?? "",
-        "Giá vốn (buy)": r.gia_von_buy ?? "",
-      };
-      if (canSeeSell) obj["Giá bán (sell)"] = r.gia_ban_sell ?? "";
-      obj["VAT %"] = r.vat_percent ?? "";
-      obj["Tiền thuế"] = r.tien_thue;
-      obj["Tổng tiền"] = r.tong_tien;
-      obj["Nội bộ"] = r.noi_bo ? "Có" : "Không";
-      obj["Chi hộ"] = r.chi_ho ? "Có" : "Không";
-      obj["Có hóa đơn thuế"] = r.tt_thue ? "Có" : "Không";
-      obj["Ngày phát sinh"] = r.ngay_phat_sinh;
-      obj["Trạng thái"] = r.trang_thai;
-      obj["Tình trạng thanh toán"] = r.tinh_trang_thanh_toan;
-      obj["Đã thanh toán"] = r.so_tien_da_thanh_toan ?? "";
-      obj["Ghi chú"] = r.ghi_chu ?? "";
-      return obj;
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Loại chi phí", key: "loai", width: 18 },
+      { header: "Nhà cung cấp", key: "ncc", width: 18 },
+      { header: "Đối tác thuê ngoài", key: "doiTac", width: 18 },
+      { header: "Chặng vận chuyển", key: "chang", width: 16 },
+      { header: "Số lượng", key: "soLuong", width: 10 },
+      { header: "Đơn giá", key: "donGia", width: 12 },
+      { header: "Giá vốn (buy)", key: "giaVon", width: 14 },
+      ...(canSeeSell ? [{ header: "Giá bán (sell)", key: "giaBan", width: 14 }] : []),
+      { header: "VAT %", key: "vat", width: 8 },
+      { header: "Tiền thuế", key: "tienThue", width: 12 },
+      { header: "Tổng tiền", key: "tongTien", width: 14 },
+      { header: "Nội bộ", key: "noiBo", width: 8 },
+      { header: "Chi hộ", key: "chiHo", width: 8 },
+      { header: "Có hóa đơn thuế", key: "ttThue", width: 14 },
+      { header: "Ngày phát sinh", key: "ngay", width: 12 },
+      { header: "Trạng thái", key: "trangThai", width: 12 },
+      { header: "Tình trạng thanh toán", key: "ttThanhToan", width: 16 },
+      { header: "Đã thanh toán", key: "daThanhToan", width: 14 },
+      { header: "Ghi chú", key: "ghiChu", width: 20 },
+    ];
+    const exportRows = rows.map((r) => [
+      loaiTen(r.loai_chi_phi_id),
+      r.nha_cung_cap_id ? nccTen(r.nha_cung_cap_id) : "",
+      r.doi_tac_thue_ngoai_id ? doiTacTen(r.doi_tac_thue_ngoai_id) : "",
+      changTen(r.chi_tiet_van_chuyen_id) ?? "",
+      r.so_luong ?? "",
+      r.don_gia ?? "",
+      r.gia_von_buy ?? "",
+      ...(canSeeSell ? [r.gia_ban_sell ?? ""] : []),
+      r.vat_percent ?? "",
+      r.tien_thue,
+      r.tong_tien,
+      r.noi_bo ? "Có" : "Không",
+      r.chi_ho ? "Có" : "Không",
+      r.tt_thue ? "Có" : "Không",
+      r.ngay_phat_sinh,
+      r.trang_thai,
+      r.tinh_trang_thanh_toan,
+      r.so_tien_da_thanh_toan ?? "",
+      r.ghi_chu ?? "",
+    ]);
+    await xuatExcelKeO(`chi-phi-${soDonHang}.xlsx`, {
+      sheetName: "Chi phí",
+      headerLines: [`CHI PHÍ PHÁT SINH — Đơn ${soDonHang}`],
+      columns,
+      rows: exportRows,
     });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Chi phí");
-    XLSX.writeFile(wb, `chi-phi-${soDonHang}.xlsx`);
   }
 
   function handleDownloadTemplate() {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import * as XLSX from "xlsx";
+import { taoWorkbook, themSheetKeO, taiWorkbook } from "@/lib/excel";
 
 interface DonHang {
   id: string;
@@ -259,53 +259,89 @@ export default function BaoCaoView({
     return Array.from(map.values()).map((m) => ({ ...m, chenhLech: m.sell - m.buy }));
   }, [thueNgoaiTrongKy]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleExportAll() {
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(theoTrangThai.map((r) => ({ "Trạng thái": r.trangThai, "Số lượng": r.soLuong }))),
-      "Đơn hàng theo TT"
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(doanhSoTheoSale.map((r) => ({ Sale: r.ten, "Doanh số (sell)": r.sell }))),
-      "Doanh số theo Sale"
-    );
+  async function handleExportAll() {
+    const wb = taoWorkbook();
+    themSheetKeO(wb, {
+      sheetName: "Đơn hàng theo TT",
+      columns: [
+        { header: "Trạng thái", key: "tt", width: 16 },
+        { header: "Số lượng", key: "sl", width: 10 },
+      ],
+      rows: theoTrangThai.map((r) => [r.trangThai, r.soLuong]),
+    });
+    themSheetKeO(wb, {
+      sheetName: "Doanh số theo Sale",
+      columns: [
+        { header: "Sale", key: "sale", width: 18 },
+        { header: "Doanh số (sell)", key: "sell", width: 16 },
+      ],
+      rows: doanhSoTheoSale.map((r) => [r.ten, r.sell]),
+    });
     if (isKeToanOrGiamDoc) {
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          loiNhuanTheoLo.map((r) => ({
-            "Số đơn": r.donHang.so_don_hang,
-            Sell: r.sell,
-            Buy: r.buy,
-            "Buy thuê ngoài": r.thueNgoaiBuy,
-            "Định phí phân bổ": r.dinhPhi,
-            "LN trước hoa hồng": r.lnTruocHoaHong,
-            "Hoa hồng Sale": r.hoaHongSale,
-            "LN công ty": r.lnCongTy,
-          }))
-        ),
-        "Lợi nhuận theo lô"
-      );
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(chiPhiTheoLoai.map((r) => ({ "Loại chi phí": r.ten, Buy: r.buy, Sell: r.sell }))), "Chi phí theo loại");
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(congNoPhaiThu.map((r) => ({ "Khách hàng": r.ten, "Tổng hóa đơn": r.tongHoaDon, "Đã thu": r.daThu, "Còn phải thu": r.conPhaiThu }))),
-        "Công nợ phải thu"
-      );
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(congNoPhaiTra.map((r) => ({ "NCC/Đối tác": r.ten, "Tổng nợ": r.tongNo, "Đã trả": r.daTra, "Còn phải trả": r.conPhaiTra }))),
-        "Công nợ phải trả"
-      );
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(loiNhuanTheoDoiTac.map((r) => ({ "Đối tác": r.ten, Buy: r.buy, Sell: r.sell, "Chênh lệch": r.chenhLech }))),
-        "LN theo đối tác thuê ngoài"
-      );
+      themSheetKeO(wb, {
+        sheetName: "Lợi nhuận theo lô",
+        columns: [
+          { header: "Số đơn", key: "soDon", width: 14 },
+          { header: "Sell", key: "sell", width: 14 },
+          { header: "Buy", key: "buy", width: 14 },
+          { header: "Buy thuê ngoài", key: "thueNgoaiBuy", width: 14 },
+          { header: "Định phí phân bổ", key: "dinhPhi", width: 14 },
+          { header: "LN trước hoa hồng", key: "lnTruocHoaHong", width: 16 },
+          { header: "Hoa hồng Sale", key: "hoaHongSale", width: 14 },
+          { header: "LN công ty", key: "lnCongTy", width: 14 },
+        ],
+        rows: loiNhuanTheoLo.map((r) => [
+          r.donHang.so_don_hang,
+          r.sell,
+          r.buy,
+          r.thueNgoaiBuy,
+          r.dinhPhi,
+          r.lnTruocHoaHong,
+          r.hoaHongSale,
+          r.lnCongTy,
+        ]),
+      });
+      themSheetKeO(wb, {
+        sheetName: "Chi phí theo loại",
+        columns: [
+          { header: "Loại chi phí", key: "loai", width: 20 },
+          { header: "Buy", key: "buy", width: 14 },
+          { header: "Sell", key: "sell", width: 14 },
+        ],
+        rows: chiPhiTheoLoai.map((r) => [r.ten, r.buy, r.sell]),
+      });
+      themSheetKeO(wb, {
+        sheetName: "Công nợ phải thu",
+        columns: [
+          { header: "Khách hàng", key: "kh", width: 22 },
+          { header: "Tổng hóa đơn", key: "tongHoaDon", width: 16 },
+          { header: "Đã thu", key: "daThu", width: 14 },
+          { header: "Còn phải thu", key: "conPhaiThu", width: 14 },
+        ],
+        rows: congNoPhaiThu.map((r) => [r.ten, r.tongHoaDon, r.daThu, r.conPhaiThu]),
+      });
+      themSheetKeO(wb, {
+        sheetName: "Công nợ phải trả",
+        columns: [
+          { header: "NCC/Đối tác", key: "ncc", width: 22 },
+          { header: "Tổng nợ", key: "tongNo", width: 14 },
+          { header: "Đã trả", key: "daTra", width: 14 },
+          { header: "Còn phải trả", key: "conPhaiTra", width: 14 },
+        ],
+        rows: congNoPhaiTra.map((r) => [r.ten, r.tongNo, r.daTra, r.conPhaiTra]),
+      });
+      themSheetKeO(wb, {
+        sheetName: "LN theo đối tác thuê ngoài",
+        columns: [
+          { header: "Đối tác", key: "doiTac", width: 20 },
+          { header: "Buy", key: "buy", width: 14 },
+          { header: "Sell", key: "sell", width: 14 },
+          { header: "Chênh lệch", key: "chenhLech", width: 14 },
+        ],
+        rows: loiNhuanTheoDoiTac.map((r) => [r.ten, r.buy, r.sell, r.chenhLech]),
+      });
     }
-    XLSX.writeFile(wb, `bao-cao-${tuNgay}_${denNgay}.xlsx`);
+    await taiWorkbook(wb, `bao-cao-${tuNgay}_${denNgay}.xlsx`);
   }
 
   return (

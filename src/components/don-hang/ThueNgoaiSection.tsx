@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
@@ -109,23 +110,37 @@ export default function ThueNgoaiSection({
     }
   }
 
-  function handleExportExcel() {
-    const data = rows.map((r) => ({
-      "Loại dịch vụ": r.loai_dich_vu_thue ?? "",
-      "Đối tác thuê ngoài": doiTacTen(r.doi_tac_thue_ngoai_id),
-      "Nội dung": r.noi_dung ?? "",
-      "Giá vốn (buy)": r.gia_von_buy ?? "",
-      ...(canSeeSell ? { "Giá bán (sell)": r.gia_ban_sell ?? "" } : {}),
-      "Tình trạng thanh toán": r.tinh_trang_thanh_toan,
-      "Đã thanh toán": r.so_tien_da_thanh_toan ?? "",
-      "Còn phải trả": (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0),
-      "Ngày thuê": r.ngay_thue,
-      "Trạng thái": r.trang_thai,
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Thuê ngoài");
-    XLSX.writeFile(wb, `thue-ngoai-${soDonHang}.xlsx`);
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Loại dịch vụ", key: "loai", width: 18 },
+      { header: "Đối tác thuê ngoài", key: "doiTac", width: 20 },
+      { header: "Nội dung", key: "noiDung", width: 24 },
+      { header: "Giá vốn (buy)", key: "giaVon", width: 14 },
+      ...(canSeeSell ? [{ header: "Giá bán (sell)", key: "giaBan", width: 14 }] : []),
+      { header: "Tình trạng thanh toán", key: "ttThanhToan", width: 16 },
+      { header: "Đã thanh toán", key: "daThanhToan", width: 14 },
+      { header: "Còn phải trả", key: "conPhaiTra", width: 14 },
+      { header: "Ngày thuê", key: "ngayThue", width: 12 },
+      { header: "Trạng thái", key: "trangThai", width: 12 },
+    ];
+    const rows_ = rows.map((r) => [
+      r.loai_dich_vu_thue ?? "",
+      doiTacTen(r.doi_tac_thue_ngoai_id),
+      r.noi_dung ?? "",
+      r.gia_von_buy ?? "",
+      ...(canSeeSell ? [r.gia_ban_sell ?? ""] : []),
+      r.tinh_trang_thanh_toan,
+      r.so_tien_da_thanh_toan ?? "",
+      (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0),
+      r.ngay_thue,
+      r.trang_thai,
+    ]);
+    await xuatExcelKeO(`thue-ngoai-${soDonHang}.xlsx`, {
+      sheetName: "Thuê ngoài",
+      headerLines: [`THUÊ NGOÀI — Đơn ${soDonHang}`],
+      columns,
+      rows: rows_,
+    });
   }
 
   function handleDownloadTemplate() {

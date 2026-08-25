@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -71,16 +72,15 @@ export default function LineItemsSection({
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
   }
 
-  function handleExportExcel() {
-    const data = rows.map((r) => {
-      const obj: Record<string, unknown> = {};
-      fields.forEach((f) => (obj[f.label] = f.type === "select" ? optionLabel(f, r[f.key]) : (r[f.key] ?? "")));
-      return obj;
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = fields.map((f) => ({ header: f.label, key: f.key, width: 16 }));
+    const exportRows = rows.map((r) => fields.map((f) => (f.type === "select" ? optionLabel(f, r[f.key]) : (r[f.key] as string | number) ?? "")));
+    await xuatExcelKeO(`${table}-${soDonHang}.xlsx`, {
+      sheetName: title,
+      headerLines: [`${title.toUpperCase()} — Đơn ${soDonHang}`],
+      columns,
+      rows: exportRows,
     });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, title);
-    XLSX.writeFile(wb, `${table}-${soDonHang}.xlsx`);
   }
 
   function handleDownloadTemplate() {

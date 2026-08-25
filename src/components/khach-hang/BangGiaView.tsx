@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
@@ -126,20 +127,33 @@ export default function BangGiaView({
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
   }
 
-  function handleExportExcel() {
-    const data = filtered.map((r) => ({
-      "Khách hàng": khTen(r.khach_hang_id),
-      "Loại chi phí": loaiTen(r.loai_chi_phi_id),
-      "Mặt hàng": hangHoaTen(r.hang_hoa_id),
-      "Đơn giá": r.don_gia ?? "",
-      "Đơn vị": r.don_vi ?? "",
-      "Trạng thái": r.dang_hoat_dong ? "Đang hoạt động" : "Ngừng hoạt động",
-      "Ghi chú": r.ghi_chu ?? "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Bảng giá");
-    XLSX.writeFile(wb, "bang-gia-khach-hang.xlsx");
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Khách hàng", key: "kh", width: 22 },
+      { header: "Loại chi phí", key: "loai", width: 18 },
+      { header: "Mặt hàng", key: "hangHoa", width: 16 },
+      { header: "Đơn giá", key: "donGia", width: 12 },
+      { header: "Đơn vị", key: "donVi", width: 10 },
+      { header: "Trạng thái", key: "trangThai", width: 16 },
+      { header: "Ghi chú", key: "ghiChu", width: 20 },
+    ];
+    const rows = filtered.map((r) => [
+      khTen(r.khach_hang_id),
+      loaiTen(r.loai_chi_phi_id),
+      hangHoaTen(r.hang_hoa_id),
+      r.don_gia ?? "",
+      r.don_vi ?? "",
+      r.dang_hoat_dong ? "Đang hoạt động" : "Ngừng hoạt động",
+      r.ghi_chu ?? "",
+    ]);
+    const logo = await taiLogoCongTy();
+    await xuatExcelKeO("bang-gia-khach-hang.xlsx", {
+      sheetName: "Bảng giá",
+      logo: logo ?? undefined,
+      headerLines: [...CONG_TY_HEADER_LINES, "", { text: "BẢNG GIÁ KHÁCH HÀNG", bold: true, size: 12 }],
+      columns,
+      rows,
+    });
   }
 
   function handleDownloadTemplate() {
