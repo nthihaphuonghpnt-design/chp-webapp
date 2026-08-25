@@ -205,6 +205,7 @@ export interface ToKhaiHaiQuan {
   thue_khac: number | null;
   ngay_thong_quan: string | null;
   trang_thai: TrangThaiToKhai;
+  ai_dong_thue: "Khách hàng tự đóng" | "CHP đóng hộ";
   created_at: string;
   updated_at: string;
 }
@@ -270,6 +271,9 @@ export interface PhatSinhChiPhi {
   nha_cung_cap_id: string | null;
   doi_tac_thue_ngoai_id: string | null;
   chi_tiet_van_chuyen_id: string | null;
+  to_khai_id: string | null;
+  nguon_tu_dong: string | null;
+  phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;
   so_luong: number | null;
   don_gia: number | null;
   gia_von_buy: number | null;
@@ -328,6 +332,7 @@ export interface DonThueNgoai {
   gia_ban_sell: number | null;
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;
+  phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;
   ngay_thue: string;
   trang_thai: TrangThaiThueNgoai;
   nguoi_nhap_id: string | null;
@@ -390,6 +395,7 @@ export interface TamUngGiaiChi {
   so_phieu: string | null;
   ghi_chu: string | null;
   trang_thai: TrangThaiTamUng;
+  phuong_thuc: "Tiền mặt" | "Tài khoản công ty" | null;
   nguoi_de_nghi_id: string | null;
   don_hang_id: string | null;
   created_at: string;
@@ -429,8 +435,22 @@ export interface HoaDonXuat {
   tong_tien: number;
   trang_thai_thanh_toan: TrangThaiThuTien;
   so_tien_da_thu: number | null;
+  phuong_thuc_thu: "Tiền mặt" | "Tài khoản công ty" | null;
   ghi_chu: string | null;
   nguoi_tao_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SoQuy {
+  id: string;
+  loai_so: "Tiền mặt" | "Tài khoản công ty";
+  loai_giao_dich: "Thu" | "Chi";
+  so_tien: number;
+  ngay: string;
+  noi_dung: string | null;
+  nguon_bang: string;
+  nguon_id: string;
   created_at: string;
   updated_at: string;
 }

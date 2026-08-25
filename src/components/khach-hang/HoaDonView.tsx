@@ -35,6 +35,7 @@ interface Row {
   tong_tien: number;
   trang_thai_thanh_toan: "Chưa thu" | "Thu một phần" | "Đã thu đủ";
   so_tien_da_thu: number | null;
+  phuong_thuc_thu: string | null;
   ghi_chu: string | null;
   khach_hang: KhachHang | KhachHang[] | null;
 }
@@ -99,6 +100,7 @@ export default function HoaDonView({
       tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
       trang_thai_thanh_toan: values.trang_thai_thanh_toan || "Chưa thu",
       so_tien_da_thu: values.so_tien_da_thu ? Number(values.so_tien_da_thu) : null,
+      phuong_thuc_thu: values.phuong_thuc_thu || null,
       ghi_chu: values.ghi_chu || null,
     };
 
@@ -319,6 +321,7 @@ function HoaDonForm({
     tien_chi_ho: initial?.tien_chi_ho?.toString() ?? "",
     trang_thai_thanh_toan: initial?.trang_thai_thanh_toan ?? "Chưa thu",
     so_tien_da_thu: initial?.so_tien_da_thu?.toString() ?? "",
+    phuong_thuc_thu: initial?.phuong_thuc_thu ?? "",
     ghi_chu: initial?.ghi_chu ?? "",
   });
   const [selectedDonHang, setSelectedDonHang] = useState<string[]>(initialDonHangIds);
@@ -413,6 +416,14 @@ function HoaDonForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đã thu</label>
             <MoneyInput value={values.so_tien_da_thu} onChange={(v) => set("so_tien_da_thu", v)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức thu</label>
+            <select value={values.phuong_thuc_thu} onChange={(e) => set("phuong_thuc_thu", e.target.value)} className={cls}>
+              <option value="">-- Chọn --</option>
+              <option value="Tiền mặt">Tiền mặt</option>
+              <option value="Tài khoản công ty">Tài khoản công ty</option>
+            </select>
           </div>
         </div>
 

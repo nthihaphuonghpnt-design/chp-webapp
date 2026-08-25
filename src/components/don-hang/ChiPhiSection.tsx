@@ -535,6 +535,7 @@ function ChiPhiForm({
     chi_tiet_van_chuyen_id: initial?.chi_tiet_van_chuyen_id ?? "",
     tinh_trang_thanh_toan: initial?.tinh_trang_thanh_toan ?? "Chưa thanh toán",
     so_tien_da_thanh_toan: initial?.so_tien_da_thanh_toan?.toString() ?? "",
+    phuong_thuc_thanh_toan: initial?.phuong_thuc_thanh_toan ?? "",
     so_luong: initial?.so_luong?.toString() ?? "",
     don_gia: initial?.don_gia?.toString() ?? "",
     gia_von_buy: initial?.gia_von_buy?.toString() ?? "",
@@ -697,13 +698,15 @@ function ChiPhiForm({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Đã thanh toán</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={values.so_tien_da_thanh_toan}
-                  onChange={(e) => set("so_tien_da_thanh_toan", e.target.value)}
-                  className={cls}
-                />
+                <MoneyInput value={values.so_tien_da_thanh_toan} onChange={(v) => set("so_tien_da_thanh_toan", v)} className={cls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức thanh toán</label>
+                <select value={values.phuong_thuc_thanh_toan} onChange={(e) => set("phuong_thuc_thanh_toan", e.target.value)} className={cls}>
+                  <option value="">-- Chọn --</option>
+                  <option value="Tiền mặt">Tiền mặt</option>
+                  <option value="Tài khoản công ty">Tài khoản công ty</option>
+                </select>
               </div>
             </>
           )}

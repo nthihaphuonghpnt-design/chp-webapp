@@ -25,6 +25,7 @@ interface Row {
   ten_tai_xe: string | null;
   lan: number | null;
   so_tien: number;
+  phuong_thuc: string | null;
   muc_tam_ung_toi_da: number | null;
   so_phieu: string | null;
   ghi_chu: string | null;
@@ -171,6 +172,7 @@ export default function TamUngGiaiChiView({
       ghi_chu: values.ghi_chu || null,
       trang_thai: values.trang_thai || "Đề nghị",
       don_hang_id: values.don_hang_id || null,
+      phuong_thuc: values.phuong_thuc || null,
     };
 
     if (editing) {
@@ -646,6 +648,7 @@ function TamUngForm({
     don_hang_id: initial?.don_hang_id ?? giaiChiPrefill?.don_hang_id ?? "",
     ghi_chu: initial?.ghi_chu ?? giaiChiPrefill?.ghi_chu ?? "",
     trang_thai: initial?.trang_thai ?? "Đề nghị",
+    phuong_thuc: initial?.phuong_thuc ?? "",
   });
 
   function set(key: keyof typeof values, value: string) {
@@ -718,6 +721,14 @@ function TamUngForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số phiếu</label>
             <input value={values.so_phieu} onChange={(e) => set("so_phieu", e.target.value)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức</label>
+            <select value={values.phuong_thuc} onChange={(e) => set("phuong_thuc", e.target.value)} className={cls}>
+              <option value="">-- Chọn --</option>
+              <option value="Tiền mặt">Tiền mặt</option>
+              <option value="Tài khoản công ty">Tài khoản công ty</option>
+            </select>
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (tùy chọn)</label>
