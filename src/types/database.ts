@@ -379,7 +379,7 @@ export interface LichNhacNho {
 }
 
 export type LoaiTamUng = "Tạm ứng" | "Giải chi";
-export type DoiTuongTamUng = "Nhân viên" | "Tài xế";
+export type DoiTuongTamUng = "Nhân viên" | "Tài xế" | "Khách hàng";
 export type TrangThaiTamUng = "Đề nghị" | "Đã duyệt" | "Từ chối";
 
 export interface TamUngGiaiChi {
@@ -389,6 +389,7 @@ export interface TamUngGiaiChi {
   doi_tuong: DoiTuongTamUng;
   nhan_vien_id: string | null;
   ten_tai_xe: string | null;
+  khach_hang_id: string | null;
   lan: number | null;
   so_tien: number;
   muc_tam_ung_toi_da: number | null;

@@ -13,7 +13,7 @@ export default async function BangGiaKhachHangPage() {
     supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
 
-  const canEdit = user?.phong_ban === "Sale" || user?.phong_ban === "Kế toán";
+  const canEdit = user?.phong_ban === "Sale" || user?.phong_ban === "Kế toán" || user?.phong_ban === "Giám đốc";
 
   return (
     <BangGiaView

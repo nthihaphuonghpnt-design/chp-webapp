@@ -6,13 +6,14 @@ export default async function TamUngGiaiChiPage() {
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: chiPhiRows }] = await Promise.all([
+  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: khachHangList }, { data: chiPhiRows }] = await Promise.all([
     supabase
       .from("tam_ung_giai_chi")
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
+      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
       .order("ngay_thuc_hien", { ascending: false }),
     supabase.from("nhan_vien").select("id, ho_ten").eq("dang_lam_viec", true).order("ho_ten"),
     supabase.from("don_hang").select("id, so_don_hang").order("created_at", { ascending: false }).limit(300),
+    supabase.from("khach_hang").select("id, ten_day_du").eq("dang_hoat_dong", true).order("ten_day_du"),
     supabase
       .from("phat_sinh_chi_phi")
       .select("nguoi_nhap_id, don_hang_id, gia_von_buy")
@@ -34,6 +35,7 @@ export default async function TamUngGiaiChiPage() {
       initialRows={(rows ?? []) as any[]}
       nhanVienList={nhanVienList ?? []}
       donHangList={donHangList ?? []}
+      khachHangList={khachHangList ?? []}
       daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
       currentUserId={user?.id}
       currentPhongBan={user?.phong_ban ?? ""}

@@ -16,13 +16,19 @@ interface DonHangOpt {
   so_don_hang: string;
 }
 
+interface KhachHangOpt {
+  id: string;
+  ten_day_du: string;
+}
+
 interface Row {
   id: string;
   loai: "Tạm ứng" | "Giải chi";
   ngay_thuc_hien: string;
-  doi_tuong: "Nhân viên" | "Tài xế";
+  doi_tuong: "Nhân viên" | "Tài xế" | "Khách hàng";
   nhan_vien_id: string | null;
   ten_tai_xe: string | null;
+  khach_hang_id: string | null;
   lan: number | null;
   so_tien: number;
   phuong_thuc: string | null;
@@ -35,6 +41,7 @@ interface Row {
   nhan_vien: { ho_ten: string } | { ho_ten: string }[] | null;
   nguoi_de_nghi: { ho_ten: string } | { ho_ten: string }[] | null;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
+  khach_hang: { ten_day_du: string } | { ten_day_du: string }[] | null;
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -43,6 +50,7 @@ function one<T>(v: T | T[] | null): T | null {
 
 function doiTuongTen(row: Row) {
   if (row.doi_tuong === "Tài xế") return row.ten_tai_xe ?? "—";
+  if (row.doi_tuong === "Khách hàng") return one(row.khach_hang)?.ten_day_du ?? "—";
   return one(row.nhan_vien)?.ho_ten ?? "—";
 }
 
@@ -63,6 +71,7 @@ export default function TamUngGiaiChiView({
   initialRows,
   nhanVienList,
   donHangList,
+  khachHangList,
   daChiTheoNguoiVaLo,
   currentUserId,
   currentPhongBan,
@@ -70,6 +79,7 @@ export default function TamUngGiaiChiView({
   initialRows: Row[];
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
+  khachHangList: KhachHangOpt[];
   daChiTheoNguoiVaLo: Record<string, number>;
   currentUserId?: string;
   currentPhongBan: string;
@@ -79,6 +89,7 @@ export default function TamUngGiaiChiView({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [proposing, setProposing] = useState(false);
+  const [khachTamUngMode, setKhachTamUngMode] = useState(false);
   const [giaiChiPrefill, setGiaiChiPrefill] = useState<{
     nhan_vien_id: string;
     don_hang_id: string;
@@ -98,9 +109,12 @@ export default function TamUngGiaiChiView({
   const isKeToan = currentPhongBan === "Kế toán";
   const isGiamDoc = currentPhongBan === "Giám đốc";
   const canSeeSummary = isKeToan || isGiamDoc;
+  const canGhiNhanKhachTamUng = isKeToan || currentPhongBan === "Sale";
 
   function personKey(row: Row) {
-    return row.doi_tuong === "Tài xế" ? `tx:${row.ten_tai_xe}` : `nv:${row.nhan_vien_id}`;
+    if (row.doi_tuong === "Tài xế") return `tx:${row.ten_tai_xe}`;
+    if (row.doi_tuong === "Khách hàng") return `kh:${row.khach_hang_id}`;
+    return `nv:${row.nhan_vien_id}`;
   }
 
   function daChiChoLo(row: Row): number | null {
@@ -112,6 +126,7 @@ export default function TamUngGiaiChiView({
     const daChi = daChiChoLo(row) ?? 0;
     setEditing(null);
     setProposing(false);
+    setKhachTamUngMode(false);
     setGiaiChiPrefill({
       nhan_vien_id: row.nhan_vien_id ?? "",
       don_hang_id: row.don_hang_id ?? "",
@@ -165,6 +180,7 @@ export default function TamUngGiaiChiView({
       doi_tuong: values.doi_tuong,
       nhan_vien_id: values.doi_tuong === "Nhân viên" ? values.nhan_vien_id || null : null,
       ten_tai_xe: values.doi_tuong === "Tài xế" ? values.ten_tai_xe || null : null,
+      khach_hang_id: values.doi_tuong === "Khách hàng" ? values.khach_hang_id || null : null,
       lan: values.lan ? Number(values.lan) : null,
       so_tien: Number(values.so_tien),
       muc_tam_ung_toi_da: values.muc_tam_ung_toi_da ? Number(values.muc_tam_ung_toi_da) : null,
@@ -180,7 +196,7 @@ export default function TamUngGiaiChiView({
         .from("tam_ung_giai_chi")
         .update(payload)
         .eq("id", editing.id)
-        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
+        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
         .single();
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
@@ -197,7 +213,7 @@ export default function TamUngGiaiChiView({
       const { data, error } = await supabase
         .from("tam_ung_giai_chi")
         .insert({ ...payload, nguoi_de_nghi_id: nv?.id })
-        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
+        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
         .single();
       if (!error && data) {
         setRows((prev) => [data as Row, ...prev]);
@@ -214,7 +230,7 @@ export default function TamUngGiaiChiView({
       .from("tam_ung_giai_chi")
       .update({ trang_thai: trangThai })
       .eq("id", row.id)
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)")
+      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
       .single();
     if (!error && data) setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
     else if (error) window.alert(error.message);
@@ -370,7 +386,7 @@ export default function TamUngGiaiChiView({
     const { data, error } = await supabase
       .from("tam_ung_giai_chi")
       .insert(records)
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang)");
+      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)");
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
@@ -389,6 +405,7 @@ export default function TamUngGiaiChiView({
             onClick={() => {
               setEditing(null);
               setProposing(true);
+              setKhachTamUngMode(false);
               setGiaiChiPrefill(null);
               setShowForm(true);
             }}
@@ -396,11 +413,26 @@ export default function TamUngGiaiChiView({
           >
             + Đề nghị tạm ứng
           </button>
+          {canGhiNhanKhachTamUng && (
+            <button
+              onClick={() => {
+                setEditing(null);
+                setProposing(false);
+                setKhachTamUngMode(true);
+                setGiaiChiPrefill(null);
+                setShowForm(true);
+              }}
+              className="rounded-lg border border-purple-300 px-4 py-2.5 text-sm font-medium text-purple-700"
+            >
+              + Khách tạm ứng
+            </button>
+          )}
           {isKeToan && (
             <button
               onClick={() => {
                 setEditing(null);
                 setProposing(false);
+                setKhachTamUngMode(false);
                 setGiaiChiPrefill(null);
                 setShowForm(true);
               }}
@@ -567,6 +599,7 @@ export default function TamUngGiaiChiView({
                     onClick={() => {
                       setEditing(row);
                       setProposing(false);
+                      setKhachTamUngMode(false);
                       setGiaiChiPrefill(null);
                       setShowForm(true);
                     }}
@@ -604,9 +637,11 @@ export default function TamUngGiaiChiView({
         <TamUngForm
           initial={editing}
           proposing={proposing}
+          khachTamUngMode={khachTamUngMode}
           giaiChiPrefill={giaiChiPrefill}
           nhanVienList={nhanVienList}
           donHangList={donHangList}
+          khachHangList={khachHangList}
           currentUserId={currentUserId}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
@@ -619,18 +654,22 @@ export default function TamUngGiaiChiView({
 function TamUngForm({
   initial,
   proposing,
+  khachTamUngMode,
   giaiChiPrefill,
   nhanVienList,
   donHangList,
+  khachHangList,
   currentUserId,
   onCancel,
   onSave,
 }: {
   initial: Row | null;
   proposing: boolean;
+  khachTamUngMode: boolean;
   giaiChiPrefill: { nhan_vien_id: string; don_hang_id: string; so_tien: string; ghi_chu: string } | null;
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
+  khachHangList: KhachHangOpt[];
   currentUserId?: string;
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
@@ -638,9 +677,10 @@ function TamUngForm({
   const [values, setValues] = useState({
     loai: initial?.loai ?? (giaiChiPrefill ? "Giải chi" : "Tạm ứng"),
     ngay_thuc_hien: initial?.ngay_thuc_hien ?? new Date().toISOString().slice(0, 10),
-    doi_tuong: initial?.doi_tuong ?? "Nhân viên",
+    doi_tuong: initial?.doi_tuong ?? (khachTamUngMode ? "Khách hàng" : "Nhân viên"),
     nhan_vien_id: initial?.nhan_vien_id ?? giaiChiPrefill?.nhan_vien_id ?? (proposing ? currentUserId ?? "" : ""),
     ten_tai_xe: initial?.ten_tai_xe ?? "",
+    khach_hang_id: initial?.khach_hang_id ?? "",
     lan: initial?.lan?.toString() ?? "",
     so_tien: initial?.so_tien?.toString() ?? giaiChiPrefill?.so_tien ?? "",
     muc_tam_ung_toi_da: initial?.muc_tam_ung_toi_da?.toString() ?? "",
@@ -667,12 +707,18 @@ function TamUngForm({
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
         <h2 className="mb-4 text-lg font-semibold text-slate-900">
-          {initial ? "Sửa" : proposing ? "Đề nghị tạm ứng" : "Thêm tạm ứng/giải chi"}
+          {initial ? "Sửa" : khachTamUngMode ? "Khách hàng tạm ứng" : proposing ? "Đề nghị tạm ứng" : "Thêm tạm ứng/giải chi"}
         </h2>
+        {khachTamUngMode && !initial && (
+          <p className="mb-3 rounded-lg bg-purple-50 p-2 text-xs text-purple-800">
+            Ghi nhận khoản khách hàng ứng trước tiền để làm hàng cho 1 lô cụ thể. Chọn đúng &quot;Đơn hàng liên
+            quan&quot; và &quot;Phương thức&quot; để tiền tự chạy vào Sổ quỹ.
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Loại</label>
-            <select disabled={proposing} value={values.loai} onChange={(e) => set("loai", e.target.value)} className={cls}>
+            <select disabled={proposing || khachTamUngMode} value={values.loai} onChange={(e) => set("loai", e.target.value)} className={cls}>
               <option value="Tạm ứng">Tạm ứng</option>
               <option value="Giải chi">Giải chi</option>
             </select>
@@ -683,9 +729,10 @@ function TamUngForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đối tượng</label>
-            <select disabled={proposing} value={values.doi_tuong} onChange={(e) => set("doi_tuong", e.target.value)} className={cls}>
+            <select disabled={proposing || khachTamUngMode} value={values.doi_tuong} onChange={(e) => set("doi_tuong", e.target.value)} className={cls}>
               <option value="Nhân viên">Nhân viên</option>
               <option value="Tài xế">Tài xế</option>
+              <option value="Khách hàng">Khách hàng</option>
             </select>
           </div>
           {values.doi_tuong === "Nhân viên" ? (
@@ -700,10 +747,19 @@ function TamUngForm({
                 ))}
               </select>
             </div>
-          ) : (
+          ) : values.doi_tuong === "Tài xế" ? (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Tên tài xế</label>
               <input required value={values.ten_tai_xe} onChange={(e) => set("ten_tai_xe", e.target.value)} className={cls} />
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
+              <SearchableSelect
+                options={khachHangList.map((k) => ({ value: k.id, label: k.ten_day_du }))}
+                value={values.khach_hang_id}
+                onChange={(v) => set("khach_hang_id", v)}
+              />
             </div>
           )}
           <div>
