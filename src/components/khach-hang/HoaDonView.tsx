@@ -31,6 +31,7 @@ interface Row {
   tong_tien_truoc_thue: number | null;
   vat_percent: number | null;
   tien_vat: number;
+  tien_chi_ho: number | null;
   tong_tien: number;
   trang_thai_thanh_toan: "Chưa thu" | "Thu một phần" | "Đã thu đủ";
   so_tien_da_thu: number | null;
@@ -95,6 +96,7 @@ export default function HoaDonView({
       ngay_xuat: values.ngay_xuat,
       tong_tien_truoc_thue: values.tong_tien_truoc_thue ? Number(values.tong_tien_truoc_thue) : null,
       vat_percent: values.vat_percent ? Number(values.vat_percent) : null,
+      tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
       trang_thai_thanh_toan: values.trang_thai_thanh_toan || "Chưa thu",
       so_tien_da_thu: values.so_tien_da_thu ? Number(values.so_tien_da_thu) : null,
       ghi_chu: values.ghi_chu || null,
@@ -163,6 +165,7 @@ export default function HoaDonView({
       "Ngày xuất": r.ngay_xuat,
       "Tổng trước thuế": r.tong_tien_truoc_thue ?? "",
       "VAT %": r.vat_percent ?? "",
+      "Tiền chi hộ": r.tien_chi_ho ?? "",
       "Tiền VAT": r.tien_vat,
       "Tổng tiền": r.tong_tien,
       "Trạng thái thanh toán": r.trang_thai_thanh_toan,
@@ -239,6 +242,7 @@ export default function HoaDonView({
             <p className="text-slate-500">
               {row.ngay_xuat} · Tổng: {row.tong_tien.toLocaleString("en-US")}
               {row.vat_percent ? ` (gồm VAT ${row.vat_percent}%)` : ""}
+              {row.tien_chi_ho ? ` (gồm chi hộ ${row.tien_chi_ho.toLocaleString("en-US")})` : ""}
               {row.so_tien_da_thu ? ` · Đã thu: ${row.so_tien_da_thu.toLocaleString("en-US")}` : ""}
             </p>
             {donHangCuaHoaDon(row.id).length > 0 && (
@@ -312,6 +316,7 @@ function HoaDonForm({
     ngay_xuat: initial?.ngay_xuat ?? new Date().toISOString().slice(0, 10),
     tong_tien_truoc_thue: initial?.tong_tien_truoc_thue?.toString() ?? "",
     vat_percent: initial?.vat_percent?.toString() ?? "",
+    tien_chi_ho: initial?.tien_chi_ho?.toString() ?? "",
     trang_thai_thanh_toan: initial?.trang_thai_thanh_toan ?? "Chưa thu",
     so_tien_da_thu: initial?.so_tien_da_thu?.toString() ?? "",
     ghi_chu: initial?.ghi_chu ?? "",
@@ -389,6 +394,11 @@ function HoaDonForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">VAT %</label>
             <input type="number" step="any" value={values.vat_percent} onChange={(e) => set("vat_percent", e.target.value)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Tiền chi hộ</label>
+            <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} />
+            <p className="mt-1 text-xs text-slate-400">Khoản thu hộ đúng số tiền, không tính VAT</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái thanh toán</label>

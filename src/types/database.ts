@@ -280,6 +280,7 @@ export interface PhatSinhChiPhi {
   ngay_phat_sinh: string;
   nguoi_nhap_id: string | null;
   nguoi_duyet_id: string | null;
+  hoa_don_id: string | null;
   trang_thai: TrangThaiChiPhi;
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;
@@ -293,6 +294,7 @@ export interface PhuThu {
   don_hang_id: string;
   loai_phu_thu: string | null;
   thanh_tien: number | null;
+  hoa_don_id: string | null;
   ghi_chu: string | null;
   created_at: string;
   updated_at: string;
@@ -420,6 +422,7 @@ export interface HoaDonXuat {
   tong_tien_truoc_thue: number | null;
   vat_percent: number | null;
   tien_vat: number;
+  tien_chi_ho: number | null;
   tong_tien: number;
   trang_thai_thanh_toan: TrangThaiThuTien;
   so_tien_da_thu: number | null;
