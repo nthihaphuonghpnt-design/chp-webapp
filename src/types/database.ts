@@ -393,13 +393,17 @@ export interface TamUngGiaiChi {
 
 export type LoaiHopDong = "Dịch vụ logistics" | "Ủy thác XNK" | "Khác";
 
+export type TrangThaiHopDong = "Chưa có hợp đồng" | "Đã có hợp đồng";
+
 export interface HopDongKhachHang {
   id: string;
-  khach_hang_id: string;
+  khach_hang_id: string | null;
+  nha_cung_cap_id: string | null;
   so_hop_dong: string | null;
   loai_hop_dong: LoaiHopDong | null;
   ngay_hieu_luc: string | null;
   ngay_het_han: string | null;
+  trang_thai_hop_dong: TrangThaiHopDong;
   ghi_chu: string | null;
   nguoi_tao_id: string | null;
   created_at: string;

@@ -7,29 +7,37 @@ import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
 import type { DinhKem } from "@/types/database";
 
-interface KhachHang {
+interface DoiTac {
   id: string;
-  ten_day_du: string;
-  ten_viet_tat: string | null;
+  ten_day_du?: string;
+  ten_viet_tat?: string | null;
+  ten?: string;
 }
 
 interface Row {
   id: string;
-  khach_hang_id: string;
+  khach_hang_id: string | null;
+  nha_cung_cap_id: string | null;
   so_hop_dong: string | null;
   loai_hop_dong: string | null;
   ngay_hieu_luc: string | null;
   ngay_het_han: string | null;
+  trang_thai_hop_dong: "Chưa có hợp đồng" | "Đã có hợp đồng";
   ghi_chu: string | null;
-  khach_hang: KhachHang | KhachHang[] | null;
+  khach_hang: DoiTac | DoiTac[] | null;
+  nha_cung_cap: DoiTac | DoiTac[] | null;
 }
 
 function one<T>(v: T | T[] | null): T | null {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
-function khName(kh: KhachHang | null) {
-  return kh ? kh.ten_viet_tat || kh.ten_day_du : "—";
+function doiTuongTen(row: Row) {
+  const kh = one(row.khach_hang);
+  if (kh) return { ten: kh.ten_viet_tat || kh.ten_day_du || "—", loai: "Khách hàng" };
+  const ncc = one(row.nha_cung_cap);
+  if (ncc) return { ten: ncc.ten || "—", loai: "Nhà cung cấp" };
+  return { ten: "—", loai: "" };
 }
 
 const LOAI_HOP_DONG = ["Dịch vụ logistics", "Ủy thác XNK", "Khác"];
@@ -41,16 +49,23 @@ function trangThaiHieuLuc(row: Row) {
   return { label: "Còn hiệu lực", color: "bg-green-100 text-green-700" };
 }
 
+const HOP_DONG_COLOR: Record<string, string> = {
+  "Chưa có hợp đồng": "bg-red-100 text-red-700",
+  "Đã có hợp đồng": "bg-green-100 text-green-700",
+};
+
 export default function HopDongView({
   initialRows,
   khachHangList,
+  nhaCungCapList,
   dinhKemRows,
   canEdit,
   canDelete,
   currentUserId,
 }: {
   initialRows: Row[];
-  khachHangList: KhachHang[];
+  khachHangList: DoiTac[];
+  nhaCungCapList: DoiTac[];
   dinhKemRows: DinhKem[];
   canEdit: boolean;
   canDelete: boolean;
@@ -59,24 +74,34 @@ export default function HopDongView({
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
+  const [chuaCoHopDongOnly, setChuaCoHopDongOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
-  const filtered = rows.filter((r) => {
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return (
-      (r.so_hop_dong ?? "").toLowerCase().includes(q) ||
-      khName(one(r.khach_hang)).toLowerCase().includes(q)
-    );
-  });
+  const filtered = rows
+    .filter((r) => !chuaCoHopDongOnly || r.trang_thai_hop_dong === "Chưa có hợp đồng")
+    .filter((r) => {
+      if (!query) return true;
+      const q = query.toLowerCase();
+      return (r.so_hop_dong ?? "").toLowerCase().includes(q) || doiTuongTen(r).ten.toLowerCase().includes(q);
+    });
+
+  async function refetchRow(id: string) {
+    const { data } = await supabase
+      .from("hop_dong_khach_hang")
+      .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), nha_cung_cap:nha_cung_cap_id(ten)")
+      .eq("id", id)
+      .single();
+    if (data) setRows((prev) => prev.map((r) => (r.id === id ? (data as Row) : r)));
+  }
 
   async function handleSave(values: Record<string, string>) {
     const payload: Record<string, unknown> = {
-      khach_hang_id: values.khach_hang_id,
+      khach_hang_id: values.doi_tuong === "khach_hang" ? values.doi_tuong_id || null : null,
+      nha_cung_cap_id: values.doi_tuong === "nha_cung_cap" ? values.doi_tuong_id || null : null,
       so_hop_dong: values.so_hop_dong || null,
       loai_hop_dong: values.loai_hop_dong || null,
       ngay_hieu_luc: values.ngay_hieu_luc || null,
@@ -85,18 +110,13 @@ export default function HopDongView({
     };
 
     if (editing) {
-      const { data, error } = await supabase
-        .from("hop_dong_khach_hang")
-        .update(payload)
-        .eq("id", editing.id)
-        .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
-        .single();
-      if (!error && data) {
-        setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
-        setShowForm(false);
-      } else if (error) {
+      const { error } = await supabase.from("hop_dong_khach_hang").update(payload).eq("id", editing.id);
+      if (error) {
         window.alert(error.message);
+        return;
       }
+      await refetchRow(editing.id);
+      setShowForm(false);
     } else {
       const {
         data: { user },
@@ -106,7 +126,7 @@ export default function HopDongView({
       const { data, error } = await supabase
         .from("hop_dong_khach_hang")
         .insert({ ...payload, nguoi_tao_id: nv?.id })
-        .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
+        .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), nha_cung_cap:nha_cung_cap_id(ten)")
         .single();
       if (!error && data) {
         setRows((prev) => [data as Row, ...prev]);
@@ -125,28 +145,40 @@ export default function HopDongView({
 
   function handleExportExcel() {
     const data = filtered.map((r) => ({
-      "Khách hàng": khName(one(r.khach_hang)),
+      "Đối tượng": doiTuongTen(r).loai,
+      Tên: doiTuongTen(r).ten,
       "Số hợp đồng": r.so_hop_dong ?? "",
       "Loại hợp đồng": r.loai_hop_dong ?? "",
       "Ngày hiệu lực": r.ngay_hieu_luc ?? "",
       "Ngày hết hạn": r.ngay_het_han ?? "",
-      "Trạng thái": trangThaiHieuLuc(r).label,
+      "Trạng thái hợp đồng": r.trang_thai_hop_dong,
+      "Trạng thái hiệu lực": trangThaiHieuLuc(r).label,
       "Ghi chú": r.ghi_chu ?? "",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Hợp đồng");
-    XLSX.writeFile(wb, "hop-dong-khach-hang.xlsx");
+    XLSX.writeFile(wb, "hop-dong.xlsx");
   }
 
   function handleDownloadTemplate() {
-    const headers = ["Khách hàng *", "Số hợp đồng", "Loại hợp đồng", "Ngày hiệu lực (yyyy-mm-dd)", "Ngày hết hạn (yyyy-mm-dd)", "Ghi chú"];
+    const headers = [
+      "Đối tượng * (Khách hàng/Nhà cung cấp)",
+      "Tên *",
+      "Số hợp đồng",
+      "Loại hợp đồng",
+      "Ngày hiệu lực (yyyy-mm-dd)",
+      "Ngày hết hạn (yyyy-mm-dd)",
+      "Ghi chú",
+    ];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Mẫu nhập");
     const guideRows = [
       ["Cột", "Giá trị hợp lệ"],
-      ["Khách hàng", khachHangList.map((k) => k.ten_viet_tat || k.ten_day_du).join(", ")],
+      ["Đối tượng", "Khách hàng, Nhà cung cấp"],
+      ["Tên (nếu Khách hàng)", khachHangList.map((k) => k.ten_viet_tat || k.ten_day_du).join(", ")],
+      ["Tên (nếu Nhà cung cấp)", nhaCungCapList.map((n) => n.ten).join(", ")],
       ["Loại hợp đồng", LOAI_HOP_DONG.join(", ")],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guideRows), "Hướng dẫn");
@@ -177,14 +209,32 @@ export default function HopDongView({
         return v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").trim();
       };
 
-      const khName_ = get("Khách hàng *") || get("Khách hàng");
-      const kh = khachHangList.find((k) => (k.ten_viet_tat || k.ten_day_du).toLowerCase() === khName_.toLowerCase() || k.ten_day_du.toLowerCase() === khName_.toLowerCase());
-      if (!kh) {
-        errors.push(`Dòng ${rowNum}: không tìm thấy khách hàng "${khName_}".`);
+      const doiTuong = get("Đối tượng * (Khách hàng/Nhà cung cấp)") || get("Đối tượng");
+      const ten = get("Tên *") || get("Tên");
+      let khId: string | null = null;
+      let nccId: string | null = null;
+      if (doiTuong === "Khách hàng") {
+        const kh = khachHangList.find((k) => (k.ten_viet_tat || k.ten_day_du || "").toLowerCase() === ten.toLowerCase());
+        if (!kh) {
+          errors.push(`Dòng ${rowNum}: không tìm thấy khách hàng "${ten}".`);
+          return;
+        }
+        khId = kh.id;
+      } else if (doiTuong === "Nhà cung cấp") {
+        const ncc = nhaCungCapList.find((n) => (n.ten ?? "").toLowerCase() === ten.toLowerCase());
+        if (!ncc) {
+          errors.push(`Dòng ${rowNum}: không tìm thấy nhà cung cấp "${ten}".`);
+          return;
+        }
+        nccId = ncc.id;
+      } else {
+        errors.push(`Dòng ${rowNum}: Đối tượng "${doiTuong}" không hợp lệ.`);
         return;
       }
+
       records.push({
-        khach_hang_id: kh.id,
+        khach_hang_id: khId,
+        nha_cung_cap_id: nccId,
         so_hop_dong: get("Số hợp đồng") || null,
         loai_hop_dong: LOAI_HOP_DONG.includes(get("Loại hợp đồng")) ? get("Loại hợp đồng") : null,
         ngay_hieu_luc: get("Ngày hiệu lực (yyyy-mm-dd)") || null,
@@ -203,7 +253,7 @@ export default function HopDongView({
     const { data, error } = await supabase
       .from("hop_dong_khach_hang")
       .insert(records)
-      .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)");
+      .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), nha_cung_cap:nha_cung_cap_id(ten)");
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
@@ -216,7 +266,7 @@ export default function HopDongView({
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Hợp đồng khách hàng</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Hợp đồng (Khách hàng &amp; Nhà cung cấp)</h1>
         <div className="flex flex-wrap gap-2">
           <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
             Xuất Excel
@@ -255,25 +305,39 @@ export default function HopDongView({
         </div>
       </div>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Tìm theo số hợp đồng, khách hàng..."
-        className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-      />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Tìm theo số hợp đồng, tên..."
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+        />
+        <label className="flex items-center gap-1.5 text-sm text-slate-600">
+          <input type="checkbox" checked={chuaCoHopDongOnly} onChange={(e) => setChuaCoHopDongOnly(e.target.checked)} />
+          Chỉ hiện chưa có hợp đồng
+        </label>
+      </div>
 
       {importMsg && <p className="mb-4 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">{importMsg}</p>}
 
       <div className="flex flex-col gap-2">
         {filtered.map((row) => {
           const status = trangThaiHieuLuc(row);
+          const dt = doiTuongTen(row);
           return (
             <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
               <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium text-slate-900">
-                  {row.so_hop_dong || "(chưa có số)"} · {khName(one(row.khach_hang))}
+                  [{dt.loai}] {dt.ten} {row.so_hop_dong ? `· ${row.so_hop_dong}` : ""}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.color}`}>{status.label}</span>
+                <div className="flex gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${HOP_DONG_COLOR[row.trang_thai_hop_dong]}`}>
+                    {row.trang_thai_hop_dong}
+                  </span>
+                  {row.trang_thai_hop_dong === "Đã có hợp đồng" && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.color}`}>{status.label}</span>
+                  )}
+                </div>
               </div>
               <p className="text-slate-500">
                 {row.loai_hop_dong ?? "—"} · Hiệu lực: {row.ngay_hieu_luc ?? "—"} → {row.ngay_het_han ?? "—"}
@@ -309,11 +373,17 @@ export default function HopDongView({
             </div>
           );
         })}
-        {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">Chưa có hợp đồng nào.</p>}
+        {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">Không có hợp đồng nào.</p>}
       </div>
 
       {showForm && (
-        <HopDongForm initial={editing} khachHangList={khachHangList} onCancel={() => setShowForm(false)} onSave={handleSave} />
+        <HopDongForm
+          initial={editing}
+          khachHangList={khachHangList}
+          nhaCungCapList={nhaCungCapList}
+          onCancel={() => setShowForm(false)}
+          onSave={handleSave}
+        />
       )}
     </div>
   );
@@ -322,16 +392,20 @@ export default function HopDongView({
 function HopDongForm({
   initial,
   khachHangList,
+  nhaCungCapList,
   onCancel,
   onSave,
 }: {
   initial: Row | null;
-  khachHangList: KhachHang[];
+  khachHangList: DoiTac[];
+  nhaCungCapList: DoiTac[];
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
+  const initialDoiTuong = initial?.nha_cung_cap_id ? "nha_cung_cap" : "khach_hang";
   const [values, setValues] = useState({
-    khach_hang_id: initial?.khach_hang_id ?? "",
+    doi_tuong: initialDoiTuong,
+    doi_tuong_id: initial?.khach_hang_id ?? initial?.nha_cung_cap_id ?? "",
     so_hop_dong: initial?.so_hop_dong ?? "",
     loai_hop_dong: initial?.loai_hop_dong ?? "",
     ngay_hieu_luc: initial?.ngay_hieu_luc ?? "",
@@ -343,8 +417,10 @@ function HopDongForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }));
-  const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
+  const daCoDoiTuong = !!initial;
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du || "" }));
+  const nccOptions = nhaCungCapList.map((n) => ({ value: n.id, label: n.ten ?? "" }));
+  const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
@@ -357,9 +433,33 @@ function HopDongForm({
       >
         <h2 className="mb-4 text-lg font-semibold text-slate-900">{initial ? "Sửa hợp đồng" : "Thêm hợp đồng"}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
-            <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Đối tượng</label>
+            <select
+              disabled={daCoDoiTuong}
+              value={values.doi_tuong}
+              onChange={(e) => set("doi_tuong", e.target.value)}
+              className={cls}
+            >
+              <option value="khach_hang">Khách hàng</option>
+              <option value="nha_cung_cap">Nhà cung cấp</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">{values.doi_tuong === "khach_hang" ? "Khách hàng" : "Nhà cung cấp"}</label>
+            {daCoDoiTuong ? (
+              <input
+                disabled
+                value={(values.doi_tuong === "khach_hang" ? khOptions : nccOptions).find((o) => o.value === values.doi_tuong_id)?.label ?? ""}
+                className={cls}
+              />
+            ) : (
+              <SearchableSelect
+                options={values.doi_tuong === "khach_hang" ? khOptions : nccOptions}
+                value={values.doi_tuong_id}
+                onChange={(v) => set("doi_tuong_id", v)}
+              />
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số hợp đồng</label>
