@@ -66,6 +66,12 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
 
   if (!order) notFound();
 
+  const toKhaiIds = (toKhaiRows ?? []).map((t) => t.id);
+  const { data: toKhaiDinhKemRows } =
+    toKhaiIds.length > 0
+      ? await supabase.from("dinh_kem").select("*").in("to_khai_id", toKhaiIds).order("thoi_gian_upload", { ascending: false })
+      : { data: [] };
+
   const bangGiaList = (bangGiaAll ?? []).filter((b) => b.khach_hang_id === order.khach_hang_id);
 
   // Loi nhuan so bo: Sell - Buy(noi bo) - Chi phi giao nhan/chung tu - Chi phi thue ngoai
@@ -106,7 +112,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const nhanVienGiaoNhanOptions = (nhanVienList ?? [])
     .filter((nv) => {
       const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
-      return pb?.ten === "Hiện trường" || pb?.ten === "Chứng từ";
+      return pb?.ten === "Hiện trường" || pb?.ten === "Chứng từ" || pb?.ten === "Kế toán" || pb?.ten === "Sale";
     })
     .map((nv) => {
       const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
@@ -197,7 +203,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="mb-4">
-        <ToKhaiSection donHangId={order.id} initialRows={toKhaiRows ?? []} canEdit={canEditToKhai} />
+        <ToKhaiSection
+          donHangId={order.id}
+          initialRows={toKhaiRows ?? []}
+          dinhKemRows={toKhaiDinhKemRows ?? []}
+          canEdit={canEditToKhai}
+          currentUserId={user?.id}
+        />
       </div>
 
       <div className="mb-4">

@@ -21,6 +21,8 @@ export interface NhanVien {
   so_dien_thoai: string | null;
   auth_user_id: string | null;
   dang_lam_viec: boolean;
+  luong_co_dinh: number | null;
+  muc_dong_bhxh: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -249,6 +251,7 @@ export interface DinhKem {
   don_hang_id: string | null;
   hop_dong_id: string | null;
   hoa_don_id: string | null;
+  to_khai_id: string | null;
   lien_ket_toi: LienKetToi | null;
   loai_dinh_kem: LoaiDinhKem | null;
   duong_dan_file: string;

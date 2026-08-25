@@ -13,10 +13,10 @@ export default function FileAttachSection({
   canUpload,
   currentUserId,
 }: {
-  parentField: "hop_dong_id" | "hoa_don_id";
+  parentField: "hop_dong_id" | "hoa_don_id" | "to_khai_id";
   parentId: string;
   pathPrefix: string;
-  lienKetToi: "Hợp đồng" | "Hóa đơn";
+  lienKetToi: "Hợp đồng" | "Hóa đơn" | "Thông quan";
   initialRows: DinhKem[];
   canUpload: boolean;
   currentUserId?: string;

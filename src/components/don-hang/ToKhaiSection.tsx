@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
-import type { ToKhaiHaiQuan } from "@/types/database";
+import FileAttachSection from "@/components/common/FileAttachSection";
+import type { DinhKem, ToKhaiHaiQuan } from "@/types/database";
 
 const LOAI_HINH = ["Nhập kinh doanh", "Nhập ủy thác", "Xuất kinh doanh", "Xuất ủy thác", "Tạm nhập tái xuất", "Khác"];
 const LUONG = ["Xanh", "Vàng", "Đỏ"];
@@ -18,11 +19,15 @@ const LUONG_COLOR: Record<string, string> = {
 export default function ToKhaiSection({
   donHangId,
   initialRows,
+  dinhKemRows,
   canEdit,
+  currentUserId,
 }: {
   donHangId: string;
   initialRows: ToKhaiHaiQuan[];
+  dinhKemRows: DinhKem[];
   canEdit: boolean;
+  currentUserId?: string;
 }) {
   const supabase = createClient();
   const [rows, setRows] = useState<ToKhaiHaiQuan[]>(initialRows);
@@ -112,6 +117,15 @@ export default function ToKhaiSection({
                 Thuế NK: {row.thue_nhap_khau ?? 0} · VAT NK: {row.thue_vat_nk ?? 0} · Thuế khác: {row.thue_khac ?? 0}
               </p>
             )}
+            <FileAttachSection
+              parentField="to_khai_id"
+              parentId={row.id}
+              pathPrefix="to-khai"
+              lienKetToi="Thông quan"
+              initialRows={dinhKemRows.filter((d) => d.to_khai_id === row.id)}
+              canUpload={canEdit}
+              currentUserId={currentUserId}
+            />
             {canEdit && (
               <div className="mt-2 flex gap-3">
                 <button
