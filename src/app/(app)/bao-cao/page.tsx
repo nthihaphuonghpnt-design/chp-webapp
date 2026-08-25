@@ -23,6 +23,7 @@ export default async function BaoCaoPage() {
     { data: phuThuList },
     { data: thueNgoaiList },
     { data: hoaDonList },
+    { data: hoaDonDonHangList },
     { data: dinhPhiList },
     { data: nhaCungCapList },
     { data: doiTacList },
@@ -41,8 +42,9 @@ export default async function BaoCaoPage() {
       ? supabase.from("don_thue_ngoai").select("don_hang_id, doi_tac_thue_ngoai_id, gia_von_buy, gia_ban_sell, so_tien_da_thanh_toan, ngay_thue")
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc
-      ? supabase.from("hoa_don_xuat").select("khach_hang_id, ngay_xuat, tong_tien, so_tien_da_thu, trang_thai_thanh_toan")
+      ? supabase.from("hoa_don_xuat").select("id, khach_hang_id, so_hoa_don, ngay_xuat, tong_tien, tien_chi_ho, so_tien_da_thu, trang_thai_thanh_toan")
       : Promise.resolve({ data: [] }),
+    isKeToanOrGiamDoc ? supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id") : Promise.resolve({ data: [] }),
     supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     supabase.from("nha_cung_cap").select("id, ten"),
     supabase.from("doi_tac_thue_ngoai").select("id, ten"),
@@ -61,6 +63,7 @@ export default async function BaoCaoPage() {
       thueNgoaiList={(thueNgoaiList ?? []) as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       hoaDonList={(hoaDonList ?? []) as any[]}
+      hoaDonDonHangList={hoaDonDonHangList ?? []}
       dinhPhiList={dinhPhiList ?? []}
       nhaCungCapList={nhaCungCapList ?? []}
       doiTacList={doiTacList ?? []}

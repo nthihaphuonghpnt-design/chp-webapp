@@ -39,11 +39,18 @@ interface ThueNgoai {
   ngay_thue: string;
 }
 interface HoaDon {
+  id: string;
   khach_hang_id: string;
+  so_hoa_don: string | null;
   ngay_xuat: string;
   tong_tien: number;
+  tien_chi_ho: number | null;
   so_tien_da_thu: number | null;
   trang_thai_thanh_toan: string;
+}
+interface HoaDonDonHang {
+  hoa_don_id: string;
+  don_hang_id: string;
 }
 interface DinhPhi {
   thang_nam: string;
@@ -82,6 +89,7 @@ export default function BaoCaoView({
   phuThuList,
   thueNgoaiList,
   hoaDonList,
+  hoaDonDonHangList,
   dinhPhiList,
   nhaCungCapList,
   doiTacList,
@@ -96,6 +104,7 @@ export default function BaoCaoView({
   phuThuList: PhuThu[];
   thueNgoaiList: ThueNgoai[];
   hoaDonList: HoaDon[];
+  hoaDonDonHangList: HoaDonDonHang[];
   dinhPhiList: DinhPhi[];
   nhaCungCapList: Option[];
   doiTacList: Option[];
@@ -167,6 +176,36 @@ export default function BaoCaoView({
       return { donHang: d, sell, buy, thueNgoaiBuy, dinhPhi, lnTruocHoaHong, hoaHongSale: lnTruocHoaHong * 0.4, lnCongTy: lnTruocHoaHong * 0.6 };
     });
   }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- 2b) Cong no theo lo (Ke toan/Giam doc): gia ban + chi ho + hoa don da xuat + con phai thu ---
+  const congNoTheoLo = useMemo(() => {
+    if (!isKeToanOrGiamDoc) return [];
+    return donHangTrongKy.map((d) => {
+      const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
+      const giaBan =
+        cp.filter((c) => !c.chi_ho).reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
+        phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
+      const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.gia_von_buy ?? 0), 0);
+      const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
+      const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id));
+      const tongHoaDon = hoaDonLienQuan.reduce((s, h) => s + h.tong_tien, 0);
+      const daThu = hoaDonLienQuan.reduce((s, h) => s + (h.so_tien_da_thu ?? 0), 0);
+      return {
+        donHang: d,
+        khTen: khTen(d.khach_hang_id),
+        giaBan,
+        chiHo,
+        soHoaDon: hoaDonLienQuan.map((h) => h.so_hoa_don || "(chưa có số)").join(", "),
+        soLuongHoaDon: hoaDonLienQuan.length,
+        tongHoaDon,
+        daThu,
+        // Neu 1 hoa don gom nhieu don hang thi "da thu" cua rieng lo nay khong tach
+        // rach roi duoc (tien thu ve tinh chung cho ca hoa don) — chi chinh xac khi
+        // moi don hang 1 hoa don rieng.
+        gomNhieuDon: hoaDonLienQuan.some((h) => hoaDonDonHangList.filter((l) => l.hoa_don_id === h.id).length > 1),
+      };
+    });
+  }, [donHangTrongKy, chiPhiList, phuThuList, hoaDonDonHangList, hoaDonList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 3) Doanh so theo Sale ---
   const doanhSoTheoSale = useMemo(() => {
@@ -302,6 +341,29 @@ export default function BaoCaoView({
         ]),
       });
       themSheetKeO(wb, {
+        sheetName: "Công nợ theo lô",
+        columns: [
+          { header: "Số đơn", key: "soDon", width: 14 },
+          { header: "Khách hàng", key: "kh", width: 20 },
+          { header: "Giá bán", key: "giaBan", width: 14, numFmt: "#,##0" },
+          { header: "Chi hộ", key: "chiHo", width: 14, numFmt: "#,##0" },
+          { header: "Số hóa đơn", key: "soHd", width: 18 },
+          { header: "Tổng hóa đơn", key: "tongHd", width: 14, numFmt: "#,##0" },
+          { header: "Đã thu", key: "daThu", width: 14, numFmt: "#,##0" },
+          { header: "Còn phải thu", key: "conPhaiThu", width: 14, numFmt: "#,##0" },
+        ],
+        rows: congNoTheoLo.map((r) => [
+          r.donHang.so_don_hang,
+          r.khTen,
+          r.giaBan,
+          r.chiHo,
+          r.soLuongHoaDon > 0 ? r.soHoaDon : "Chưa xuất HĐ",
+          r.tongHoaDon,
+          r.daThu,
+          r.soLuongHoaDon > 0 ? r.tongHoaDon - r.daThu : r.giaBan + r.chiHo,
+        ]),
+      });
+      themSheetKeO(wb, {
         sheetName: "Chi phí theo loại",
         columns: [
           { header: "Loại chi phí", key: "loai", width: 20 },
@@ -419,6 +481,62 @@ export default function BaoCaoView({
                 </tbody>
               </table>
             </div>
+          </Section>
+
+          <Section title="Công nợ theo lô hàng (giá bán + chi hộ + hóa đơn)">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
+                  <tr>
+                    {["Số đơn", "Khách hàng", "Giá bán", "Chi hộ", "Hóa đơn", "Tổng HĐ", "Đã thu", "Còn phải thu"].map((h) => (
+                      <th key={h} className="px-3 py-2 font-medium">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {congNoTheoLo.map((r) => {
+                    const conPhaiThu = r.soLuongHoaDon > 0 ? r.tongHoaDon - r.daThu : r.giaBan + r.chiHo;
+                    return (
+                      <tr key={r.donHang.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2">
+                          <Link href={`/don-hang/${r.donHang.id}`} className="text-blue-600 hover:underline">
+                            {r.donHang.so_don_hang}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2">{r.khTen}</td>
+                        <td className="px-3 py-2">{fmt(r.giaBan)}</td>
+                        <td className="px-3 py-2">{fmt(r.chiHo)}</td>
+                        <td className="px-3 py-2">
+                          {r.soLuongHoaDon > 0 ? (
+                            <>
+                              {r.soHoaDon}
+                              {r.gomNhieuDon && <span className="ml-1 text-amber-600" title="Hóa đơn này gồm nhiều đơn hàng, số đã thu không tách riêng được cho từng đơn">*</span>}
+                            </>
+                          ) : (
+                            <span className="text-slate-400">Chưa xuất HĐ</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">{fmt(r.tongHoaDon)}</td>
+                        <td className="px-3 py-2">{fmt(r.daThu)}</td>
+                        <td className="px-3 py-2 font-medium">{fmt(conPhaiThu)}</td>
+                      </tr>
+                    );
+                  })}
+                  {congNoTheoLo.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                        Không có đơn hàng trong khoảng thời gian này.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              * Hóa đơn gộp nhiều đơn hàng thì &quot;Đã thu&quot;/&quot;Còn phải thu&quot; hiển thị theo cả hóa đơn, không tách được cho riêng từng đơn.
+            </p>
           </Section>
 
           <Section title="Báo cáo chi phí theo loại">

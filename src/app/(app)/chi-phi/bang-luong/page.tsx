@@ -27,7 +27,7 @@ export default async function BangLuongPage() {
   ] = await Promise.all([
     supabase
       .from("nhan_vien")
-      .select("id, ho_ten, luong_co_dinh, muc_dong_bhxh, dang_lam_viec, phong_ban:phong_ban_id(ten)")
+      .select("id, ho_ten, dang_lam_viec, phong_ban:phong_ban_id(ten)")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
     supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at"),
@@ -41,10 +41,24 @@ export default async function BangLuongPage() {
     supabase.from("luong_da_tra").select("*"),
   ]);
 
+  // luong_co_dinh/muc_dong_bhxh khong con select truc tiep tu bang nhan_vien
+  // duoc nua (xem migration 0039) — lay qua RPC rieng, chi Ke toan/Giam doc
+  // hoac chinh chu moi goi duoc.
+  const { data: luongList } = await supabase.rpc("luong_cua_nhan_vien");
+  const luongMap = new Map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((luongList ?? []) as any[]).map((l) => [l.id as string, l as { luong_co_dinh: number | null; muc_dong_bhxh: number | null }])
+  );
+  const nhanVienDayDu = (nhanVienList ?? []).map((nv) => ({
+    ...nv,
+    luong_co_dinh: luongMap.get(nv.id)?.luong_co_dinh ?? null,
+    muc_dong_bhxh: luongMap.get(nv.id)?.muc_dong_bhxh ?? null,
+  }));
+
   return (
     <BangLuongView
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      nhanVienList={(nhanVienList ?? []) as any[]}
+      nhanVienList={nhanVienDayDu as any[]}
       chiPhiGiaoNhanList={chiPhiGiaoNhanList ?? []}
       donHangList={donHangList ?? []}
       chiPhiList={chiPhiList ?? []}
