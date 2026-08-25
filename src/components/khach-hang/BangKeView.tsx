@@ -11,13 +11,38 @@ interface KhachHang {
   ten_day_du: string;
   ten_viet_tat: string | null;
 }
+interface KhachHangChiTiet {
+  id: string;
+  ten_day_du: string;
+  ten_viet_tat: string | null;
+  dia_chi: string | null;
+  ma_so_thue: string | null;
+  nguoi_lien_he: string | null;
+  dien_thoai: string | null;
+  email: string | null;
+}
 interface DonHangOpt {
   id: string;
   so_don_hang: string;
   ngay_len_don: string;
+  ngay_van_chuyen: string | null;
+  loai_don_hang: string | null;
   loai_kich_co: string | null;
+  dvt: string | null;
   so_luong: number | null;
+  so_bl_bk: string | null;
+  so_lo: string | null;
+  hang_hoa: { ten: string } | { ten: string }[] | null;
+  bien_so: string[];
 }
+
+const CONG_TY = {
+  tenViet: "CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VẬN TẢI CHÂU HOÀNG PHÁT",
+  tenAnh: "CHAU HOANG PHAT TRANSPORT TRADING SERVICE CO., LTD",
+  mst: "0316928901",
+  diaChi: "197/27/34/16 Đường TL 15, P. An Phú Đông, TP. Hồ Chí Minh, Việt Nam",
+  email: "info@chauhoangphat.com",
+};
 interface ChiPhiRow {
   id: string;
   don_hang_id: string;
@@ -43,12 +68,14 @@ function one<T>(v: T | T[] | null): T | null {
 export default function BangKeView({
   khachHangList,
   khachHangIdChon,
+  khachHangChiTiet,
   donHangList,
   chiPhiRows: initialChiPhi,
   phuThuRows: initialPhuThu,
 }: {
   khachHangList: KhachHang[];
   khachHangIdChon: string;
+  khachHangChiTiet: KhachHangChiTiet | null;
   donHangList: DonHangOpt[];
   chiPhiRows: ChiPhiRow[];
   phuThuRows: PhuThuRow[];
@@ -74,6 +101,7 @@ export default function BangKeView({
     label: `${d.so_don_hang} · ${d.ngay_len_don}${d.loai_kich_co ? ` · ${d.so_luong ?? 1}x${d.loai_kich_co}` : ""}`,
   }));
   const donHangChon = donHangList.find((d) => d.id === donHangFilter) ?? null;
+  const donHangMap = useMemo(() => new Map(donHangList.map((d) => [d.id, d])), [donHangList]);
 
   function chonKhachHang(id: string) {
     const params = new URLSearchParams();
@@ -116,6 +144,7 @@ export default function BangKeView({
     const vat = Number(vatPercent) || 0;
     const rows: {
       dienGiai: string;
+      donHangId: string;
       donHang: string;
       donGia: number;
       soLuong: number;
@@ -133,6 +162,7 @@ export default function BangKeView({
       const tienVatDong = r.chi_ho ? 0 : Math.round((soTien * vatDong) / 100);
       rows.push({
         dienGiai: one(r.loai_chi_phi)?.ten ?? "—",
+        donHangId: r.don_hang_id,
         donHang: one(r.don_hang)?.so_don_hang ?? "—",
         donGia: soTien,
         soLuong: 1,
@@ -148,6 +178,7 @@ export default function BangKeView({
       const tienVatDong = Math.round((soTien * vat) / 100);
       rows.push({
         dienGiai: `Phụ thu: ${r.loai_phu_thu ?? "—"}`,
+        donHangId: r.don_hang_id,
         donHang: one(r.don_hang)?.so_don_hang ?? "—",
         donGia: soTien,
         soLuong: 1,
@@ -163,33 +194,114 @@ export default function BangKeView({
 
   function handleXuatExcelBangKe() {
     const khTen = khachHangList.find((k) => k.id === khachHangIdChon);
-    const data = chiTietBangKe.map((r, i) => ({
-      No: i + 1,
-      "Charge Descriptions": r.dienGiai,
-      "Đơn hàng": r.donHang,
-      Currency: "VNĐ",
-      "Unit Price": r.donGia,
-      Volume: r.soLuong,
-      Total: r.thanhTien,
-      "VAT (%)": r.vatPercent,
-      "Tiền VAT": r.tienVat,
-      "Total (sau VAT)": r.tongSauVat,
-      "Ghi chú": r.ghiChu,
-    }));
-    data.push({
-      No: 0,
-      "Charge Descriptions": "TỔNG CỘNG",
-      "Đơn hàng": "",
-      Currency: "",
-      "Unit Price": 0,
-      Volume: 0,
-      Total: chiTietBangKe.reduce((s, r) => s + r.thanhTien, 0),
-      "VAT (%)": 0,
-      "Tiền VAT": chiTietBangKe.reduce((s, r) => s + r.tienVat, 0),
-      "Total (sau VAT)": chiTietBangKe.reduce((s, r) => s + r.tongSauVat, 0),
-      "Ghi chú": "",
+    const COT = 16; // tổng số cột của bảng, dùng để merge các dòng tiêu đề
+
+    const header: (string | number)[][] = [
+      [CONG_TY.tenViet],
+      [CONG_TY.tenAnh],
+      [`MST/Tax code: ${CONG_TY.mst}`],
+      [`Địa chỉ/Address: ${CONG_TY.diaChi}`],
+      [`Email: ${CONG_TY.email}`],
+      [],
+      ["BẢNG KÊ CHI PHÍ KHÁCH HÀNG"],
+      [`Khách hàng: ${khachHangChiTiet?.ten_day_du ?? khTen?.ten_day_du ?? ""}`],
+      [`Địa chỉ: ${khachHangChiTiet?.dia_chi ?? ""}`],
+      [
+        `MST: ${khachHangChiTiet?.ma_so_thue ?? ""}    Người liên hệ: ${khachHangChiTiet?.nguoi_lien_he ?? ""}    SĐT: ${khachHangChiTiet?.dien_thoai ?? ""}`,
+      ],
+    ];
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = header
+      .map((row, r) => (row.length > 0 ? { s: { r, c: 0 }, e: { r, c: COT - 1 } } : null))
+      .filter((m): m is { s: { r: number; c: number }; e: { r: number; c: number } } => m !== null);
+
+    if (donHangChon) {
+      header.push([`Đơn hàng: ${donHangChon.so_don_hang}  ·  Ngày lên đơn: ${donHangChon.ngay_len_don}`]);
+      merges.push({ s: { r: header.length - 1, c: 0 }, e: { r: header.length - 1, c: COT - 1 } });
+    }
+    header.push([]);
+
+    const colHeaders = [
+      "No",
+      "Charge Descriptions",
+      "Đơn hàng",
+      "Loại hàng",
+      "Kích cỡ / SL",
+      "Ngày vận chuyển",
+      "Số BL/BK",
+      "Số lô",
+      "Biển kiểm soát",
+      "Đơn giá",
+      "SL",
+      "Total",
+      "VAT (%)",
+      "Tiền VAT",
+      "Total (sau VAT)",
+      "Ghi chú",
+    ];
+    header.push(colHeaders);
+
+    const dataRows = chiTietBangKe.map((r, i) => {
+      const dh = donHangMap.get(r.donHangId);
+      return [
+        i + 1,
+        r.dienGiai,
+        r.donHang,
+        one(dh?.hang_hoa ?? null)?.ten ?? "",
+        dh ? `${dh.so_luong ?? 1}${dh.dvt ? ` ${dh.dvt}` : ""}${dh.loai_kich_co ? ` ${dh.loai_kich_co}` : ""}` : "",
+        dh?.ngay_van_chuyen ?? "",
+        dh?.so_bl_bk ?? "",
+        dh?.so_lo ?? "",
+        dh?.bien_so?.join(", ") ?? "",
+        r.donGia,
+        r.soLuong,
+        r.thanhTien,
+        r.vatPercent || "",
+        r.tienVat || "",
+        r.tongSauVat,
+        r.ghiChu,
+      ];
     });
-    const ws = XLSX.utils.json_to_sheet(data);
+
+    const tongRow = [
+      "",
+      "TỔNG CỘNG",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      chiTietBangKe.reduce((s, r) => s + r.thanhTien, 0),
+      "",
+      chiTietBangKe.reduce((s, r) => s + r.tienVat, 0),
+      chiTietBangKe.reduce((s, r) => s + r.tongSauVat, 0),
+      "",
+    ];
+
+    const aoa = [...header, ...dataRows, tongRow];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = merges;
+    ws["!cols"] = [
+      { wch: 5 },
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 6 },
+      { wch: 14 },
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+    ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Bảng kê");
     const ten = (khTen?.ten_viet_tat || khTen?.ten_day_du || "khach-hang").replace(/[^\p{L}\p{N}]+/gu, "-");
