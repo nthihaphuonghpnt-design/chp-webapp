@@ -6,7 +6,7 @@ export default async function HopDongPage() {
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const allowed = user && ["Sale", "Chứng từ", "Kế toán", "Giám đốc"].includes(user.phong_ban);
+  const allowed = user && ["Sale", "Kế toán", "Giám đốc"].includes(user.phong_ban);
   if (!allowed) {
     return (
       <div className="mx-auto max-w-xl px-4 py-10 text-center">
@@ -25,7 +25,7 @@ export default async function HopDongPage() {
     supabase.from("dinh_kem").select("*").not("hop_dong_id", "is", null).order("thoi_gian_upload", { ascending: false }),
   ]);
 
-  const canEdit = user?.phong_ban === "Chứng từ" || user?.phong_ban === "Kế toán";
+  const canEdit = user?.phong_ban === "Kế toán";
   const canDelete = user?.phong_ban === "Kế toán";
 
   return (

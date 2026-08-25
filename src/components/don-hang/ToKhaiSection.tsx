@@ -125,6 +125,7 @@ export default function ToKhaiSection({
               initialRows={dinhKemRows.filter((d) => d.to_khai_id === row.id)}
               canUpload={canEdit}
               currentUserId={currentUserId}
+              donHangId={donHangId}
             />
             {canEdit && (
               <div className="mt-2 flex gap-3">

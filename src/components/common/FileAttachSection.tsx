@@ -12,6 +12,7 @@ export default function FileAttachSection({
   initialRows,
   canUpload,
   currentUserId,
+  donHangId,
 }: {
   parentField: "hop_dong_id" | "hoa_don_id" | "to_khai_id";
   parentId: string;
@@ -20,6 +21,8 @@ export default function FileAttachSection({
   initialRows: DinhKem[];
   canUpload: boolean;
   currentUserId?: string;
+  /** Neu co, gan them don_hang_id de file nay cung hien trong tap chung tu cua don hang. */
+  donHangId?: string;
 }) {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +58,7 @@ export default function FileAttachSection({
       .from("dinh_kem")
       .insert({
         [parentField]: parentId,
+        ...(donHangId ? { don_hang_id: donHangId } : {}),
         lien_ket_toi: lienKetToi,
         loai_dinh_kem: "Khác",
         duong_dan_file: path,

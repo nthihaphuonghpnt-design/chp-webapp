@@ -242,21 +242,23 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         />
       </div>
 
-      <div className="mb-4">
-        <LineItemsSection
-          table="phu_thu"
-          donHangId={order.id}
-          soDonHang={order.so_don_hang}
-          title="Phụ thu khách hàng"
-          fields={[
-            { key: "loai_phu_thu", label: "Loại phụ thu", type: "text", required: true },
-            { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
-            { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
-          ]}
-          initialRows={phuThuRows ?? []}
-          canEdit={user?.phong_ban === "Sale" || user?.phong_ban === "Kế toán"}
-        />
-      </div>
+      {user?.phong_ban !== "Chứng từ" && (
+        <div className="mb-4">
+          <LineItemsSection
+            table="phu_thu"
+            donHangId={order.id}
+            soDonHang={order.so_don_hang}
+            title="Phụ thu khách hàng"
+            fields={[
+              { key: "loai_phu_thu", label: "Loại phụ thu", type: "text", required: true },
+              { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
+              { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+            ]}
+            initialRows={phuThuRows ?? []}
+            canEdit={user?.phong_ban === "Sale" || user?.phong_ban === "Kế toán"}
+          />
+        </div>
+      )}
 
       <div className="mb-4">
         <LineItemsSection
