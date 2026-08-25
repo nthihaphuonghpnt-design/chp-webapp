@@ -334,6 +334,7 @@ export interface BangGiaKhachHang {
   id: string;
   khach_hang_id: string;
   loai_chi_phi_id: string;
+  hang_hoa_id: string | null;
   don_gia: number | null;
   don_vi: string | null;
   ghi_chu: string | null;

@@ -6,10 +6,11 @@ export default async function BangGiaKhachHangPage() {
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const [{ data }, { data: khachHangList }, { data: loaiChiPhiList }] = await Promise.all([
+  const [{ data }, { data: khachHangList }, { data: loaiChiPhiList }, { data: hangHoaList }] = await Promise.all([
     supabase.from("bang_gia_khach_hang").select("*").order("created_at", { ascending: false }),
     supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
     supabase.from("loai_chi_phi").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
 
   const fields: FieldConfig[] = [
@@ -26,6 +27,13 @@ export default async function BangGiaKhachHangPage() {
       type: "select",
       required: true,
       options: (loaiChiPhiList ?? []).map((l) => ({ value: l.id, label: l.ten })),
+    },
+    {
+      key: "hang_hoa_id",
+      label: "Mặt hàng",
+      type: "select",
+      hint: "Để trống nếu áp dụng chung cho mọi mặt hàng",
+      options: (hangHoaList ?? []).map((h) => ({ value: h.id, label: h.ten })),
     },
     { key: "don_gia", label: "Đơn giá", type: "number", required: true },
     { key: "don_vi", label: "Đơn vị", type: "text", hint: "VD: /cont 20', /cont 40', /lô, /kg..." },
@@ -45,8 +53,9 @@ export default async function BangGiaKhachHangPage() {
         searchField="khach_hang_id"
       />
       <p className="mx-auto -mt-2 max-w-5xl px-4 pb-6 text-xs text-slate-400">
-        Đơn giá đã thỏa thuận sẵn với từng khách hàng cho từng loại chi phí. Khi nhập &quot;Chi phí
-        phát sinh&quot; cho đơn hàng, hệ thống sẽ tự gợi ý giá bán theo đúng khách hàng của đơn đó.
+        Đơn giá đã thỏa thuận sẵn với từng khách hàng, có thể khác nhau theo từng mặt hàng. Khi nhập
+        &quot;Chi phí phát sinh&quot; cho đơn hàng, hệ thống sẽ tự gợi ý giá bán theo đúng khách hàng
+        + mặt hàng của đơn đó (ưu tiên giá riêng cho mặt hàng, nếu không có sẽ dùng giá chung).
       </p>
     </div>
   );

@@ -224,6 +224,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           doiTacThueNgoaiList={doiTacList ?? []}
           chiTietVanChuyenList={chiTietRows ?? []}
           bangGiaList={bangGiaList}
+          khachHangId={order.khach_hang_id}
+          hangHoaId={order.hang_hoa_id}
           phongBan={user?.phong_ban ?? ""}
         />
       </div>

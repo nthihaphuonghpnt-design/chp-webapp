@@ -32,6 +32,8 @@ export default function ChiPhiSection({
   doiTacThueNgoaiList,
   chiTietVanChuyenList,
   bangGiaList,
+  khachHangId,
+  hangHoaId,
   phongBan,
 }: {
   donHangId: string;
@@ -42,6 +44,8 @@ export default function ChiPhiSection({
   doiTacThueNgoaiList: Option[];
   chiTietVanChuyenList: ChiTietVanChuyen[];
   bangGiaList: BangGiaKhachHang[];
+  khachHangId: string | null;
+  hangHoaId: string | null;
   phongBan: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -72,7 +76,7 @@ export default function ChiPhiSection({
     return c ? `${c.ngay_vc ?? "?"} · ${c.so_xe || c.tai_xe_cty_thue || "chặng"}` : null;
   }
 
-  async function handleSave(values: Record<string, string | boolean>) {
+  async function handleSave(values: Record<string, string | boolean>, luuGiaMoi?: boolean) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
     for (const [k, v] of Object.entries(values)) {
       if (typeof v === "boolean") {
@@ -81,6 +85,22 @@ export default function ChiPhiSection({
         payload[k] = v === "" ? null : Number(v);
       } else {
         payload[k] = v === "" ? null : v;
+      }
+    }
+
+    if (luuGiaMoi && khachHangId && typeof values.loai_chi_phi_id === "string" && payload.gia_ban_sell) {
+      const existing = bangGiaList.find(
+        (b) => b.loai_chi_phi_id === values.loai_chi_phi_id && b.hang_hoa_id === (hangHoaId ?? null)
+      );
+      if (existing) {
+        await supabase.from("bang_gia_khach_hang").update({ don_gia: payload.gia_ban_sell }).eq("id", existing.id);
+      } else {
+        await supabase.from("bang_gia_khach_hang").insert({
+          khach_hang_id: khachHangId,
+          loai_chi_phi_id: values.loai_chi_phi_id,
+          hang_hoa_id: hangHoaId ?? null,
+          don_gia: payload.gia_ban_sell,
+        });
       }
     }
 
@@ -446,6 +466,8 @@ export default function ChiPhiSection({
           doiTacThueNgoaiList={doiTacThueNgoaiList}
           chiTietVanChuyenList={chiTietVanChuyenList}
           bangGiaList={bangGiaList}
+          khachHangId={khachHangId}
+          hangHoaId={hangHoaId}
           phongBan={phongBan}
           canSeeSell={canSeeSell}
           onCancel={() => setShowForm(false)}
@@ -475,6 +497,8 @@ function ChiPhiForm({
   doiTacThueNgoaiList,
   chiTietVanChuyenList,
   bangGiaList,
+  khachHangId,
+  hangHoaId,
   phongBan,
   canSeeSell,
   onCancel,
@@ -486,16 +510,23 @@ function ChiPhiForm({
   doiTacThueNgoaiList: Option[];
   chiTietVanChuyenList: ChiTietVanChuyen[];
   bangGiaList: BangGiaKhachHang[];
+  khachHangId: string | null;
+  hangHoaId: string | null;
   phongBan: string;
   canSeeSell: boolean;
   onCancel: () => void;
-  onSave: (values: Record<string, string | boolean>) => void;
+  onSave: (values: Record<string, string | boolean>, luuGiaMoi?: boolean) => void;
 }) {
   const isSaleOnly = phongBan === "Sale";
   const isKeToan = phongBan === "Kế toán";
-  const [giaGoiY, setGiaGoiY] = useState<BangGiaKhachHang | null>(
-    () => bangGiaList.find((b) => b.loai_chi_phi_id === initial?.loai_chi_phi_id) ?? null
-  );
+
+  function timGiaGoiY(loaiChiPhiId: string): BangGiaKhachHang | null {
+    const ungVien = bangGiaList.filter((b) => b.loai_chi_phi_id === loaiChiPhiId);
+    return ungVien.find((b) => b.hang_hoa_id === hangHoaId) ?? ungVien.find((b) => b.hang_hoa_id === null) ?? null;
+  }
+
+  const [giaGoiY, setGiaGoiY] = useState<BangGiaKhachHang | null>(() => timGiaGoiY(initial?.loai_chi_phi_id ?? ""));
+  const [luuGiaMoi, setLuuGiaMoi] = useState(false);
 
   const [values, setValues] = useState({
     loai_chi_phi_id: initial?.loai_chi_phi_id ?? "",
@@ -522,8 +553,8 @@ function ChiPhiForm({
 
   function handleLoaiChiPhiChange(loaiChiPhiId: string) {
     set("loai_chi_phi_id", loaiChiPhiId);
-    const match = bangGiaList.find((b) => b.loai_chi_phi_id === loaiChiPhiId);
-    setGiaGoiY(match ?? null);
+    const match = timGiaGoiY(loaiChiPhiId);
+    setGiaGoiY(match);
     if (match?.don_gia && !values.gia_ban_sell) {
       set("gia_ban_sell", String(match.don_gia));
     }
@@ -552,7 +583,7 @@ function ChiPhiForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(values);
+          onSave(values, luuGiaMoi);
         }}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
@@ -628,6 +659,16 @@ function ChiPhiForm({
                   )}
                 </p>
               )}
+              {khachHangId &&
+                values.loai_chi_phi_id &&
+                values.gia_ban_sell &&
+                Number(values.gia_ban_sell) !== (giaGoiY?.don_gia ?? null) && (
+                  <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-600">
+                    <input type="checkbox" checked={luuGiaMoi} onChange={(e) => setLuuGiaMoi(e.target.checked)} />
+                    Lưu giá này làm giá mặc định cho khách hàng{hangHoaId ? " + mặt hàng này" : ""} (dùng lại lần
+                    sau)
+                  </label>
+                )}
             </div>
           )}
           <div>
