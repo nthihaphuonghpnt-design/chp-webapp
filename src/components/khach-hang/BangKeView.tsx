@@ -202,6 +202,8 @@ export default function BangKeView({
         ghiChu: "Xuất HĐ (Phụ thu)",
       });
     }
+    // Chi ho truoc, Xuat HD sau (giu nguyen thu tu ngay phat sinh trong tung nhom).
+    rows.sort((a, b) => (a.ghiChu === "Chi hộ" ? 0 : 1) - (b.ghiChu === "Chi hộ" ? 0 : 1));
     return rows;
   }, [chiPhiRows, phuThuRows, vatPercent]);
 
