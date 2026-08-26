@@ -14,10 +14,10 @@ export default function FileAttachSection({
   currentUserId,
   donHangId,
 }: {
-  parentField: "hop_dong_id" | "hoa_don_id" | "to_khai_id";
+  parentField: "hop_dong_id" | "hoa_don_id" | "to_khai_id" | "hop_dong_nhan_vien_id";
   parentId: string;
   pathPrefix: string;
-  lienKetToi: "Hợp đồng" | "Hóa đơn" | "Thông quan";
+  lienKetToi: "Hợp đồng" | "Hóa đơn" | "Thông quan" | "Hợp đồng nhân viên";
   initialRows: DinhKem[];
   canUpload: boolean;
   currentUserId?: string;

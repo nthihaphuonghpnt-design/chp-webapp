@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/tam-ung-giai-chi", label: "Tạm ứng & Giải chi" },
   { href: "/luong-cua-toi", label: "Lương của tôi" },
   { href: "/khach-hang/hop-dong", label: "Hợp đồng khách hàng", roles: ["Sale", "Kế toán", "Giám đốc"] },
+  { href: "/nhan-vien/hop-dong", label: "Hợp đồng nhân viên", roles: ["Kế toán", "Giám đốc"] },
   { href: "/khach-hang/hoa-don", label: "Hóa đơn xuất", roles: ["Sale", "Chứng từ", "Kế toán", "Giám đốc"] },
   { href: "/khach-hang/bang-ke", label: "Bảng kê", roles: ["Kế toán"] },
   { href: "/thu-chi/so-quy", label: "Sổ quỹ", roles: ["Kế toán", "Giám đốc"] },

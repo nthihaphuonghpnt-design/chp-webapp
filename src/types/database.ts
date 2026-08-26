@@ -238,7 +238,8 @@ export type LienKetToi =
   | "Chi tiết vận chuyển"
   | "Thuê ngoài"
   | "Hợp đồng"
-  | "Hóa đơn";
+  | "Hóa đơn"
+  | "Hợp đồng nhân viên";
 
 export type LoaiDinhKem =
   | "Ảnh hàng hóa tại cảng"
@@ -253,6 +254,7 @@ export interface DinhKem {
   hop_dong_id: string | null;
   hoa_don_id: string | null;
   to_khai_id: string | null;
+  hop_dong_nhan_vien_id: string | null;
   lien_ket_toi: LienKetToi | null;
   loai_dinh_kem: LoaiDinhKem | null;
   duong_dan_file: string;
@@ -415,6 +417,24 @@ export interface HopDongKhachHang {
   loai_hop_dong: LoaiHopDong | null;
   ngay_hieu_luc: string | null;
   ngay_het_han: string | null;
+  trang_thai_hop_dong: TrangThaiHopDong;
+  ghi_chu: string | null;
+  nguoi_tao_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type LoaiHopDongNhanVien = "Thử việc" | "Xác định thời hạn" | "Không xác định thời hạn" | "Khác";
+
+export interface HopDongNhanVien {
+  id: string;
+  nhan_vien_id: string;
+  so_hop_dong: string | null;
+  loai_hop_dong: LoaiHopDongNhanVien | null;
+  chuc_vu: string | null;
+  ngay_hieu_luc: string | null;
+  ngay_het_han: string | null;
+  luong_theo_hop_dong: number | null;
   trang_thai_hop_dong: TrangThaiHopDong;
   ghi_chu: string | null;
   nguoi_tao_id: string | null;
