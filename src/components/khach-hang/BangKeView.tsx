@@ -35,6 +35,7 @@ interface DonHangOpt {
   hang_hoa: { ten: string } | { ten: string }[] | null;
   bien_so: string[];
   so_to_khai: string[];
+  so_cont: string[];
 }
 
 interface ChiPhiRow {
@@ -57,6 +58,16 @@ interface PhuThuRow {
 
 function one<T>(v: T | T[] | null): T | null {
   return Array.isArray(v) ? v[0] ?? null : v;
+}
+
+/** Bo cac muc khong co gia tri, gop toi da `soMoiDong` muc "Nhan: gia_tri" moi dong. */
+function gopDongThongTin(muc: { nhan: string; gia_tri: string | null | undefined }[], soMoiDong: number): string[] {
+  const conLai = muc.filter((m) => m.gia_tri && m.gia_tri.trim().length > 0).map((m) => `${m.nhan}: ${m.gia_tri}`);
+  const dong: string[] = [];
+  for (let i = 0; i < conLai.length; i += soMoiDong) {
+    dong.push(conLai.slice(i, i + soMoiDong).join("    ·    "));
+  }
+  return dong;
 }
 
 export default function BangKeView({
@@ -243,16 +254,26 @@ export default function BangKeView({
         })();
 
     // Cac thong tin rieng theo don hang (chi hien khi dang xem 1 don cu the,
-    // vi khi gop nhieu don thi cac gia tri nay khac nhau giua tung don).
+    // vi khi gop nhieu don thi cac gia tri nay khac nhau giua tung don). Muc
+    // nao khong co du lieu thi tu an; gop toi da 3 muc / dong cho gon.
     const donHangChiTietLines = donHangChon
-      ? [
-          `Loại hàng: ${one(donHangChon.hang_hoa)?.ten ?? ""}`,
-          `Kích cỡ / SL: ${donHangChon.so_luong ?? 1}${donHangChon.dvt ? ` ${donHangChon.dvt}` : ""}${donHangChon.loai_kich_co ? ` ${donHangChon.loai_kich_co}` : ""}`,
-          `Ngày vận chuyển: ${donHangChon.ngay_van_chuyen ?? ""}`,
-          `Số BL/BK: ${donHangChon.so_bl_bk ?? ""}    Số lô: ${donHangChon.so_lo ?? ""}`,
-          `Số tờ khai: ${donHangChon.so_to_khai?.join(", ") ?? ""}`,
-          `Biển kiểm soát: ${donHangChon.bien_so?.join(", ") ?? ""}`,
-        ]
+      ? gopDongThongTin(
+          [
+            { nhan: "Loại hàng", gia_tri: one(donHangChon.hang_hoa)?.ten },
+            {
+              nhan: "Kích cỡ / SL",
+              gia_tri:
+                donHangChon.loai_kich_co || donHangChon.so_luong
+                  ? `${donHangChon.so_luong ?? 1}${donHangChon.dvt ? ` ${donHangChon.dvt}` : ""}${donHangChon.loai_kich_co ? ` ${donHangChon.loai_kich_co}` : ""}`
+                  : null,
+            },
+            { nhan: "Số BL/BK", gia_tri: donHangChon.so_bl_bk },
+            { nhan: "Số tờ khai", gia_tri: donHangChon.so_to_khai?.join(", ") },
+            { nhan: "Số container", gia_tri: donHangChon.so_cont?.join(", ") },
+            { nhan: "Biển kiểm soát", gia_tri: donHangChon.bien_so?.join(", ") },
+          ],
+          3
+        )
       : [];
 
     const ten = (khTen?.ten_viet_tat || khTen?.ten_day_du || "khach-hang").replace(/[^\p{L}\p{N}]+/gu, "-");
