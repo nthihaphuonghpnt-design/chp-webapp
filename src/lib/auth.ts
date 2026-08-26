@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { PhongBanTen } from "@/types/database";
 
@@ -8,7 +9,7 @@ export interface CurrentUser {
   phong_ban: PhongBanTen;
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -34,4 +35,4 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     email_tai_khoan: data.email_tai_khoan,
     phong_ban: (phongBan?.ten ?? "Sale") as PhongBanTen,
   };
-}
+});
