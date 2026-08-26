@@ -50,8 +50,9 @@ export default async function BangKePage({
     donHangIds = (donHang ?? []).map((d) => d.id);
 
     let bienSoMap: Record<string, string[]> = {};
+    let toKhaiMap: Record<string, string[]> = {};
     if (donHangIds.length > 0) {
-      const [{ data: cp }, { data: pt }, { data: ctvc }] = await Promise.all([
+      const [{ data: cp }, { data: pt }, { data: ctvc }, { data: tk }] = await Promise.all([
         supabase
           .from("phat_sinh_chi_phi")
           .select("*, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
@@ -70,6 +71,11 @@ export default async function BangKePage({
           .select("don_hang_id, so_xe")
           .in("don_hang_id", donHangIds)
           .not("so_xe", "is", null),
+        supabase
+          .from("to_khai_hai_quan")
+          .select("don_hang_id, so_to_khai")
+          .in("don_hang_id", donHangIds)
+          .not("so_to_khai", "is", null),
       ]);
       chiPhiRows = cp ?? [];
       phuThuRows = pt ?? [];
@@ -78,8 +84,13 @@ export default async function BangKePage({
         if (!r.so_xe) continue;
         (bienSoMap[r.don_hang_id] ??= []).push(r.so_xe);
       }
+      toKhaiMap = {};
+      for (const r of tk ?? []) {
+        if (!r.so_to_khai) continue;
+        (toKhaiMap[r.don_hang_id] ??= []).push(r.so_to_khai);
+      }
     }
-    donHangList = (donHang ?? []).map((d) => ({ ...d, bien_so: bienSoMap[d.id] ?? [] }));
+    donHangList = (donHang ?? []).map((d) => ({ ...d, bien_so: bienSoMap[d.id] ?? [], so_to_khai: toKhaiMap[d.id] ?? [] }));
   }
 
   return (

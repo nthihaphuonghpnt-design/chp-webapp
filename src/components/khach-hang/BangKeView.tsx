@@ -34,6 +34,7 @@ interface DonHangOpt {
   so_lo: string | null;
   hang_hoa: { ten: string } | { ten: string }[] | null;
   bien_so: string[];
+  so_to_khai: string[];
 }
 
 interface ChiPhiRow {
@@ -241,6 +242,19 @@ export default function BangKeView({
           return soDon.length > 0 ? `Đơn hàng: ${soDon.join(", ")}` : "";
         })();
 
+    // Cac thong tin rieng theo don hang (chi hien khi dang xem 1 don cu the,
+    // vi khi gop nhieu don thi cac gia tri nay khac nhau giua tung don).
+    const donHangChiTietLines = donHangChon
+      ? [
+          `Loại hàng: ${one(donHangChon.hang_hoa)?.ten ?? ""}`,
+          `Kích cỡ / SL: ${donHangChon.so_luong ?? 1}${donHangChon.dvt ? ` ${donHangChon.dvt}` : ""}${donHangChon.loai_kich_co ? ` ${donHangChon.loai_kich_co}` : ""}`,
+          `Ngày vận chuyển: ${donHangChon.ngay_van_chuyen ?? ""}`,
+          `Số BL/BK: ${donHangChon.so_bl_bk ?? ""}    Số lô: ${donHangChon.so_lo ?? ""}`,
+          `Số tờ khai: ${donHangChon.so_to_khai?.join(", ") ?? ""}`,
+          `Biển kiểm soát: ${donHangChon.bien_so?.join(", ") ?? ""}`,
+        ]
+      : [];
+
     const ten = (khTen?.ten_viet_tat || khTen?.ten_day_du || "khach-hang").replace(/[^\p{L}\p{N}]+/gu, "-");
     const donSuffix = donHangChon ? `-${donHangChon.so_don_hang}` : "";
     const logo = await taiLogoCongTy();
@@ -252,7 +266,7 @@ export default function BangKeView({
         ...CONG_TY_HEADER_LINES,
         "", // dong 6 trang
         // Cot B tro di, tu hang 7
-        { text: "DEBIT NOTE", bold: true, color: "FFDC2626", size: 16, col: 2 },
+        { text: "DEBIT NOTE", bold: true, color: "FFDC2626", size: 16, col: 2, align: "center" },
         "", // dong 8 trang
         { text: `Khách hàng: ${khachHangChiTiet?.ten_day_du ?? khTen?.ten_day_du ?? ""}`, col: 2 },
         { text: `Địa chỉ: ${khachHangChiTiet?.dia_chi ?? ""}`, col: 2 },
@@ -261,6 +275,7 @@ export default function BangKeView({
           col: 2,
         },
         donHangLienQuan ? { text: donHangLienQuan, col: 2 } : "",
+        ...donHangChiTietLines.map((text) => ({ text, col: 2 })),
       ],
       columns,
       rows,

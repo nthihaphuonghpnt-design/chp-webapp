@@ -25,6 +25,8 @@ export interface DongTieuDe {
   size?: number;
   /** Cot bat dau (1 = A, 2 = B...). Bo trong = mac dinh ngay sau logo. */
   col?: number;
+  /** Can chu trong vung merge. Bo trong = can trai. */
+  align?: "left" | "center" | "right";
 }
 /** Chuoi rong hoac "" = 1 dong trang (dung de gian cach cho de nhin). */
 type HeaderLine = string | DongTieuDe | null | undefined;
@@ -114,6 +116,7 @@ export function themSheetKeO(wb: ExcelJS.Workbook, opts: KeOSheetOptions) {
       const cell = row.getCell(col);
       cell.value = line.text;
       cell.font = { bold: line.bold ?? false, italic: line.italic ?? false, size: line.size ?? 11, color: line.color ? { argb: line.color } : undefined };
+      if (line.align) cell.alignment = { horizontal: line.align };
       ws.mergeCells(row.number, col, row.number, Math.max(col, colCount));
       lastLineWasBlank = false;
     } else {
