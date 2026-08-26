@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import type { SoQuy } from "@/types/database";
 
 function fmt(n: number) {
@@ -49,23 +49,34 @@ export default function SoQuyView({ initialRows }: { initialRows: SoQuy[] }) {
     return acc;
   }, []);
 
-  function handleExportExcel() {
-    const data = [
-      { Ngày: "", "Loại": "", "Nội dung": `TỒN ĐẦU KỲ (${tuNgay})`, Thu: "", Chi: "", "Tồn": tonDauKy },
-      ...rowsWithRunning.map((r) => ({
-        Ngày: r.ngay,
-        Loại: NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang,
-        "Nội dung": r.noi_dung ?? "",
-        Thu: r.loai_giao_dich === "Thu" ? r.so_tien : "",
-        Chi: r.loai_giao_dich === "Chi" ? r.so_tien : "",
-        Tồn: r.tonSauGiaoDich,
-      })),
-      { Ngày: "", "Loại": "", "Nội dung": `TỒN CUỐI KỲ (${denNgay})`, Thu: tongThu, Chi: tongChi, "Tồn": tonCuoiKy },
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Ngày", key: "ngay", width: 12 },
+      { header: "Loại", key: "loai", width: 18 },
+      { header: "Nội dung", key: "noiDung", width: 30 },
+      { header: "Thu", key: "thu", width: 14 },
+      { header: "Chi", key: "chi", width: 14 },
+      { header: "Tồn", key: "ton", width: 14 },
     ];
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sổ quỹ");
-    XLSX.writeFile(wb, `so-quy-${loaiSo}-${tuNgay}_${denNgay}.xlsx`);
+    const rows = [
+      ["", "", `TỒN ĐẦU KỲ (${tuNgay})`, "", "", tonDauKy],
+      ...rowsWithRunning.map((r) => [
+        r.ngay,
+        NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang,
+        r.noi_dung ?? "",
+        r.loai_giao_dich === "Thu" ? r.so_tien : "",
+        r.loai_giao_dich === "Chi" ? r.so_tien : "",
+        r.tonSauGiaoDich,
+      ]),
+    ];
+    const totalRow = ["", "", `TỒN CUỐI KỲ (${denNgay})`, tongThu, tongChi, tonCuoiKy];
+    await xuatExcelKeO(`so-quy-${loaiSo}-${tuNgay}_${denNgay}.xlsx`, {
+      sheetName: "Sổ quỹ",
+      headerLines: [`SỔ QUỸ — ${loaiSo}`, `Từ ${tuNgay} đến ${denNgay}`],
+      columns,
+      rows,
+      totalRow,
+    });
   }
 
   return (

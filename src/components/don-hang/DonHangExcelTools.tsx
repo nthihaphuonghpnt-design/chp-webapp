@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 
 interface Option {
@@ -86,22 +87,36 @@ export default function DonHangExcelTools({
     XLSX.writeFile(wb, "mau-nhap-don-hang.xlsx");
   }
 
-  function handleExportExcel() {
-    const data = rows.map((row) => {
-      const obj: Record<string, unknown> = { "Số đơn hàng": row.so_don_hang, "Số container": row.so_cont_label ?? "" };
-      for (const col of IMPORT_COLUMNS) {
-        const headerNoHint = col.header.replace(/\s*\*.*$/, "").replace(/\s*\(.*\)$/, "");
-        obj[headerNoHint] = row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "";
-      }
-      obj["Trạng thái"] = row.trang_thai;
-      obj["OPS xác nhận"] = row.ops_xac_nhan ? "Có" : "Không";
-      obj["CS xác nhận"] = row.cs_xac_nhan ? "Có" : "Không";
-      return obj;
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Số đơn hàng", key: "soDonHang", width: 14 },
+      { header: "Số container", key: "soCont", width: 16 },
+      ...IMPORT_COLUMNS.map((col) => ({
+        header: col.header.replace(/\s*\*.*$/, "").replace(/\s*\(.*\)$/, ""),
+        key: col.key,
+        width: 16,
+      })),
+      { header: "Trạng thái", key: "trangThai", width: 14 },
+      { header: "OPS xác nhận", key: "ops", width: 12 },
+      { header: "CS xác nhận", key: "cs", width: 12 },
+    ];
+    const v = (x: unknown): string | number => (typeof x === "number" ? x : String(x ?? ""));
+    const exportRows = rows.map((row) => [
+      v(row.so_don_hang),
+      v(row.so_cont_label ?? ""),
+      ...IMPORT_COLUMNS.map((col) => v(row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "")),
+      v(row.trang_thai),
+      row.ops_xac_nhan ? "Có" : "Không",
+      row.cs_xac_nhan ? "Có" : "Không",
+    ]);
+    const logo = await taiLogoCongTy();
+    await xuatExcelKeO(`don-hang-${new Date().toISOString().slice(0, 10)}.xlsx`, {
+      sheetName: "Đơn hàng",
+      logo: logo ?? undefined,
+      headerLines: [...CONG_TY_HEADER_LINES, "", { text: "DANH SÁCH ĐƠN HÀNG", bold: true, size: 12 }],
+      columns,
+      rows: exportRows,
     });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Đơn hàng");
-    XLSX.writeFile(wb, `don-hang-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function handleImportFile(file: File) {

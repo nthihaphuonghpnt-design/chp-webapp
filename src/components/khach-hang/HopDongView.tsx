@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
@@ -143,22 +144,37 @@ export default function HopDongView({
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
   }
 
-  function handleExportExcel() {
-    const data = filtered.map((r) => ({
-      "Đối tượng": doiTuongTen(r).loai,
-      Tên: doiTuongTen(r).ten,
-      "Số hợp đồng": r.so_hop_dong ?? "",
-      "Loại hợp đồng": r.loai_hop_dong ?? "",
-      "Ngày hiệu lực": r.ngay_hieu_luc ?? "",
-      "Ngày hết hạn": r.ngay_het_han ?? "",
-      "Trạng thái hợp đồng": r.trang_thai_hop_dong,
-      "Trạng thái hiệu lực": trangThaiHieuLuc(r).label,
-      "Ghi chú": r.ghi_chu ?? "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Hợp đồng");
-    XLSX.writeFile(wb, "hop-dong.xlsx");
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Đối tượng", key: "doiTuong", width: 12 },
+      { header: "Tên", key: "ten", width: 22 },
+      { header: "Số hợp đồng", key: "soHopDong", width: 16 },
+      { header: "Loại hợp đồng", key: "loaiHopDong", width: 16 },
+      { header: "Ngày hiệu lực", key: "hieuLuc", width: 12 },
+      { header: "Ngày hết hạn", key: "hetHan", width: 12 },
+      { header: "Trạng thái hợp đồng", key: "trangThaiHd", width: 16 },
+      { header: "Trạng thái hiệu lực", key: "trangThaiHl", width: 16 },
+      { header: "Ghi chú", key: "ghiChu", width: 20 },
+    ];
+    const rows = filtered.map((r) => [
+      doiTuongTen(r).loai,
+      doiTuongTen(r).ten,
+      r.so_hop_dong ?? "",
+      r.loai_hop_dong ?? "",
+      r.ngay_hieu_luc ?? "",
+      r.ngay_het_han ?? "",
+      r.trang_thai_hop_dong,
+      trangThaiHieuLuc(r).label,
+      r.ghi_chu ?? "",
+    ]);
+    const logo = await taiLogoCongTy();
+    await xuatExcelKeO("hop-dong.xlsx", {
+      sheetName: "Hợp đồng",
+      logo: logo ?? undefined,
+      headerLines: [...CONG_TY_HEADER_LINES, "", { text: "DANH SÁCH HỢP ĐỒNG", bold: true, size: 12 }],
+      columns,
+      rows,
+    });
   }
 
   function handleDownloadTemplate() {

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
 import MoneyInput from "@/components/common/MoneyInput";
+import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import type { DinhKem } from "@/types/database";
 
 interface KhachHang {
@@ -21,6 +21,25 @@ interface DonHangOpt {
 interface LienKet {
   hoa_don_id: string;
   don_hang_id: string;
+}
+interface ChiPhiDoiChieu {
+  id: string;
+  hoa_don_id: string | null;
+  don_hang_id: string;
+  chi_ho: boolean;
+  gia_von_buy: number | null;
+  gia_ban_sell: number | null;
+  vat_percent: number | null;
+  don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
+  loai_chi_phi: { ten: string } | { ten: string }[] | null;
+}
+interface PhuThuDoiChieu {
+  id: string;
+  hoa_don_id: string | null;
+  don_hang_id: string;
+  loai_phu_thu: string | null;
+  thanh_tien: number | null;
+  don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
 
 interface Row {
@@ -60,6 +79,8 @@ export default function HoaDonView({
   donHangList,
   lienKetAll,
   dinhKemRows,
+  chiPhiRows,
+  phuThuRows,
   canEdit,
   canDelete,
   currentUserId,
@@ -69,6 +90,8 @@ export default function HoaDonView({
   donHangList: DonHangOpt[];
   lienKetAll: LienKet[];
   dinhKemRows: DinhKem[];
+  chiPhiRows: ChiPhiDoiChieu[];
+  phuThuRows: PhuThuDoiChieu[];
   canEdit: boolean;
   canDelete: boolean;
   currentUserId?: string;
@@ -80,6 +103,13 @@ export default function HoaDonView({
   const [ttFilter, setTtFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [doiChieuMoRong, setDoiChieuMoRong] = useState<string | null>(null);
+
+  function chiTietCuaHoaDon(hoaDonId: string) {
+    const cp = chiPhiRows.filter((r) => r.hoa_don_id === hoaDonId);
+    const pt = phuThuRows.filter((r) => r.hoa_don_id === hoaDonId);
+    return { cp, pt };
+  }
 
   function donHangCuaHoaDon(hoaDonId: string) {
     const ids = lienKet.filter((l) => l.hoa_don_id === hoaDonId).map((l) => l.don_hang_id);
@@ -91,12 +121,17 @@ export default function HoaDonView({
     .filter((r) => !ttFilter || r.trang_thai_thanh_toan === ttFilter);
 
   async function handleSave(values: Record<string, string>, selectedDonHang: string[]) {
+    const tongTruocThue = values.tong_tien_truoc_thue ? Number(values.tong_tien_truoc_thue) : 0;
+    const vatPercent = values.vat_percent ? Number(values.vat_percent) : 0;
     const payload: Record<string, unknown> = {
       khach_hang_id: values.khach_hang_id,
       so_hoa_don: values.so_hoa_don || null,
       ngay_xuat: values.ngay_xuat,
-      tong_tien_truoc_thue: values.tong_tien_truoc_thue ? Number(values.tong_tien_truoc_thue) : null,
-      vat_percent: values.vat_percent ? Number(values.vat_percent) : null,
+      tong_tien_truoc_thue: values.tong_tien_truoc_thue ? tongTruocThue : null,
+      vat_percent: values.vat_percent ? vatPercent : null,
+      // tien_vat khong con tu tinh o DB nua (xem migration 0038) — tu tinh o day
+      // cho truong hop tao/sua hoa don thu cong (khong di tu Bang ke).
+      tien_vat: Math.round((tongTruocThue * vatPercent) / 100),
       tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
       trang_thai_thanh_toan: values.trang_thai_thanh_toan || "Chưa thu",
       so_tien_da_thu: values.so_tien_da_thu ? Number(values.so_tien_da_thu) : null,
@@ -160,27 +195,43 @@ export default function HoaDonView({
     }
   }
 
-  function handleExportExcel() {
-    const data = filtered.map((r) => ({
-      "Khách hàng": khName(one(r.khach_hang)),
-      "Số hóa đơn": r.so_hoa_don ?? "",
-      "Ngày xuất": r.ngay_xuat,
-      "Tổng trước thuế": r.tong_tien_truoc_thue ?? "",
-      "VAT %": r.vat_percent ?? "",
-      "Tiền chi hộ": r.tien_chi_ho ?? "",
-      "Tiền VAT": r.tien_vat,
-      "Tổng tiền": r.tong_tien,
-      "Trạng thái thanh toán": r.trang_thai_thanh_toan,
-      "Đã thu": r.so_tien_da_thu ?? "",
-      "Đơn hàng liên quan": donHangCuaHoaDon(r.id)
-        .map((d) => d.so_don_hang)
-        .join(", "),
-      "Ghi chú": r.ghi_chu ?? "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Hóa đơn");
-    XLSX.writeFile(wb, "hoa-don-xuat.xlsx");
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Khách hàng", key: "kh", width: 22 },
+      { header: "Số hóa đơn", key: "so", width: 14 },
+      { header: "Ngày xuất", key: "ngay", width: 12 },
+      { header: "Tổng trước thuế", key: "truocThue", width: 16 },
+      { header: "VAT %", key: "vat", width: 8 },
+      { header: "Tiền chi hộ", key: "chiHo", width: 14 },
+      { header: "Tiền VAT", key: "tienVat", width: 14 },
+      { header: "Tổng tiền", key: "tong", width: 16 },
+      { header: "Trạng thái thanh toán", key: "tt", width: 16 },
+      { header: "Đã thu", key: "daThu", width: 14 },
+      { header: "Đơn hàng liên quan", key: "donHang", width: 20 },
+      { header: "Ghi chú", key: "ghiChu", width: 20 },
+    ];
+    const rows = filtered.map((r) => [
+      khName(one(r.khach_hang)),
+      r.so_hoa_don ?? "",
+      r.ngay_xuat,
+      r.tong_tien_truoc_thue ?? "",
+      r.vat_percent ?? "",
+      r.tien_chi_ho ?? "",
+      r.tien_vat,
+      r.tong_tien,
+      r.trang_thai_thanh_toan,
+      r.so_tien_da_thu ?? "",
+      donHangCuaHoaDon(r.id).map((d) => d.so_don_hang).join(", "),
+      r.ghi_chu ?? "",
+    ]);
+    const logo = await taiLogoCongTy();
+    await xuatExcelKeO("hoa-don-xuat.xlsx", {
+      sheetName: "Hóa đơn",
+      logo: logo ?? undefined,
+      headerLines: [...CONG_TY_HEADER_LINES, "", { text: "DANH SÁCH HÓA ĐƠN XUẤT", bold: true, size: 12 }],
+      columns,
+      rows,
+    });
   }
 
   const tongTien = filtered.reduce((s, r) => s + r.tong_tien, 0);
@@ -243,7 +294,7 @@ export default function HoaDonView({
             </div>
             <p className="text-slate-500">
               {row.ngay_xuat} · Tổng: {row.tong_tien.toLocaleString("en-US")}
-              {row.vat_percent ? ` (gồm VAT ${row.vat_percent}%)` : ""}
+              {row.tien_vat ? ` (gồm VAT ${row.tien_vat.toLocaleString("en-US")}${row.vat_percent ? ` · ${row.vat_percent}%` : ""})` : ""}
               {row.tien_chi_ho ? ` (gồm chi hộ ${row.tien_chi_ho.toLocaleString("en-US")})` : ""}
               {row.so_tien_da_thu ? ` · Đã thu: ${row.so_tien_da_thu.toLocaleString("en-US")}` : ""}
             </p>
@@ -260,8 +311,14 @@ export default function HoaDonView({
               canUpload={canEdit}
               currentUserId={currentUserId}
             />
-            {canEdit && (
-              <div className="mt-2 flex gap-3">
+            <div className="mt-2 flex gap-3">
+              <button
+                onClick={() => setDoiChieuMoRong((prev) => (prev === row.id ? null : row.id))}
+                className="text-xs font-medium text-slate-600"
+              >
+                {doiChieuMoRong === row.id ? "Ẩn đối chiếu" : "Đối chiếu với Bảng kê"}
+              </button>
+              {canEdit && (
                 <button
                   onClick={() => {
                     setEditing(row);
@@ -271,13 +328,14 @@ export default function HoaDonView({
                 >
                   Sửa
                 </button>
-                {canDelete && (
-                  <button onClick={() => handleDelete(row)} className="text-xs font-medium text-red-600">
-                    Xóa
-                  </button>
-                )}
-              </div>
-            )}
+              )}
+              {canDelete && (
+                <button onClick={() => handleDelete(row)} className="text-xs font-medium text-red-600">
+                  Xóa
+                </button>
+              )}
+            </div>
+            {doiChieuMoRong === row.id && <DoiChieuBangKe {...chiTietCuaHoaDon(row.id)} row={row} />}
           </div>
         ))}
         {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">Chưa có hóa đơn nào.</p>}
@@ -292,6 +350,87 @@ export default function HoaDonView({
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
+      )}
+    </div>
+  );
+}
+
+function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiChieu[]; row: Row }) {
+  const dong = [
+    ...cp.map((r) => {
+      const soTien = r.chi_ho ? r.gia_von_buy ?? 0 : r.gia_ban_sell ?? 0;
+      const vatPercent = r.chi_ho ? 0 : row.vat_percent || r.vat_percent || 0;
+      const tienVat = r.chi_ho ? 0 : Math.round((soTien * vatPercent) / 100);
+      return {
+        id: r.id,
+        dienGiai: one(r.loai_chi_phi)?.ten ?? "—",
+        donHang: one(r.don_hang)?.so_don_hang ?? "—",
+        soTien,
+        tienVat,
+        ghiChu: r.chi_ho ? "Chi hộ" : "Xuất HĐ",
+      };
+    }),
+    ...pt.map((r) => {
+      const soTien = r.thanh_tien ?? 0;
+      const tienVat = Math.round((soTien * (row.vat_percent || 0)) / 100);
+      return {
+        id: r.id,
+        dienGiai: `Phụ thu: ${r.loai_phu_thu ?? "—"}`,
+        donHang: one(r.don_hang)?.so_don_hang ?? "—",
+        soTien,
+        tienVat,
+        ghiChu: "Xuất HĐ (Phụ thu)",
+      };
+    }),
+  ];
+  const tongGiaBanVaChiHo = dong.reduce((s, r) => s + r.soTien, 0);
+  const tongVat = dong.reduce((s, r) => s + r.tienVat, 0);
+  const khop = tongGiaBanVaChiHo + tongVat === row.tong_tien;
+
+  return (
+    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+      {dong.length === 0 ? (
+        <p className="text-xs text-slate-400">Hóa đơn này không gắn với dòng chi phí/phụ thu nào (có thể tạo thủ công).</p>
+      ) : (
+        <>
+          <table className="w-full text-xs">
+            <thead className="text-left text-slate-500">
+              <tr>
+                <th className="px-2 py-1 font-medium">Diễn giải</th>
+                <th className="px-2 py-1 font-medium">Đơn hàng</th>
+                <th className="px-2 py-1 font-medium">Thành tiền</th>
+                <th className="px-2 py-1 font-medium">Tiền VAT</th>
+                <th className="px-2 py-1 font-medium">Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dong.map((r) => (
+                <tr key={r.id} className="border-t border-slate-200">
+                  <td className="px-2 py-1">{r.dienGiai}</td>
+                  <td className="px-2 py-1">{r.donHang}</td>
+                  <td className="px-2 py-1">{r.soTien.toLocaleString("en-US")}</td>
+                  <td className="px-2 py-1">{r.tienVat ? r.tienVat.toLocaleString("en-US") : ""}</td>
+                  <td className="px-2 py-1 text-slate-500">{r.ghiChu}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-300 font-semibold">
+                <td className="px-2 py-1" colSpan={2}>
+                  Cộng dồn (khớp Bảng kê chi tiết)
+                </td>
+                <td className="px-2 py-1">{tongGiaBanVaChiHo.toLocaleString("en-US")}</td>
+                <td className="px-2 py-1">{tongVat.toLocaleString("en-US")}</td>
+                <td className="px-2 py-1"></td>
+              </tr>
+            </tfoot>
+          </table>
+          <p className={`mt-2 text-xs font-medium ${khop ? "text-green-700" : "text-red-600"}`}>
+            {khop
+              ? `Khớp: Tổng dòng ${tongGiaBanVaChiHo.toLocaleString("en-US")} + VAT ${tongVat.toLocaleString("en-US")} = Tổng hóa đơn ${row.tong_tien.toLocaleString("en-US")}.`
+              : `Chênh lệch ${(row.tong_tien - tongGiaBanVaChiHo - tongVat).toLocaleString("en-US")} so với hóa đơn (${row.tong_tien.toLocaleString("en-US")}) — có thể do sửa tay số liệu hóa đơn sau khi xuất.`}
+          </p>
+        </>
       )}
     </div>
   );

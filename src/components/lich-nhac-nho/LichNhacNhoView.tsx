@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 
@@ -175,20 +176,31 @@ export default function LichNhacNhoView({
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
   }
 
-  function handleExportExcel() {
-    const data = rows.map((r) => ({
-      "Phòng ban": one(r.phong_ban)?.ten ?? phongBanTen(r.phong_ban_id),
-      "Nội dung": r.noi_dung,
-      "Đơn hàng liên quan": one(r.don_hang)?.so_don_hang ?? "",
-      "Người phụ trách": one(r.nguoi_phu_trach)?.ho_ten ?? nhanVienTen(r.nguoi_phu_trach_id),
-      "Ngày dự kiến": r.ngay_du_kien,
-      "Còn lại (ngày)": daysUntil(r.ngay_du_kien),
-      "Trạng thái": r.trang_thai,
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Lịch nhắc nhở");
-    XLSX.writeFile(wb, `lich-nhac-nho-${thangNam}.xlsx`);
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Phòng ban", key: "phongBan", width: 14 },
+      { header: "Nội dung", key: "noiDung", width: 32 },
+      { header: "Đơn hàng liên quan", key: "donHang", width: 16 },
+      { header: "Người phụ trách", key: "nguoiPhuTrach", width: 18 },
+      { header: "Ngày dự kiến", key: "ngay", width: 12 },
+      { header: "Còn lại (ngày)", key: "conLai", width: 12 },
+      { header: "Trạng thái", key: "trangThai", width: 14 },
+    ];
+    const rows_ = rows.map((r) => [
+      one(r.phong_ban)?.ten ?? phongBanTen(r.phong_ban_id),
+      r.noi_dung,
+      one(r.don_hang)?.so_don_hang ?? "",
+      one(r.nguoi_phu_trach)?.ho_ten ?? nhanVienTen(r.nguoi_phu_trach_id),
+      r.ngay_du_kien,
+      daysUntil(r.ngay_du_kien),
+      r.trang_thai,
+    ]);
+    await xuatExcelKeO(`lich-nhac-nho-${thangNam}.xlsx`, {
+      sheetName: "Lịch nhắc nhở",
+      headerLines: [`LỊCH NHẮC NHỞ — ${thangNam}`],
+      columns,
+      rows: rows_,
+    });
   }
 
   function handleDownloadTemplate() {

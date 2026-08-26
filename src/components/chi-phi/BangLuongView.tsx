@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
+import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -261,23 +261,37 @@ export default function BangLuongView({
     setSavedMsg(error ? `Lỗi: ${error.message}` : "Đã thêm vào Định phí tháng.");
   }
 
-  function handleExportExcel() {
-    const data = bangLuong.map((r) => ({
-      "Họ tên": r.nv.ho_ten,
-      "Phòng ban": r.phongBan,
-      "Lương cố định": r.luongCoDinh,
-      "Lương theo lô (tháng trước)": r.luongTheoLo,
-      "Tổng thu nhập": r.tongThuNhap,
-      "Mức đóng BHXH": r.mucDongBhxh,
-      "BHXH nhân viên đóng": r.bhxhNv,
-      "BHXH công ty đóng": r.bhxhCt,
-      "Thuế TNCN": r.thueTncn,
-      "Thực lãnh": r.thucLanh,
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Bảng lương");
-    XLSX.writeFile(wb, `bang-luong-${thangLuong}.xlsx`);
+  async function handleExportExcel() {
+    const columns: ExcelColumn[] = [
+      { header: "Họ tên", key: "hoTen", width: 20 },
+      { header: "Phòng ban", key: "phongBan", width: 14 },
+      { header: "Lương cố định", key: "luongCoDinh", width: 14 },
+      { header: "Lương theo lô (tháng trước)", key: "luongTheoLo", width: 18 },
+      { header: "Tổng thu nhập", key: "tongThuNhap", width: 14 },
+      { header: "Mức đóng BHXH", key: "mucDongBhxh", width: 14 },
+      { header: "BHXH nhân viên đóng", key: "bhxhNv", width: 16 },
+      { header: "BHXH công ty đóng", key: "bhxhCt", width: 16 },
+      { header: "Thuế TNCN", key: "thueTncn", width: 12 },
+      { header: "Thực lãnh", key: "thucLanh", width: 14 },
+    ];
+    const rows = bangLuong.map((r) => [
+      r.nv.ho_ten,
+      r.phongBan,
+      r.luongCoDinh,
+      r.luongTheoLo,
+      r.tongThuNhap,
+      r.mucDongBhxh,
+      r.bhxhNv,
+      r.bhxhCt,
+      r.thueTncn,
+      r.thucLanh,
+    ]);
+    await xuatExcelKeO(`bang-luong-${thangLuong}.xlsx`, {
+      sheetName: "Bảng lương",
+      headerLines: [`BẢNG LƯƠNG — Tháng ${thangLuong}`],
+      columns,
+      rows,
+    });
   }
 
   return (

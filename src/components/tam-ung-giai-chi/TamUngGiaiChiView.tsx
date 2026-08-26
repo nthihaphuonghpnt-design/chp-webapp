@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { taoWorkbook, themSheetKeO, taiWorkbook, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
 import SearchableSelect from "@/components/common/SearchableSelect";
@@ -242,35 +243,53 @@ export default function TamUngGiaiChiView({
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
   }
 
-  function handleExportExcel() {
-    const data = detailRows.map((r) => ({
-      "Loại": r.loai,
-      "Ngày thực hiện": r.ngay_thuc_hien,
-      "Đối tượng": r.doi_tuong,
-      "Tên": doiTuongTen(r),
-      "Lần": r.lan ?? "",
-      "Số tiền": r.so_tien,
-      "Mức tạm ứng tối đa": r.muc_tam_ung_toi_da ?? "",
-      "Số phiếu": r.so_phieu ?? "",
-      "Đơn hàng liên quan": one(r.don_hang)?.so_don_hang ?? "",
-      "Trạng thái": r.trang_thai,
-      "Ghi chú": r.ghi_chu ?? "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Chi tiết");
+  async function handleExportExcel() {
+    const wb = taoWorkbook();
+    const chiTietCols: ExcelColumn[] = [
+      { header: "Loại", key: "loai", width: 10 },
+      { header: "Ngày thực hiện", key: "ngay", width: 12 },
+      { header: "Đối tượng", key: "doiTuong", width: 12 },
+      { header: "Tên", key: "ten", width: 18 },
+      { header: "Lần", key: "lan", width: 6 },
+      { header: "Số tiền", key: "soTien", width: 14 },
+      { header: "Mức tạm ứng tối đa", key: "mucToiDa", width: 16 },
+      { header: "Số phiếu", key: "soPhieu", width: 12 },
+      { header: "Đơn hàng liên quan", key: "donHang", width: 16 },
+      { header: "Trạng thái", key: "trangThai", width: 12 },
+      { header: "Ghi chú", key: "ghiChu", width: 20 },
+    ];
+    const chiTietRows = detailRows.map((r) => [
+      r.loai,
+      r.ngay_thuc_hien,
+      r.doi_tuong,
+      doiTuongTen(r),
+      r.lan ?? "",
+      r.so_tien,
+      r.muc_tam_ung_toi_da ?? "",
+      r.so_phieu ?? "",
+      one(r.don_hang)?.so_don_hang ?? "",
+      r.trang_thai,
+      r.ghi_chu ?? "",
+    ]);
+    themSheetKeO(wb, {
+      sheetName: "Chi tiết",
+      headerLines: [`TẠM ỨNG & GIẢI CHI — Từ ${tuNgay} đến ${denNgay}`],
+      columns: chiTietCols,
+      rows: chiTietRows,
+    });
 
     if (canSeeSummary) {
-      const sumData = summary.map((s) => ({
-        "Nhân viên/Tài xế": s.ten,
-        "Tiền đầu kỳ": s.dauKy,
-        "Tạm ứng trong kỳ": s.tamUng,
-        "Giải chi trong kỳ": s.giaiChi,
-        "Tiền còn lại": s.conLai,
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sumData), "Tổng hợp");
+      const sumCols: ExcelColumn[] = [
+        { header: "Nhân viên/Tài xế", key: "ten", width: 20 },
+        { header: "Tiền đầu kỳ", key: "dauKy", width: 14 },
+        { header: "Tạm ứng trong kỳ", key: "tamUng", width: 16 },
+        { header: "Giải chi trong kỳ", key: "giaiChi", width: 16 },
+        { header: "Tiền còn lại", key: "conLai", width: 14 },
+      ];
+      const sumRows = summary.map((s) => [s.ten, s.dauKy, s.tamUng, s.giaiChi, s.conLai]);
+      themSheetKeO(wb, { sheetName: "Tổng hợp", columns: sumCols, rows: sumRows });
     }
-    XLSX.writeFile(wb, `tam-ung-giai-chi-${tuNgay}_${denNgay}.xlsx`);
+    await taiWorkbook(wb, `tam-ung-giai-chi-${tuNgay}_${denNgay}.xlsx`);
   }
 
   function handleDownloadTemplate() {
