@@ -128,6 +128,22 @@ export default function BangKeView({
     }
   }
 
+  async function handleCapNhatVat(chiPhiId: string, vatMoi: string) {
+    const so = vatMoi.trim() === "" ? null : Number(vatMoi);
+    if (so !== null && Number.isNaN(so)) return;
+    const { data, error } = await supabase
+      .from("phat_sinh_chi_phi")
+      .update({ vat_percent: so })
+      .eq("id", chiPhiId)
+      .select("*, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+      .single();
+    if (!error && data) {
+      setChiPhiRows((prev) => prev.map((r) => (r.id === chiPhiId ? (data as ChiPhiRow) : r)));
+    } else if (error) {
+      window.alert(error.message);
+    }
+  }
+
   function toggle(set: Set<string>, id: string, setter: (s: Set<string>) => void) {
     const next = new Set(set);
     if (next.has(id)) next.delete(id);
@@ -156,6 +172,8 @@ export default function BangKeView({
   const chiTietBangKe = useMemo(() => {
     const vat = Number(vatPercent) || 0;
     const rows: {
+      id: string;
+      loai: "chi_phi" | "phu_thu";
       dienGiai: string;
       donHangId: string;
       donHang: string;
@@ -166,6 +184,7 @@ export default function BangKeView({
       tienVat: number;
       tongSauVat: number;
       ghiChu: string;
+      coTheSuaVat: boolean;
     }[] = [];
     for (const r of chiPhiRows) {
       const soTien = r.chi_ho ? r.gia_von_buy ?? 0 : r.gia_ban_sell ?? 0;
@@ -174,6 +193,8 @@ export default function BangKeView({
       const vatDong = r.chi_ho ? 0 : vat || r.vat_percent || 0;
       const tienVatDong = r.chi_ho ? 0 : Math.round((soTien * vatDong) / 100);
       rows.push({
+        id: r.id,
+        loai: "chi_phi",
         dienGiai: one(r.loai_chi_phi)?.ten ?? "—",
         donHangId: r.don_hang_id,
         donHang: one(r.don_hang)?.so_don_hang ?? "—",
@@ -184,12 +205,18 @@ export default function BangKeView({
         tienVat: tienVatDong,
         tongSauVat: soTien + tienVatDong,
         ghiChu: r.chi_ho ? "Chi hộ" : "Xuất HĐ",
+        // Sua VAT ngay tai day chi co y nghia khi chua nhap VAT% chung o khung
+        // Tao hoa don (vi VAT% chung se ghi de len het, sua tung dong luc do
+        // se khong thay doi gi tren man hinh).
+        coTheSuaVat: !r.chi_ho && !vat,
       });
     }
     for (const r of phuThuRows) {
       const soTien = r.thanh_tien ?? 0;
       const tienVatDong = Math.round((soTien * vat) / 100);
       rows.push({
+        id: r.id,
+        loai: "phu_thu",
         dienGiai: `Phụ thu: ${r.loai_phu_thu ?? "—"}`,
         donHangId: r.don_hang_id,
         donHang: one(r.don_hang)?.so_don_hang ?? "—",
@@ -200,6 +227,7 @@ export default function BangKeView({
         tienVat: tienVatDong,
         tongSauVat: soTien + tienVatDong,
         ghiChu: "Xuất HĐ (Phụ thu)",
+        coTheSuaVat: false, // phu_thu chua co cot vat_percent rieng trong DB
       });
     }
     // Chi ho truoc, Xuat HD sau (giu nguyen thu tu ngay phat sinh trong tung nhom).
@@ -420,14 +448,29 @@ export default function BangKeView({
                 </thead>
                 <tbody>
                   {chiTietBangKe.map((r, i) => (
-                    <tr key={i} className="border-t border-slate-100">
+                    <tr key={r.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">{i + 1}</td>
                       <td className="px-3 py-2">{r.dienGiai}</td>
                       <td className="px-3 py-2">{r.donHang}</td>
                       <td className="px-3 py-2">{r.donGia.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2">{r.soLuong}</td>
                       <td className="px-3 py-2">{r.thanhTien.toLocaleString("en-US")}</td>
-                      <td className="px-3 py-2">{r.vatPercent || ""}</td>
+                      <td className="px-3 py-2">
+                        {r.coTheSuaVat ? (
+                          <input
+                            type="number"
+                            step="any"
+                            defaultValue={r.vatPercent || ""}
+                            onBlur={(e) => {
+                              if (Number(e.target.value || 0) !== r.vatPercent) handleCapNhatVat(r.id, e.target.value);
+                            }}
+                            className="w-16 rounded border border-slate-200 px-1.5 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                            title="Sửa VAT% cho riêng dòng này (ghi lại vào Chi phí phát sinh ở Đơn hàng)"
+                          />
+                        ) : (
+                          r.vatPercent || ""
+                        )}
+                      </td>
                       <td className="px-3 py-2">{r.tienVat ? r.tienVat.toLocaleString("en-US") : ""}</td>
                       <td className="px-3 py-2 font-medium">{r.tongSauVat.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2 text-xs text-slate-500">{r.ghiChu}</td>
@@ -458,8 +501,9 @@ export default function BangKeView({
               </table>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Nhập VAT % ở khung &quot;Tạo hóa đơn&quot; bên dưới để bảng này tự tính lại tiền VAT cho các dòng &quot;Xuất HĐ&quot;
-              (dòng &quot;Chi hộ&quot; không tính VAT).
+              Cột VAT (%) của các dòng &quot;Xuất HĐ&quot; có thể sửa trực tiếp tại đây nếu quên nhập lúc tạo chi phí — sửa xong tự
+              lưu về Chi phí phát sinh ở Đơn hàng. Nếu nhập VAT % chung ở khung &quot;Tạo hóa đơn&quot; bên dưới thì áp dụng cho tất
+              cả các dòng (không sửa được riêng từng dòng nữa). Dòng &quot;Chi hộ&quot; không tính VAT.
             </p>
           </div>
 
