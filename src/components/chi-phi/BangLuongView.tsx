@@ -2,7 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
-import { TY_LE_BHXH_NV, TY_LE_BHXH_CT, HOA_HONG_SALE, giamTruGiaCanh, tinhThueTNCN, dungLuatThueMoi } from "@/lib/luong";
+import {
+  TY_LE_BHXH_NV,
+  TY_LE_BHXH_CT,
+  HOA_HONG_SALE,
+  giamTruGiaCanh,
+  tinhThueTNCN,
+  dungLuatThueMoi,
+  apDungTruLuongTheoChamCong,
+  tinhLuongCoBanTheoChamCong,
+  THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG,
+} from "@/lib/luong";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -15,7 +25,14 @@ interface NhanVien {
   luong_co_dinh: number | null;
   muc_dong_bhxh: number | null;
   so_nguoi_phu_thuoc: number | null;
+  loai_nhan_su: string;
+  ngay_vao_lam: string | null;
   phong_ban: PhongBan | PhongBan[] | null;
+}
+interface ChamCongRow {
+  nhan_vien_id: string;
+  ngay: string;
+  trang_thai: string;
 }
 interface ChiPhiGiaoNhan {
   nhan_vien_id: string | null;
@@ -93,6 +110,8 @@ export default function BangLuongView({
   thueNgoaiList,
   dinhPhiList,
   luongDaTraList,
+  chamCongList = [],
+  ngayLeList = [],
 }: {
   nhanVienList: NhanVien[];
   chiPhiGiaoNhanList: ChiPhiGiaoNhan[];
@@ -102,6 +121,8 @@ export default function BangLuongView({
   thueNgoaiList: ThueNgoai[];
   dinhPhiList: DinhPhi[];
   luongDaTraList: LuongDaTra[];
+  chamCongList?: ChamCongRow[];
+  ngayLeList?: string[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [thangLuong, setThangLuong] = useState(monthRange());
@@ -145,10 +166,23 @@ export default function BangLuongView({
     return sell - buy - thueNgoaiBuy - dinhPhi;
   }
 
+  const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
+  const apDungChamCong = apDungTruLuongTheoChamCong(thangHoatDong);
+
   const bangLuong = useMemo(() => {
     return nhanVienList.map((nv) => {
       const pb = one(nv.phong_ban)?.ten ?? "";
-      const luongCoDinh = nv.luong_co_dinh ?? 0;
+      const luongCoDinhGoc = nv.luong_co_dinh ?? 0;
+      const luongCoDinh = apDungChamCong
+        ? tinhLuongCoBanTheoChamCong({
+            loaiNhanSu: nv.loai_nhan_su,
+            luongCoDinh: luongCoDinhGoc,
+            ngayVaoLam: nv.ngay_vao_lam,
+            thangHoatDong,
+            chamCongCaNamList: chamCongList.filter((c) => c.nhan_vien_id === nv.id),
+            ngayLeSet,
+          })
+        : luongCoDinhGoc;
 
       let luongTheoLo = 0;
       if (pb === "Sale") {
@@ -174,9 +208,9 @@ export default function BangLuongView({
       const thueTncn = tinhThueTNCN(thuNhapChiuThue, thangLuong);
       const thucLanh = tongThuNhap - bhxhNv - thueTncn;
 
-      return { nv, phongBan: pb, luongCoDinh, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh };
+      return { nv, phongBan: pb, luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh };
     });
-  }, [nhanVienList, chiPhiGiaoNhanList, donHangList, thangHoatDong, thangLuong]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nhanVienList, chiPhiGiaoNhanList, donHangList, thangHoatDong, thangLuong, chamCongList, ngayLeSet, apDungChamCong]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tongLuong = bangLuong.reduce((s, r) => s + r.tongThuNhap, 0);
   const tongBhxhCt = bangLuong.reduce((s, r) => s + r.bhxhCt, 0);
@@ -302,12 +336,17 @@ export default function BangLuongView({
         Lương theo lô lấy từ hoạt động tháng {thangHoatDong} (chậm 1 tháng so với lương tháng {thangLuong}) — gồm Chi
         phí giao nhận (Hiện trường/Chứng từ/Kế toán) và hoa hồng lợi nhuận (Sale, 4/10).
       </p>
-      <p className="mb-4 text-xs text-slate-400">
+      <p className="mb-1 text-xs text-slate-400">
         Thuế TNCN tháng {thangLuong} tính theo{" "}
         {dungLuatThueMoi(thangLuong)
           ? "Luật Thuế TNCN mới (109/2025/QH15, 5 bậc, giảm trừ bản thân 15,5tr + 6,2tr/người phụ thuộc)"
           : "biểu thuế cũ (7 bậc, giảm trừ bản thân 11tr + 4,4tr/người phụ thuộc)"}
         .
+      </p>
+      <p className="mb-4 text-xs text-slate-400">
+        {apDungChamCong
+          ? `Lương cố định tháng ${thangHoatDong} đã được tính lại theo dữ liệu Chấm công (ngày Đi làm + Nghỉ lễ + Nghỉ phép trong hạn mức / ngày công chuẩn; Nghỉ không phép và Thiếu chấm công không được trả lương). Nhân viên Outsource tính theo đơn giá/ngày × số ngày Đi làm thực tế.`
+          : `Lương cố định tháng ${thangHoatDong} đang tính nguyên tháng (chưa trừ theo Chấm công) — việc trừ theo ngày công chỉ áp dụng từ tháng ${THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG} trở đi.`}
       </p>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -326,7 +365,14 @@ export default function BangLuongView({
               <tr key={r.nv.id} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-medium text-slate-900">{r.nv.ho_ten}</td>
                 <td className="px-3 py-2">{r.phongBan}</td>
-                <td className="px-3 py-2">{fmt(r.luongCoDinh)}</td>
+                <td className="px-3 py-2">
+                  {fmt(r.luongCoDinh)}
+                  {apDungChamCong && Math.round(r.luongCoDinh) !== Math.round(r.luongCoDinhGoc) && (
+                    <span className="ml-1 text-xs text-slate-400" title="Đã trừ theo dữ liệu Chấm công">
+                      (gốc {fmt(r.luongCoDinhGoc)})
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2">{fmt(r.luongTheoLo)}</td>
                 <td className="px-3 py-2">{fmt(r.tongThuNhap)}</td>
                 <td className="px-3 py-2">{fmt(r.bhxhNv)}</td>

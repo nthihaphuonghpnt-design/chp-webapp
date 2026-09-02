@@ -4,6 +4,8 @@
  * khop nhau, tranh lech cong thuc nhu tung xay ra.
  */
 
+import { danhSachNgay, laNgayCanChamCong, ngayCuoiThang } from "@/lib/chamCong";
+
 export const TY_LE_BHXH_NV = 0.105;
 export const TY_LE_BHXH_CT = 0.215;
 export const HOA_HONG_SALE = 0.4;
@@ -66,4 +68,93 @@ export function tinhThueTNCN(thuNhapChiuThue: number, thangLuong: string) {
     } else break;
   }
   return thue;
+}
+
+/**
+ * Tru luong theo cham cong (module moi, xem src/lib/chamCong.ts): chi ap
+ * dung tu thang hoat dong nay tro di, giong cach xu ly luat thue moi — vi
+ * cac thang truoc chua ai cham cong (module chua ton tai), neu tinh ca se
+ * bi hieu nham la "thieu cham cong toan bo" va lam luong sai. thangHoatDong
+ * la thang cham cong thuc te (thang truoc thang tra luong).
+ */
+export const THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG = "2026-10";
+
+export function apDungTruLuongTheoChamCong(thangHoatDong: string) {
+  return thangHoatDong >= THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG;
+}
+
+/** So ngay phep duoc nghi trong 1 nam: 12 ngay co ban + 1 ngay moi 5 nam tham nien (theo ngay vao lam). */
+export function hanMucPhepNam(ngayVaoLam: string | null | undefined, nam: number): number {
+  const CO_BAN = 12;
+  if (!ngayVaoLam) return CO_BAN;
+  const namVaoLam = Number(ngayVaoLam.slice(0, 4));
+  if (!Number.isFinite(namVaoLam)) return CO_BAN;
+  const soNamThamNien = Math.max(0, nam - namVaoLam);
+  return CO_BAN + Math.floor(soNamThamNien / 5);
+}
+
+interface ChamCongRowGon {
+  ngay: string;
+  trang_thai: string;
+}
+
+/**
+ * Tinh lai "luong co ban" (thay cho luong_co_dinh nguyen thang) cho 1 nhan
+ * vien trong thangHoatDong, dua tren du lieu Cham cong:
+ * - Outsource: don gia/ngay (dung luong_co_dinh) x so ngay "Di lam" thuc te
+ *   trong thang — khong tinh nghi le/nghi phep mac dinh.
+ * - Co dinh: luong_co_dinh / ngay cong chuan thang x (Di lam + Nghi le +
+ *   Nghi phep hop le trong han muc nam). Nghi khong phep, Nghi khac va
+ *   Thieu cham cong KHONG duoc tra luong ngay do. Nghi phep vuot han muc
+ *   con lai cua nam (sau khi tru luy ke cac thang truoc) cung khong duoc
+ *   tra luong (coi nhu nghi khong phep).
+ * chamCongCaNamList: toan bo ban ghi cham_cong CUA NHAN VIEN NAY trong ca
+ * nam chua thangHoatDong (de tinh luy ke phep dung).
+ */
+export function tinhLuongCoBanTheoChamCong(params: {
+  loaiNhanSu: string;
+  luongCoDinh: number;
+  ngayVaoLam: string | null | undefined;
+  thangHoatDong: string;
+  chamCongCaNamList: ChamCongRowGon[];
+  ngayLeSet: ReadonlySet<string>;
+}): number {
+  const { loaiNhanSu, luongCoDinh, ngayVaoLam, thangHoatDong, chamCongCaNamList, ngayLeSet } = params;
+  const nam = Number(thangHoatDong.slice(0, 4));
+
+  if (loaiNhanSu === "Outsource") {
+    const soNgayDiLamThang = chamCongCaNamList.filter(
+      (r) => r.ngay.slice(0, 7) === thangHoatDong && r.trang_thai === "Đi làm"
+    ).length;
+    return luongCoDinh * soNgayDiLamThang;
+  }
+
+  const cacNgayTrongThang = danhSachNgay(`${thangHoatDong}-01`, ngayCuoiThang(thangHoatDong));
+  let diLam = 0;
+  let nghiLe = 0;
+  let nghiPhepThang = 0;
+  let ngayCongChuan = 0;
+  for (const ngay of cacNgayTrongThang) {
+    const row = chamCongCaNamList.find((r) => r.ngay === ngay);
+    if (ngayLeSet.has(ngay)) {
+      if (row?.trang_thai === "Đi làm") diLam += 1;
+      else nghiLe += 1;
+      continue;
+    }
+    if (!laNgayCanChamCong(ngay)) continue;
+    ngayCongChuan += 1;
+    if (row?.trang_thai === "Đi làm") diLam += 1;
+    else if (row?.trang_thai === "Nghỉ phép") nghiPhepThang += 1;
+  }
+
+  const hanMuc = hanMucPhepNam(ngayVaoLam, nam);
+  const luyKeTruocThang = chamCongCaNamList.filter(
+    (r) => r.ngay.slice(0, 4) === String(nam) && r.ngay.slice(0, 7) < thangHoatDong && r.trang_thai === "Nghỉ phép"
+  ).length;
+  const conLaiHanMuc = Math.max(0, hanMuc - luyKeTruocThang);
+  const nghiPhepHopLe = Math.min(nghiPhepThang, conLaiHanMuc);
+
+  if (ngayCongChuan <= 0) return luongCoDinh;
+  const ngayDuocTraLuong = diLam + nghiLe + nghiPhepHopLe;
+  return (luongCoDinh / ngayCongChuan) * ngayDuocTraLuong;
 }

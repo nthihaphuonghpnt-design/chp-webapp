@@ -24,10 +24,12 @@ export default async function BangLuongPage() {
     { data: thueNgoaiList },
     { data: dinhPhiList },
     { data: luongDaTraList },
+    { data: chamCongList },
+    { data: ngayLeList },
   ] = await Promise.all([
     supabase
       .from("nhan_vien")
-      .select("id, ho_ten, dang_lam_viec, so_nguoi_phu_thuoc, phong_ban:phong_ban_id(ten)")
+      .select("id, ho_ten, dang_lam_viec, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, phong_ban:phong_ban_id(ten)")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
     supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at"),
@@ -39,6 +41,8 @@ export default async function BangLuongPage() {
     supabase.from("don_thue_ngoai").select("don_hang_id, gia_von_buy, gia_ban_sell"),
     supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     supabase.from("luong_da_tra").select("*"),
+    supabase.from("cham_cong").select("nhan_vien_id, ngay, trang_thai"),
+    supabase.from("lich_nghi_le").select("ngay").eq("dang_hoat_dong", true),
   ]);
 
   // luong_co_dinh/muc_dong_bhxh khong con select truc tiep tu bang nhan_vien
@@ -67,6 +71,8 @@ export default async function BangLuongPage() {
       dinhPhiList={dinhPhiList ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       luongDaTraList={(luongDaTraList ?? []) as any[]}
+      chamCongList={chamCongList ?? []}
+      ngayLeList={(ngayLeList ?? []).map((r) => r.ngay)}
     />
   );
 }

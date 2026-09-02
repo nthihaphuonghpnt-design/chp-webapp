@@ -51,6 +51,12 @@ export function trangThaiHienThi(
   return "Thiếu chấm công";
 }
 
+/** Ngay cuoi cung (yyyy-mm-dd) cua 1 thang "yyyy-mm". */
+export function ngayCuoiThang(thangNam: string): string {
+  const [y, m] = thangNam.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
 /** Danh sach ngay (yyyy-mm-dd) tu ngayBatDau den ngayKetThuc (bao gom ca 2 dau). */
 export function danhSachNgay(ngayBatDau: string, ngayKetThuc: string): string[] {
   const out: string[] = [];

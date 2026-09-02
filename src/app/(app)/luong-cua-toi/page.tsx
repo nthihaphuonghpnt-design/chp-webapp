@@ -14,15 +14,29 @@ export default async function LuongCuaToiPage() {
     );
   }
 
-  const [{ data: nvCoBan }, { data: chiPhiGiaoNhanList }, { data: donHangCuaToi }, { data: dinhPhiList }, { data: soLoRaw }, { data: luongDaTraList }] =
-    await Promise.all([
-      supabase.from("nhan_vien").select("id, ho_ten, so_nguoi_phu_thuoc, phong_ban:phong_ban_id(ten)").eq("id", user.id).single(),
-      supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at").eq("nhan_vien_id", user.id),
-      supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id").eq("sale_phu_trach_id", user.id),
-      supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
-      supabase.from("don_hang").select("ngay_len_don"),
-      supabase.from("luong_da_tra").select("*").eq("nhan_vien_id", user.id).order("thang_luong", { ascending: false }),
-    ]);
+  const [
+    { data: nvCoBan },
+    { data: chiPhiGiaoNhanList },
+    { data: donHangCuaToi },
+    { data: dinhPhiList },
+    { data: soLoRaw },
+    { data: luongDaTraList },
+    { data: chamCongList },
+    { data: ngayLeList },
+  ] = await Promise.all([
+    supabase
+      .from("nhan_vien")
+      .select("id, ho_ten, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, phong_ban:phong_ban_id(ten)")
+      .eq("id", user.id)
+      .single(),
+    supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at").eq("nhan_vien_id", user.id),
+    supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id").eq("sale_phu_trach_id", user.id),
+    supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
+    supabase.from("don_hang").select("ngay_len_don"),
+    supabase.from("luong_da_tra").select("*").eq("nhan_vien_id", user.id).order("thang_luong", { ascending: false }),
+    supabase.from("cham_cong").select("ngay, trang_thai").eq("nhan_vien_id", user.id),
+    supabase.from("lich_nghi_le").select("ngay").eq("dang_hoat_dong", true),
+  ]);
 
   // luong_co_dinh/muc_dong_bhxh khong con select truc tiep tu bang nhan_vien
   // duoc nua (xem migration 0039) — lay qua RPC rieng cho chinh chu.
@@ -54,6 +68,8 @@ export default async function LuongCuaToiPage() {
       soLoTheoThangRaw={soLoRaw ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       luongDaTraList={(luongDaTraList ?? []) as any[]}
+      chamCongList={chamCongList ?? []}
+      ngayLeList={(ngayLeList ?? []).map((r) => r.ngay)}
     />
   );
 }
