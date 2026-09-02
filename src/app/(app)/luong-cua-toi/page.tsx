@@ -16,7 +16,7 @@ export default async function LuongCuaToiPage() {
 
   const [{ data: nvCoBan }, { data: chiPhiGiaoNhanList }, { data: donHangCuaToi }, { data: dinhPhiList }, { data: soLoRaw }, { data: luongDaTraList }] =
     await Promise.all([
-      supabase.from("nhan_vien").select("id, ho_ten, phong_ban:phong_ban_id(ten)").eq("id", user.id).single(),
+      supabase.from("nhan_vien").select("id, ho_ten, so_nguoi_phu_thuoc, phong_ban:phong_ban_id(ten)").eq("id", user.id).single(),
       supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at").eq("nhan_vien_id", user.id),
       supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id").eq("sale_phu_trach_id", user.id),
       supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),

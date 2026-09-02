@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
+import { TY_LE_BHXH_NV, TY_LE_BHXH_CT, HOA_HONG_SALE, giamTruGiaCanh, tinhThueTNCN, dungLuatThueMoi } from "@/lib/luong";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -13,6 +14,7 @@ interface NhanVien {
   ho_ten: string;
   luong_co_dinh: number | null;
   muc_dong_bhxh: number | null;
+  so_nguoi_phu_thuoc: number | null;
   phong_ban: PhongBan | PhongBan[] | null;
 }
 interface ChiPhiGiaoNhan {
@@ -76,34 +78,6 @@ function ngayTraLuong(thang: string) {
   return d;
 }
 
-const BAC_THUE = [
-  { den: 5_000_000, thue: 0.05 },
-  { den: 10_000_000, thue: 0.1 },
-  { den: 18_000_000, thue: 0.15 },
-  { den: 32_000_000, thue: 0.2 },
-  { den: 52_000_000, thue: 0.25 },
-  { den: 80_000_000, thue: 0.3 },
-  { den: Infinity, thue: 0.35 },
-];
-
-function tinhThueTNCN(thuNhapChiuThue: number) {
-  if (thuNhapChiuThue <= 0) return 0;
-  let thue = 0;
-  let truoc = 0;
-  for (const bac of BAC_THUE) {
-    if (thuNhapChiuThue > truoc) {
-      const phan = Math.min(thuNhapChiuThue, bac.den) - truoc;
-      thue += phan * bac.thue;
-      truoc = bac.den;
-    } else break;
-  }
-  return thue;
-}
-
-const GIAM_TRU_BAN_THAN = 11_000_000;
-const TY_LE_BHXH_NV = 0.105;
-const TY_LE_BHXH_CT = 0.215;
-const HOA_HONG_SALE = 0.4;
 
 function monthRange() {
   const now = new Date();
@@ -195,13 +169,14 @@ export default function BangLuongView({
       const mucDongBhxh = nv.muc_dong_bhxh ?? luongCoDinh;
       const bhxhNv = mucDongBhxh * TY_LE_BHXH_NV;
       const bhxhCt = mucDongBhxh * TY_LE_BHXH_CT;
-      const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - GIAM_TRU_BAN_THAN);
-      const thueTncn = tinhThueTNCN(thuNhapChiuThue);
+      const giamTru = giamTruGiaCanh(thangLuong, nv.so_nguoi_phu_thuoc ?? 0);
+      const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - giamTru);
+      const thueTncn = tinhThueTNCN(thuNhapChiuThue, thangLuong);
       const thucLanh = tongThuNhap - bhxhNv - thueTncn;
 
-      return { nv, phongBan: pb, luongCoDinh, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, bhxhCt, thueTncn, thucLanh };
+      return { nv, phongBan: pb, luongCoDinh, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh };
     });
-  }, [nhanVienList, chiPhiGiaoNhanList, donHangList, thangHoatDong]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nhanVienList, chiPhiGiaoNhanList, donHangList, thangHoatDong, thangLuong]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tongLuong = bangLuong.reduce((s, r) => s + r.tongThuNhap, 0);
   const tongBhxhCt = bangLuong.reduce((s, r) => s + r.bhxhCt, 0);
@@ -271,6 +246,8 @@ export default function BangLuongView({
       { header: "Mức đóng BHXH", key: "mucDongBhxh", width: 14 },
       { header: "BHXH nhân viên đóng", key: "bhxhNv", width: 16 },
       { header: "BHXH công ty đóng", key: "bhxhCt", width: 16 },
+      { header: "Số người phụ thuộc", key: "soNguoiPhuThuoc", width: 14 },
+      { header: "Giảm trừ gia cảnh", key: "giamTru", width: 16 },
       { header: "Thuế TNCN", key: "thueTncn", width: 12 },
       { header: "Thực lãnh", key: "thucLanh", width: 14 },
     ];
@@ -283,6 +260,8 @@ export default function BangLuongView({
       r.mucDongBhxh,
       r.bhxhNv,
       r.bhxhCt,
+      r.nv.so_nguoi_phu_thuoc ?? 0,
+      r.giamTru,
       r.thueTncn,
       r.thucLanh,
     ]);
@@ -319,9 +298,16 @@ export default function BangLuongView({
         </div>
       </div>
 
-      <p className="mb-4 text-xs text-slate-400">
+      <p className="mb-1 text-xs text-slate-400">
         Lương theo lô lấy từ hoạt động tháng {thangHoatDong} (chậm 1 tháng so với lương tháng {thangLuong}) — gồm Chi
         phí giao nhận (Hiện trường/Chứng từ/Kế toán) và hoa hồng lợi nhuận (Sale, 4/10).
+      </p>
+      <p className="mb-4 text-xs text-slate-400">
+        Thuế TNCN tháng {thangLuong} tính theo{" "}
+        {dungLuatThueMoi(thangLuong)
+          ? "Luật Thuế TNCN mới (109/2025/QH15, 5 bậc, giảm trừ bản thân 15,5tr + 6,2tr/người phụ thuộc)"
+          : "biểu thuế cũ (7 bậc, giảm trừ bản thân 11tr + 4,4tr/người phụ thuộc)"}
+        .
       </p>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">

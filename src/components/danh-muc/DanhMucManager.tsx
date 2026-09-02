@@ -51,6 +51,14 @@ interface Props {
   extraSearchFields?: string[];
   /** Tra cứu tự động theo mã số thuế (Khách hàng, Nhà cung cấp, Đối tác thuê ngoài). */
   taxLookup?: TaxLookupConfig;
+  /**
+   * Danh sach cot duoc phep doc lai sau khi luu (vd "id, ho_ten, ..."). Bo
+   * trong = doc het ("*"). Dung khi bang co cot bi gioi han quyen SELECT rieng
+   * (vi du nhan_vien.luong_co_dinh/muc_dong_bhxh — xem migration 0039) de
+   * tranh loi quyen lam hong ca thao tac luu; gia tri vua nhap van hien dung
+   * tren man hinh vi duoc gop truc tiep tu form, khong can doc lai tu DB.
+   */
+  selectColumns?: string;
 }
 
 export default function DanhMucManager({
@@ -64,6 +72,7 @@ export default function DanhMucManager({
   searchField,
   extraSearchFields,
   taxLookup,
+  selectColumns,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
@@ -130,26 +139,28 @@ export default function DanhMucManager({
         .from(table)
         .update(payload)
         .eq("id", editing.id)
-        .select()
+        .select(selectColumns)
         .single();
       if (err) {
         setError(err.message);
         setSaving(false);
         return;
       }
-      setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
+      // Gop payload vua luu de vao du du lieu tren man hinh du selectColumns co
+      // loai tru vai cot (vi du luong_co_dinh) khoi ket qua doc lai.
+      setRows((prev) => prev.map((r) => (r.id === editing.id ? { ...(data as unknown as Row), ...payload } : r)));
     } else {
       const { data, error: err } = await supabase
         .from(table)
         .insert({ ...payload, [statusField]: true })
-        .select()
+        .select(selectColumns)
         .single();
       if (err) {
         setError(err.message);
         setSaving(false);
         return;
       }
-      setRows((prev) => [data as Row, ...prev]);
+      setRows((prev) => [{ ...(data as unknown as Row), ...payload }, ...prev]);
     }
 
     setSaving(false);
@@ -164,10 +175,10 @@ export default function DanhMucManager({
       .from(table)
       .update({ [statusField]: newValue })
       .eq("id", row.id)
-      .select()
+      .select(selectColumns)
       .single();
     if (!err && data) {
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...(data as unknown as Row), [statusField]: newValue } : r)));
     }
   }
 
@@ -280,7 +291,7 @@ export default function DanhMucManager({
       return;
     }
 
-    const { data, error: err } = await supabase.from(table).insert(records).select();
+    const { data, error: err } = await supabase.from(table).insert(records).select(selectColumns);
     setImporting(false);
 
     if (err) {
@@ -288,7 +299,8 @@ export default function DanhMucManager({
       return;
     }
 
-    setRows((prev) => [...((data as Row[]) ?? []), ...prev]);
+    const savedRows = ((data as unknown as Row[]) ?? []).map((d, i) => ({ ...d, ...records[i] }));
+    setRows((prev) => [...savedRows, ...prev]);
     setImportSummary({ success: data?.length ?? 0, errors: rowErrors });
   }
 

@@ -27,7 +27,7 @@ export default async function BangLuongPage() {
   ] = await Promise.all([
     supabase
       .from("nhan_vien")
-      .select("id, ho_ten, dang_lam_viec, phong_ban:phong_ban_id(ten)")
+      .select("id, ho_ten, dang_lam_viec, so_nguoi_phu_thuoc, phong_ban:phong_ban_id(ten)")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
     supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at"),
