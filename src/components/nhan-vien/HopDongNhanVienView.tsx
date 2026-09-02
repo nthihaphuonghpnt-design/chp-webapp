@@ -70,6 +70,7 @@ export default function HopDongNhanVienView({
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
+  const [nvFilter, setNvFilter] = useState("");
   const [chuaCoHopDongOnly, setChuaCoHopDongOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -77,8 +78,11 @@ export default function HopDongNhanVienView({
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
+  const nvOptionsFilter = nhanVienList.map((n) => ({ value: n.id, label: n.ho_ten }));
+
   const filtered = rows
     .filter((r) => !chuaCoHopDongOnly || r.trang_thai_hop_dong === "Chưa có hợp đồng")
+    .filter((r) => !nvFilter || r.nhan_vien_id === nvFilter)
     .filter((r) => {
       if (!query) return true;
       const q = query.toLowerCase();
@@ -305,8 +309,11 @@ export default function HopDongNhanVienView({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Tìm theo số hợp đồng, tên nhân viên..."
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
         />
+        <div className="w-full sm:w-56">
+          <SearchableSelect options={nvOptionsFilter} value={nvFilter} onChange={setNvFilter} placeholder="Lọc theo nhân viên" />
+        </div>
         <label className="flex items-center gap-1.5 text-sm text-slate-600">
           <input type="checkbox" checked={chuaCoHopDongOnly} onChange={(e) => setChuaCoHopDongOnly(e.target.checked)} />
           Chỉ hiện chưa có hợp đồng
