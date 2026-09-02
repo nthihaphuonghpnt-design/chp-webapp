@@ -523,7 +523,7 @@ export default function DanhMucManager({
   );
 }
 
-function FormModal({
+export function FormModal({
   fields,
   initial,
   saving,

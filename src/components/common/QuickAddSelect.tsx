@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { FormModal, type FieldConfig } from "@/components/danh-muc/DanhMucManager";
 
 interface Option {
   id: string;
@@ -9,8 +10,9 @@ interface Option {
 }
 
 /**
- * Select don gian cho 1 bang danh muc (chi co cot "ten"), kem nut "+ Thêm mới"
- * de tao nhanh 1 dong danh muc chua co, khong phai roi qua trang Danh mục.
+ * Select don gian cho 1 bang danh muc, kem nut "+ Thêm mới" mo dung form
+ * day du (giong het trang Danh mục dùng chung, khong bi thieu truong nao)
+ * de tao nhanh 1 dong danh muc chua co, khong phai roi qua trang rieng.
  */
 export default function QuickAddSelect({
   table,
@@ -29,17 +31,22 @@ export default function QuickAddSelect({
   onAdded: (row: Option) => void;
   className?: string;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const [open, setOpen] = useState(false);
-  const [ten, setTen] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleAdd() {
-    if (!ten.trim()) return;
+  const fields: FieldConfig[] = [
+    { key: "ten", label: `Tên ${label}`, type: "text", required: true },
+    { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+  ];
+
+  async function handleSubmit(values: Record<string, string>) {
     setSaving(true);
     setError(null);
-    const { data, error: err } = await supabase.from(table).insert({ ten: ten.trim() }).select("id, ten").single();
+    const supabase = createClient();
+    const payload: Record<string, unknown> = {};
+    for (const f of fields) payload[f.key] = values[f.key] === "" ? null : values[f.key];
+    const { data, error: err } = await supabase.from(table).insert(payload).select("id, ten").single();
     setSaving(false);
     if (err) {
       setError(err.message);
@@ -48,7 +55,6 @@ export default function QuickAddSelect({
     onAdded(data as Option);
     onChange((data as Option).id);
     setOpen(false);
-    setTen("");
   }
 
   const selectCls =
@@ -74,52 +80,17 @@ export default function QuickAddSelect({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="mb-3 text-sm font-semibold text-slate-900">Thêm {label} mới</h3>
-            <input
-              autoFocus
-              value={ten}
-              onChange={(e) => setTen(e.target.value)}
-              placeholder={`Tên ${label}`}
-              className={selectCls}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAdd();
-                }
-              }}
-            />
-            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setError(null);
-                  setTen("");
-                }}
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={saving || !ten.trim()}
-                onClick={handleAdd}
-                className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                {saving ? "Đang lưu..." : "Thêm"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FormModal
+          fields={fields}
+          initial={null}
+          saving={saving}
+          error={error}
+          onCancel={() => {
+            setOpen(false);
+            setError(null);
+          }}
+          onSubmit={handleSubmit}
+        />
       )}
     </div>
   );

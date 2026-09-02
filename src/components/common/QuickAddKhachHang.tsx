@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { lookupTaxCode } from "@/lib/taxLookup";
+import { FormModal, type FieldConfig } from "@/components/danh-muc/DanhMucManager";
 import SearchableSelect from "@/components/common/SearchableSelect";
 
 export interface KhachHangOption {
@@ -18,9 +18,10 @@ function khOptionLabel(k: KhachHangOption) {
 }
 
 /**
- * Dropdown chon khach hang, kem nut "+" mo hop thoai them nhanh 1 khach hang
- * moi (co tra cuu ten theo MST) ngay tren cac form tao don hang/hop dong...
- * khong can roi sang trang Danh mục → Khách hàng.
+ * Dropdown chon khach hang, kem nut "+" mo dung form Them khach hang day du
+ * (giong het Danh mục → Khách hàng — MST tra cuu tu dong, nhom khach hang...)
+ * ngay tren cac form tao don hang/hop dong, khong bi thieu thong tin so voi
+ * form them nhanh rut gon truoc day.
  */
 export default function QuickAddKhachHang({
   options,
@@ -29,6 +30,7 @@ export default function QuickAddKhachHang({
   onAdded,
   nhomKhachHangList,
   placeholder = "Gõ tên khách hàng...",
+  disabled = false,
 }: {
   options: KhachHangOption[];
   value: string;
@@ -36,53 +38,41 @@ export default function QuickAddKhachHang({
   onAdded: (row: KhachHangOption & { ten_day_du: string }) => void;
   nhomKhachHangList?: { id: string; ten: string }[];
   placeholder?: string;
+  disabled?: boolean;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ ma_so_thue: "", ten_day_du: "", ten_viet_tat: "", nhom_khach_hang_id: "" });
-  const [lookingUp, setLookingUp] = useState(false);
-  const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectOptions = options.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
 
-  function set(key: keyof typeof form, v: string) {
-    setForm((prev) => ({ ...prev, [key]: v }));
-  }
+  const fields: FieldConfig[] = useMemo(
+    () => [
+      { key: "ma_so_thue", label: "Mã số thuế", type: "text", hint: "Nhập rồi rời khỏi ô để tự động tra cứu tên, địa chỉ" },
+      { key: "ten_day_du", label: "Tên đầy đủ", type: "text", required: true },
+      { key: "ten_viet_tat", label: "Tên viết tắt", type: "text" },
+      {
+        key: "nhom_khach_hang_id",
+        label: "Nhóm khách hàng",
+        type: "select",
+        options: (nhomKhachHangList ?? []).map((n) => ({ value: n.id, label: n.ten })),
+        hint: "Để trống nếu khách hàng độc lập, không thuộc nhóm nào.",
+      },
+      { key: "dia_chi", label: "Địa chỉ", type: "text" },
+      { key: "nguoi_lien_he", label: "Người liên hệ", type: "text" },
+      { key: "dien_thoai", label: "Điện thoại", type: "tel" },
+      { key: "email", label: "Email", type: "email" },
+      { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+    ],
+    [nhomKhachHangList]
+  );
 
-  function closeModal() {
-    setOpen(false);
-    setError(null);
-    setLookupMsg(null);
-    setForm({ ma_so_thue: "", ten_day_du: "", ten_viet_tat: "", nhom_khach_hang_id: "" });
-  }
-
-  async function handleTaxBlur() {
-    const code = form.ma_so_thue.trim();
-    if (!code || !/^\d{10}(\d{3})?$/.test(code)) return;
-    setLookingUp(true);
-    setLookupMsg(null);
-    const result = await lookupTaxCode(code);
-    setLookingUp(false);
-    if (!result || !result.name) {
-      setLookupMsg("Không tìm thấy thông tin cho mã số thuế này — vui lòng nhập tay.");
-      return;
-    }
-    setForm((prev) => ({ ...prev, ten_day_du: result.name || prev.ten_day_du }));
-    setLookupMsg("Đã tự động điền tên — kiểm tra lại trước khi lưu.");
-  }
-
-  async function handleAdd() {
-    if (!form.ten_day_du.trim()) return;
+  async function handleSubmit(values: Record<string, string>) {
     setSaving(true);
     setError(null);
-    const payload = {
-      ma_so_thue: form.ma_so_thue.trim() || null,
-      ten_day_du: form.ten_day_du.trim(),
-      ten_viet_tat: form.ten_viet_tat.trim() || null,
-      nhom_khach_hang_id: form.nhom_khach_hang_id || null,
-    };
+    const supabase = createClient();
+    const payload: Record<string, unknown> = {};
+    for (const f of fields) payload[f.key] = values[f.key] === "" ? null : values[f.key];
     const { data, error: err } = await supabase
       .from("khach_hang")
       .insert(payload)
@@ -102,81 +92,36 @@ export default function QuickAddKhachHang({
     };
     onAdded(row);
     onChange(row.id);
-    closeModal();
+    setOpen(false);
   }
-
-  const inputCls =
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none";
 
   return (
     <div className="flex gap-2">
-      <SearchableSelect options={selectOptions} value={value} onChange={onChange} placeholder={placeholder} className="flex-1" />
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Thêm khách hàng mới"
-        className="shrink-0 rounded-lg border border-slate-300 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50"
-      >
-        +
-      </button>
+      <SearchableSelect options={selectOptions} value={value} onChange={onChange} placeholder={placeholder} className="flex-1" disabled={disabled} />
+      {!disabled && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Thêm khách hàng mới"
+          className="shrink-0 rounded-lg border border-slate-300 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50"
+        >
+          +
+        </button>
+      )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeModal}>
-          <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 text-sm font-semibold text-slate-900">Thêm khách hàng mới</h3>
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Mã số thuế</label>
-                <input
-                  value={form.ma_so_thue}
-                  onChange={(e) => set("ma_so_thue", e.target.value)}
-                  onBlur={handleTaxBlur}
-                  placeholder="Nhập rồi rời khỏi ô để tự tra cứu"
-                  className={inputCls}
-                />
-                {lookingUp && <p className="mt-1 text-xs text-slate-400">Đang tra cứu...</p>}
-                {lookupMsg && !lookingUp && <p className="mt-1 text-xs text-slate-500">{lookupMsg}</p>}
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">
-                  Tên đầy đủ <span className="text-red-500">*</span>
-                </label>
-                <input autoFocus value={form.ten_day_du} onChange={(e) => set("ten_day_du", e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Tên viết tắt</label>
-                <input value={form.ten_viet_tat} onChange={(e) => set("ten_viet_tat", e.target.value)} className={inputCls} />
-              </div>
-              {nhomKhachHangList && nhomKhachHangList.length > 0 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Nhóm khách hàng</label>
-                  <select value={form.nhom_khach_hang_id} onChange={(e) => set("nhom_khach_hang_id", e.target.value)} className={inputCls}>
-                    <option value="">-- Không thuộc nhóm --</option>
-                    {nhomKhachHangList.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.ten}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-            <div className="mt-4 flex gap-2">
-              <button type="button" onClick={closeModal} className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={saving || !form.ten_day_du.trim()}
-                onClick={handleAdd}
-                className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                {saving ? "Đang lưu..." : "Thêm"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FormModal
+          fields={fields}
+          initial={null}
+          saving={saving}
+          error={error}
+          taxLookup={{ taxField: "ma_so_thue", nameField: "ten_day_du", addressField: "dia_chi" }}
+          onCancel={() => {
+            setOpen(false);
+            setError(null);
+          }}
+          onSubmit={handleSubmit}
+        />
       )}
     </div>
   );
