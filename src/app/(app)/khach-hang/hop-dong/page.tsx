@@ -15,7 +15,7 @@ export default async function HopDongPage() {
     );
   }
 
-  const [{ data: rows }, { data: khachHangList }, { data: nhaCungCapList }, { data: dinhKemRows }] = await Promise.all([
+  const [{ data: rows }, { data: khachHangList }, { data: nhomKhachHangList }, { data: nhaCungCapList }, { data: dinhKemRows }] = await Promise.all([
     supabase
       .from("hop_dong_khach_hang")
       .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat), nha_cung_cap:nha_cung_cap_id(ten)")
@@ -25,6 +25,7 @@ export default async function HopDongPage() {
       .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
       .eq("dang_hoat_dong", true)
       .order("ten_day_du"),
+    supabase.from("nhom_khach_hang").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("dinh_kem").select("*").not("hop_dong_id", "is", null).order("thoi_gian_upload", { ascending: false }),
   ]);
@@ -40,6 +41,7 @@ export default async function HopDongPage() {
         const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
         return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_ten: nhom?.ten ?? null };
       })}
+      nhomKhachHangList={nhomKhachHangList ?? []}
       nhaCungCapList={nhaCungCapList ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dinhKemRows={(dinhKemRows ?? []) as any[]}

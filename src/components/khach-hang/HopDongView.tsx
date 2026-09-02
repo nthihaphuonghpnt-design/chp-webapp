@@ -6,6 +6,8 @@ import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } f
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
+import QuickAddKhachHang from "@/components/common/QuickAddKhachHang";
+import QuickAddNhaCungCap from "@/components/common/QuickAddNhaCungCap";
 import type { DinhKem } from "@/types/database";
 
 interface DoiTac {
@@ -64,8 +66,9 @@ const HOP_DONG_COLOR: Record<string, string> = {
 
 export default function HopDongView({
   initialRows,
-  khachHangList,
-  nhaCungCapList,
+  khachHangList: initialKhachHangList,
+  nhaCungCapList: initialNhaCungCapList,
+  nhomKhachHangList,
   dinhKemRows,
   canEdit,
   canDelete,
@@ -74,6 +77,7 @@ export default function HopDongView({
   initialRows: Row[];
   khachHangList: DoiTac[];
   nhaCungCapList: DoiTac[];
+  nhomKhachHangList: { id: string; ten: string }[];
   dinhKemRows: DinhKem[];
   canEdit: boolean;
   canDelete: boolean;
@@ -81,6 +85,8 @@ export default function HopDongView({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
+  const [khachHangList, setKhachHangList] = useState<DoiTac[]>(initialKhachHangList);
+  const [nhaCungCapList, setNhaCungCapList] = useState<DoiTac[]>(initialNhaCungCapList);
   const [query, setQuery] = useState("");
   const [khFilter, setKhFilter] = useState("");
   const [nccFilter, setNccFilter] = useState("");
@@ -433,6 +439,9 @@ export default function HopDongView({
           initial={editing}
           khachHangList={khachHangList}
           nhaCungCapList={nhaCungCapList}
+          nhomKhachHangList={nhomKhachHangList}
+          onKhachHangAdded={(row) => setKhachHangList((prev) => [...prev, row])}
+          onNhaCungCapAdded={(row) => setNhaCungCapList((prev) => [...prev, row])}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
@@ -445,12 +454,18 @@ function HopDongForm({
   initial,
   khachHangList,
   nhaCungCapList,
+  nhomKhachHangList,
+  onKhachHangAdded,
+  onNhaCungCapAdded,
   onCancel,
   onSave,
 }: {
   initial: Row | null;
   khachHangList: DoiTac[];
   nhaCungCapList: DoiTac[];
+  nhomKhachHangList: { id: string; ten: string }[];
+  onKhachHangAdded: (row: DoiTac) => void;
+  onNhaCungCapAdded: (row: DoiTac) => void;
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
@@ -505,11 +520,20 @@ function HopDongForm({
                 value={(values.doi_tuong === "khach_hang" ? khOptions : nccOptions).find((o) => o.value === values.doi_tuong_id)?.label ?? ""}
                 className={cls}
               />
-            ) : (
-              <SearchableSelect
-                options={values.doi_tuong === "khach_hang" ? khOptions : nccOptions}
+            ) : values.doi_tuong === "khach_hang" ? (
+              <QuickAddKhachHang
+                options={khachHangList}
                 value={values.doi_tuong_id}
                 onChange={(v) => set("doi_tuong_id", v)}
+                onAdded={onKhachHangAdded}
+                nhomKhachHangList={nhomKhachHangList}
+              />
+            ) : (
+              <QuickAddNhaCungCap
+                options={nhaCungCapList}
+                value={values.doi_tuong_id}
+                onChange={(v) => set("doi_tuong_id", v)}
+                onAdded={onNhaCungCapAdded}
               />
             )}
           </div>

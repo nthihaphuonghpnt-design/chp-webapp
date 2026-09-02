@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import QuickAddSelect from "@/components/common/QuickAddSelect";
+import QuickAddKhachHang, { type KhachHangOption } from "@/components/common/QuickAddKhachHang";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { DonHang } from "@/types/database";
 
@@ -23,6 +24,7 @@ interface DiaDiemOption {
 
 interface MasterData {
   khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null; nhom_khach_hang_ten?: string | null }[];
+  nhomKhachHang: { id: string; ten: string }[];
   loaiContainer: Option[];
   hangHoa: Option[];
   diaDiem: DiaDiemOption[];
@@ -50,6 +52,7 @@ export default function DonHangForm({
   const [error, setError] = useState<string | null>(null);
   const [loaiContainerList, setLoaiContainerList] = useState(masterData.loaiContainer);
   const [hangHoaList, setHangHoaList] = useState(masterData.hangHoa);
+  const [khachHangList, setKhachHangList] = useState<KhachHangOption[]>(masterData.khachHang);
 
   const [values, setValues] = useState({
     khach_hang_id: initial?.khach_hang_id ?? "",
@@ -88,6 +91,10 @@ export default function DonHangForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!values.khach_hang_id) {
+      setError("Vui lòng chọn khách hàng.");
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -147,20 +154,14 @@ export default function DonHangForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 pb-10">
       <Section title="Thông tin chung">
         <Field label="Khách hàng" required>
-          <select
-            required
+          <QuickAddKhachHang
+            options={khachHangList}
             value={values.khach_hang_id}
-            onChange={(e) => set("khach_hang_id", e.target.value)}
-            className={inputClass}
-          >
-            <option value="">-- Chọn khách hàng --</option>
-            {masterData.khachHang.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.ten_viet_tat || k.ten_day_du}
-                {k.nhom_khach_hang_ten ? ` — (${k.nhom_khach_hang_ten})` : ""}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("khach_hang_id", v)}
+            onAdded={(row) => setKhachHangList((prev) => [...prev, row].sort((a, b) => (a.ten_viet_tat || a.ten_day_du || "").localeCompare(b.ten_viet_tat || b.ten_day_du || "")))}
+            nhomKhachHangList={masterData.nhomKhachHang}
+            placeholder="Gõ tên khách hàng..."
+          />
         </Field>
         <Field label="Sale phụ trách" required hint="Người nhận hoa hồng của đơn này">
           <select

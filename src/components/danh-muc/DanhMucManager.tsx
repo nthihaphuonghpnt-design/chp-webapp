@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
+import { lookupTaxCode } from "@/lib/taxLookup";
 import MoneyInput from "@/components/common/MoneyInput";
 
 export type FieldType = "text" | "textarea" | "select" | "tel" | "email" | "number";
@@ -520,20 +521,6 @@ export default function DanhMucManager({
       )}
     </div>
   );
-}
-
-async function lookupTaxCode(taxCode: string): Promise<{ name: string; address: string } | null> {
-  try {
-    const res = await fetch(`https://api.vietqr.io/v2/business/${encodeURIComponent(taxCode)}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json?.code === "00" && json?.data) {
-      return { name: json.data.name ?? "", address: json.data.address ?? "" };
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 function FormModal({
