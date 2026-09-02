@@ -5,36 +5,38 @@ import { createClient } from "@/lib/supabase/client";
 import { lookupTaxCode } from "@/lib/taxLookup";
 import SearchableSelect from "@/components/common/SearchableSelect";
 
-export interface NhaCungCapOption {
+export interface DoiTacThueNgoaiOption {
   id: string;
   ten?: string;
 }
 
-/** Giong QuickAddKhachHang nhung cho Nha cung cap (bang nha_cung_cap). */
-export default function QuickAddNhaCungCap({
+const NHOM_DOI_TAC = ["Công ty đối tác (vận tải)", "Hãng tàu", "Đại lý cước biển", "Dịch vụ khác"];
+
+/** Giong QuickAddNhaCungCap nhung cho Doi tac thue ngoai (bang doi_tac_thue_ngoai). */
+export default function QuickAddDoiTacThueNgoai({
   options,
   value,
   onChange,
   onAdded,
-  placeholder = "Gõ tên nhà cung cấp...",
+  placeholder = "Gõ tên đối tác thuê ngoài...",
   disabled = false,
 }: {
-  options: NhaCungCapOption[];
+  options: DoiTacThueNgoaiOption[];
   value: string;
   onChange: (value: string) => void;
-  onAdded: (row: NhaCungCapOption & { ten: string }) => void;
+  onAdded: (row: DoiTacThueNgoaiOption & { ten: string }) => void;
   placeholder?: string;
   disabled?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ ma_so_thue: "", ten: "", dia_chi: "", dien_thoai: "" });
+  const [form, setForm] = useState({ ma_so_thue: "", ten: "", nhom: "", dien_thoai: "" });
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectOptions = options.map((n) => ({ value: n.id, label: n.ten ?? "" }));
+  const selectOptions = options.map((d) => ({ value: d.id, label: d.ten ?? "" }));
 
   function set(key: keyof typeof form, v: string) {
     setForm((prev) => ({ ...prev, [key]: v }));
@@ -44,7 +46,7 @@ export default function QuickAddNhaCungCap({
     setOpen(false);
     setError(null);
     setLookupMsg(null);
-    setForm({ ma_so_thue: "", ten: "", dia_chi: "", dien_thoai: "" });
+    setForm({ ma_so_thue: "", ten: "", nhom: "", dien_thoai: "" });
   }
 
   async function handleTaxBlur() {
@@ -58,31 +60,27 @@ export default function QuickAddNhaCungCap({
       setLookupMsg("Không tìm thấy thông tin cho mã số thuế này — vui lòng nhập tay.");
       return;
     }
-    setForm((prev) => ({
-      ...prev,
-      ten: result.name || prev.ten,
-      dia_chi: result.address || prev.dia_chi,
-    }));
-    setLookupMsg("Đã tự động điền tên, địa chỉ — kiểm tra lại trước khi lưu.");
+    setForm((prev) => ({ ...prev, ten: result.name || prev.ten }));
+    setLookupMsg("Đã tự động điền tên — kiểm tra lại trước khi lưu.");
   }
 
   async function handleAdd() {
-    if (!form.ten.trim()) return;
+    if (!form.ten.trim() || !form.nhom) return;
     setSaving(true);
     setError(null);
     const payload = {
       ma_so_thue: form.ma_so_thue.trim() || null,
       ten: form.ten.trim(),
-      dia_chi: form.dia_chi.trim() || null,
+      nhom: form.nhom,
       dien_thoai: form.dien_thoai.trim() || null,
     };
-    const { data, error: err } = await supabase.from("nha_cung_cap").insert(payload).select("id, ten").single();
+    const { data, error: err } = await supabase.from("doi_tac_thue_ngoai").insert(payload).select("id, ten").single();
     setSaving(false);
     if (err) {
       setError(err.message);
       return;
     }
-    onAdded(data as NhaCungCapOption & { ten: string });
+    onAdded(data as DoiTacThueNgoaiOption & { ten: string });
     onChange(data.id);
     closeModal();
   }
@@ -97,7 +95,7 @@ export default function QuickAddNhaCungCap({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          title="Thêm nhà cung cấp mới"
+          title="Thêm đối tác thuê ngoài mới"
           className="shrink-0 rounded-lg border border-slate-300 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50"
         >
           +
@@ -107,7 +105,7 @@ export default function QuickAddNhaCungCap({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeModal}>
           <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 text-sm font-semibold text-slate-900">Thêm nhà cung cấp mới</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-900">Thêm đối tác thuê ngoài mới</h3>
             <div className="flex flex-col gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700">Mã số thuế</label>
@@ -123,13 +121,22 @@ export default function QuickAddNhaCungCap({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700">
-                  Tên nhà cung cấp <span className="text-red-500">*</span>
+                  Tên đối tác <span className="text-red-500">*</span>
                 </label>
                 <input autoFocus value={form.ten} onChange={(e) => set("ten", e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Địa chỉ</label>
-                <input value={form.dia_chi} onChange={(e) => set("dia_chi", e.target.value)} className={inputCls} />
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  Nhóm <span className="text-red-500">*</span>
+                </label>
+                <select value={form.nhom} onChange={(e) => set("nhom", e.target.value)} className={inputCls}>
+                  <option value="">-- Chọn --</option>
+                  {NHOM_DOI_TAC.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700">Điện thoại</label>
@@ -143,7 +150,7 @@ export default function QuickAddNhaCungCap({
               </button>
               <button
                 type="button"
-                disabled={saving || !form.ten.trim()}
+                disabled={saving || !form.ten.trim() || !form.nhom}
                 onClick={handleAdd}
                 className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
               >

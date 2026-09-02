@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
-import SearchableSelect from "@/components/common/SearchableSelect";
+import QuickAddDoiTacThueNgoai from "@/components/common/QuickAddDoiTacThueNgoai";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { DonThueNgoai } from "@/types/database";
 
@@ -26,7 +26,7 @@ export default function ThueNgoaiSection({
   donHangId,
   soDonHang,
   initialRows,
-  doiTacList,
+  doiTacList: initialDoiTacList,
   phongBan,
 }: {
   donHangId: string;
@@ -37,6 +37,7 @@ export default function ThueNgoaiSection({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<DonThueNgoai[]>(initialRows);
+  const [doiTacList, setDoiTacList] = useState<Option[]>(initialDoiTacList);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DonThueNgoai | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -335,6 +336,7 @@ export default function ThueNgoaiSection({
         <ThueNgoaiForm
           initial={editing}
           doiTacList={doiTacList}
+          onDoiTacAdded={(row) => setDoiTacList((prev) => [...prev, row])}
           canSeeSell={canSeeSell}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
@@ -347,12 +349,14 @@ export default function ThueNgoaiSection({
 function ThueNgoaiForm({
   initial,
   doiTacList,
+  onDoiTacAdded,
   canSeeSell,
   onCancel,
   onSave,
 }: {
   initial: DonThueNgoai | null;
   doiTacList: Option[];
+  onDoiTacAdded: (row: Option) => void;
   canSeeSell: boolean;
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
@@ -373,7 +377,6 @@ function ThueNgoaiForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
-  const doiTacOptions = doiTacList.map((d) => ({ value: d.id, label: d.ten }));
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 
   return (
@@ -400,7 +403,12 @@ function ThueNgoaiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đối tác thuê ngoài</label>
-            <SearchableSelect options={doiTacOptions} value={values.doi_tac_thue_ngoai_id} onChange={(v) => set("doi_tac_thue_ngoai_id", v)} />
+            <QuickAddDoiTacThueNgoai
+              options={doiTacList}
+              value={values.doi_tac_thue_ngoai_id}
+              onChange={(v) => set("doi_tac_thue_ngoai_id", v)}
+              onAdded={onDoiTacAdded}
+            />
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium text-slate-700">Nội dung</label>

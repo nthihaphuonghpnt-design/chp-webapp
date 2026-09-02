@@ -5,6 +5,8 @@ import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import QuickAddNhaCungCap from "@/components/common/QuickAddNhaCungCap";
+import QuickAddDoiTacThueNgoai from "@/components/common/QuickAddDoiTacThueNgoai";
 import MoneyInput from "@/components/common/MoneyInput";
 import ChiPhiBulkForm, { type BulkRowValues } from "@/components/don-hang/ChiPhiBulkForm";
 import type { BangGiaKhachHang, ChiTietVanChuyen, PhatSinhChiPhi } from "@/types/database";
@@ -29,8 +31,8 @@ export default function ChiPhiSection({
   soDonHang,
   initialRows,
   loaiChiPhiList,
-  nhaCungCapList,
-  doiTacThueNgoaiList,
+  nhaCungCapList: initialNhaCungCapList,
+  doiTacThueNgoaiList: initialDoiTacThueNgoaiList,
   chiTietVanChuyenList,
   bangGiaList,
   khachHangId,
@@ -51,6 +53,8 @@ export default function ChiPhiSection({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<PhatSinhChiPhi[]>(initialRows);
+  const [nhaCungCapList, setNhaCungCapList] = useState<Option[]>(initialNhaCungCapList);
+  const [doiTacThueNgoaiList, setDoiTacThueNgoaiList] = useState<Option[]>(initialDoiTacThueNgoaiList);
   const [showForm, setShowForm] = useState(false);
   const [showBulkForm, setShowBulkForm] = useState(false);
   const [editing, setEditing] = useState<PhatSinhChiPhi | null>(null);
@@ -484,7 +488,9 @@ export default function ChiPhiSection({
           initial={editing}
           loaiChiPhiList={loaiChiPhiList}
           nhaCungCapList={nhaCungCapList}
+          onNhaCungCapAdded={(row) => setNhaCungCapList((prev) => [...prev, row])}
           doiTacThueNgoaiList={doiTacThueNgoaiList}
+          onDoiTacThueNgoaiAdded={(row) => setDoiTacThueNgoaiList((prev) => [...prev, row])}
           chiTietVanChuyenList={chiTietVanChuyenList}
           bangGiaList={bangGiaList}
           khachHangId={khachHangId}
@@ -515,7 +521,9 @@ function ChiPhiForm({
   initial,
   loaiChiPhiList,
   nhaCungCapList,
+  onNhaCungCapAdded,
   doiTacThueNgoaiList,
+  onDoiTacThueNgoaiAdded,
   chiTietVanChuyenList,
   bangGiaList,
   khachHangId,
@@ -528,7 +536,9 @@ function ChiPhiForm({
   initial: PhatSinhChiPhi | null;
   loaiChiPhiList: Option[];
   nhaCungCapList: Option[];
+  onNhaCungCapAdded: (row: Option) => void;
   doiTacThueNgoaiList: Option[];
+  onDoiTacThueNgoaiAdded: (row: Option) => void;
   chiTietVanChuyenList: ChiTietVanChuyen[];
   bangGiaList: BangGiaKhachHang[];
   khachHangId: string | null;
@@ -591,8 +601,6 @@ function ChiPhiForm({
   }
 
   const loaiChiPhiOptions = loaiChiPhiList.map((o) => ({ value: o.id, label: o.ten, code: o.ma }));
-  const nhaCungCapOptions = nhaCungCapList.map((o) => ({ value: o.id, label: o.ten, code: o.ma }));
-  const doiTacOptions = doiTacThueNgoaiList.map((o) => ({ value: o.id, label: o.ten }));
   const changOptions = chiTietVanChuyenList.map((c) => ({
     value: c.id,
     label: `${c.ngay_vc ?? "?"} · ${c.so_xe || c.tai_xe_cty_thue || "chặng"}`,
@@ -622,22 +630,24 @@ function ChiPhiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Nhà cung cấp</label>
-            <SearchableSelect
+            <QuickAddNhaCungCap
               disabled={isSaleOnly}
-              options={nhaCungCapOptions}
+              options={nhaCungCapList}
               value={values.nha_cung_cap_id}
               onChange={(v) => set("nha_cung_cap_id", v)}
+              onAdded={onNhaCungCapAdded}
             />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Đối tác thuê ngoài <span className="font-normal text-slate-400">(nếu bên vận tải trả chi hộ)</span>
             </label>
-            <SearchableSelect
+            <QuickAddDoiTacThueNgoai
               disabled={isSaleOnly}
-              options={doiTacOptions}
+              options={doiTacThueNgoaiList}
               value={values.doi_tac_thue_ngoai_id}
               onChange={(v) => set("doi_tac_thue_ngoai_id", v)}
+              onAdded={onDoiTacThueNgoaiAdded}
             />
           </div>
           <div className="sm:col-span-2">
