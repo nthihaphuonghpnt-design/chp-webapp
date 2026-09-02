@@ -13,6 +13,13 @@ interface DoiTac {
   ten_day_du?: string;
   ten_viet_tat?: string | null;
   ten?: string;
+  nhom_khach_hang_ten?: string | null;
+}
+
+/** Kem ten nhom (vd Apple Trans) de chon dung phap nhan, tranh nham giua cac cong ty con cung nhom. */
+function khOptionLabel(k: DoiTac) {
+  const ten = k.ten_viet_tat || k.ten_day_du || k.ten || "";
+  return k.nhom_khach_hang_ten ? `${ten} — (${k.nhom_khach_hang_ten})` : ten;
 }
 
 interface Row {
@@ -84,7 +91,7 @@ export default function HopDongView({
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du || "" }));
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const nccOptions = nhaCungCapList.map((n) => ({ value: n.id, label: n.ten ?? "" }));
 
   const filtered = rows
@@ -463,7 +470,7 @@ function HopDongForm({
   }
 
   const daCoDoiTuong = !!initial;
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du || "" }));
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const nccOptions = nhaCungCapList.map((n) => ({ value: n.id, label: n.ten ?? "" }));
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 

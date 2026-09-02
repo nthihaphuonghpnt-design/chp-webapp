@@ -20,6 +20,11 @@ interface DonHangOpt {
 interface KhachHangOpt {
   id: string;
   ten_day_du: string;
+  nhom_khach_hang_ten?: string | null;
+}
+
+function khOptionLabel(k: KhachHangOpt) {
+  return k.nhom_khach_hang_ten ? `${k.ten_day_du} — (${k.nhom_khach_hang_ten})` : k.ten_day_du;
 }
 
 interface Row {
@@ -775,7 +780,7 @@ function TamUngForm({
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
               <SearchableSelect
-                options={khachHangList.map((k) => ({ value: k.id, label: k.ten_day_du }))}
+                options={khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }))}
                 value={values.khach_hang_id}
                 onChange={(v) => set("khach_hang_id", v)}
               />

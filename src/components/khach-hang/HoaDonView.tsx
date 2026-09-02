@@ -12,6 +12,7 @@ interface KhachHang {
   id: string;
   ten_day_du: string;
   ten_viet_tat: string | null;
+  nhom_khach_hang_ten?: string | null;
 }
 interface DonHangOpt {
   id: string;
@@ -64,6 +65,11 @@ function one<T>(v: T | T[] | null): T | null {
 }
 function khName(kh: KhachHang | null) {
   return kh ? kh.ten_viet_tat || kh.ten_day_du : "—";
+}
+/** Kem ten nhom (vd Apple Trans) de chon dung phap nhan, tranh nham giua cac cong ty con cung nhom. */
+function khOptionLabel(k: KhachHang) {
+  const ten = k.ten_viet_tat || k.ten_day_du;
+  return k.nhom_khach_hang_ten ? `${ten} — (${k.nhom_khach_hang_ten})` : ten;
 }
 
 const TT_THU: Row["trang_thai_thanh_toan"][] = ["Chưa thu", "Thu một phần", "Đã thu đủ"];
@@ -262,7 +268,7 @@ export default function HoaDonView({
       <div className="mb-4 flex flex-wrap gap-2">
         <div className="w-56">
           <SearchableSelect
-            options={khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }))}
+            options={khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }))}
             value={khFilter}
             onChange={setKhFilter}
             placeholder="Tất cả khách hàng"
@@ -492,7 +498,7 @@ function HoaDonForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDonHang.join(",")]);
 
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }));
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const donHangCuaKh = donHangList.filter((d) => !values.khach_hang_id || d.khach_hang_id === values.khach_hang_id);
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 

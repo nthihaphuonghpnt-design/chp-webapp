@@ -21,7 +21,7 @@ interface DiaDiemOption {
 }
 
 interface MasterData {
-  khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null }[];
+  khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null; nhom_khach_hang_ten?: string | null }[];
   loaiContainer: Option[];
   hangHoa: Option[];
   diaDiem: DiaDiemOption[];
@@ -154,6 +154,7 @@ export default function DonHangForm({
             {masterData.khachHang.map((k) => (
               <option key={k.id} value={k.id}>
                 {k.ten_viet_tat || k.ten_day_du}
+                {k.nhom_khach_hang_ten ? ` — (${k.nhom_khach_hang_ten})` : ""}
               </option>
             ))}
           </select>
