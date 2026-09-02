@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import QuickAddSelect from "@/components/common/QuickAddSelect";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { DonHang } from "@/types/database";
 
@@ -47,6 +48,8 @@ export default function DonHangForm({
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaiContainerList, setLoaiContainerList] = useState(masterData.loaiContainer);
+  const [hangHoaList, setHangHoaList] = useState(masterData.hangHoa);
 
   const [values, setValues] = useState({
     khach_hang_id: initial?.khach_hang_id ?? "",
@@ -195,14 +198,14 @@ export default function DonHangForm({
           </select>
         </Field>
         <Field label="Loại container">
-          <select value={values.loai_cont_hang_id} onChange={(e) => set("loai_cont_hang_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.loaiContainer.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <QuickAddSelect
+            table="loai_container"
+            label="loại container"
+            options={loaiContainerList}
+            value={values.loai_cont_hang_id}
+            onChange={(v) => set("loai_cont_hang_id", v)}
+            onAdded={(row) => setLoaiContainerList((prev) => [...prev, row].sort((a, b) => a.ten.localeCompare(b.ten)))}
+          />
         </Field>
         <Field label="Đơn vị tính">
           <select value={values.dvt} onChange={(e) => set("dvt", e.target.value)} className={inputClass}>
@@ -251,14 +254,14 @@ export default function DonHangForm({
 
       <Section title="Hàng hóa">
         <Field label="Hàng hóa">
-          <select value={values.hang_hoa_id} onChange={(e) => set("hang_hoa_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.hangHoa.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <QuickAddSelect
+            table="hang_hoa"
+            label="hàng hóa"
+            options={hangHoaList}
+            value={values.hang_hoa_id}
+            onChange={(v) => set("hang_hoa_id", v)}
+            onAdded={(row) => setHangHoaList((prev) => [...prev, row].sort((a, b) => a.ten.localeCompare(b.ten)))}
+          />
         </Field>
         <Field label="Kích thước (WxLxH)">
           <input value={values.kich_thuoc} onChange={(e) => set("kich_thuoc", e.target.value)} className={inputClass} />
