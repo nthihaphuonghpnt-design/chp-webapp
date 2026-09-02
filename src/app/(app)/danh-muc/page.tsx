@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const ITEMS = [
   { href: "/danh-muc/khach-hang", label: "Khách hàng", desc: "Danh sách khách hàng sử dụng dịch vụ" },
+  { href: "/danh-muc/nhom-khach-hang", label: "Nhóm khách hàng", desc: "Gom các công ty con của cùng 1 mối quan hệ (vd tập đoàn) cho dễ lọc" },
   { href: "/danh-muc/nha-cung-cap", label: "Nhà cung cấp / Đối tác", desc: "Đối tác cung cấp dịch vụ chi phí (bốc xếp, kiểm dịch...)" },
   { href: "/danh-muc/doi-tac-thue-ngoai", label: "Đối tác thuê ngoài", desc: "Công ty vận tải / hãng tàu / đại lý cước biển" },
   { href: "/danh-muc/nhan-vien", label: "Nhân viên", desc: "Nhân viên và phòng ban, dùng để đăng nhập & phân quyền" },

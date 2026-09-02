@@ -27,6 +27,15 @@ export interface NhanVien {
   updated_at: string;
 }
 
+export interface NhomKhachHang {
+  id: string;
+  ten: string;
+  ghi_chu: string | null;
+  dang_hoat_dong: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface KhachHang {
   id: string;
   ten_day_du: string;
@@ -37,6 +46,7 @@ export interface KhachHang {
   dien_thoai: string | null;
   email: string | null;
   ghi_chu: string | null;
+  nhom_khach_hang_id: string | null;
   dang_hoat_dong: boolean;
   created_at: string;
   updated_at: string;
