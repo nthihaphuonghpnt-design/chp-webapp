@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -54,7 +55,10 @@ export default function AppNav({ user }: { user: CurrentUser }) {
     <>
       {/* Top bar (mobile) */}
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:hidden">
-        <span className="font-semibold text-slate-900">CHP</span>
+        <div className="flex items-center gap-2">
+          <Image src="/logo-chp.jpg" alt="Châu Hoàng Phát" width={28} height={28} className="rounded" />
+          <span className="font-semibold text-slate-900">CHP</span>
+        </div>
         <button
           onClick={() => setMenuOpen((o) => !o)}
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600"
@@ -91,9 +95,12 @@ export default function AppNav({ user }: { user: CurrentUser }) {
 
       {/* Sidebar (desktop) */}
       <aside className="hidden w-60 flex-col border-r border-slate-200 bg-white sm:flex">
-        <div className="border-b border-slate-100 px-5 py-5">
-          <p className="font-semibold text-slate-900">CHP</p>
-          <p className="text-xs text-slate-500">Quản lý nội bộ</p>
+        <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-5">
+          <Image src="/logo-chp.jpg" alt="Châu Hoàng Phát" width={38} height={38} className="rounded-lg" />
+          <div>
+            <p className="font-semibold text-slate-900">CHP</p>
+            <p className="text-xs text-slate-500">Quản lý nội bộ</p>
+          </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
           {visibleItems.map((item) => (
