@@ -32,7 +32,7 @@ interface Row {
   loai_hop_dong: string | null;
   ngay_hieu_luc: string | null;
   ngay_het_han: string | null;
-  trang_thai_hop_dong: "Chưa có hợp đồng" | "Đã có hợp đồng";
+  trang_thai_hop_dong: "Chưa có hợp đồng" | "Đã có hợp đồng" | "Không cần hợp đồng";
   ghi_chu: string | null;
   khach_hang: DoiTac | DoiTac[] | null;
   nha_cung_cap: DoiTac | DoiTac[] | null;
@@ -62,6 +62,7 @@ function trangThaiHieuLuc(row: Row) {
 const HOP_DONG_COLOR: Record<string, string> = {
   "Chưa có hợp đồng": "bg-red-100 text-red-700",
   "Đã có hợp đồng": "bg-green-100 text-green-700",
+  "Không cần hợp đồng": "bg-slate-100 text-slate-500",
 };
 
 export default function HopDongView({
@@ -162,6 +163,15 @@ export default function HopDongView({
     if (!window.confirm(`Xóa hợp đồng "${row.so_hop_dong ?? ""}"?`)) return;
     const { error } = await supabase.from("hop_dong_khach_hang").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+  }
+
+  async function handleSetTrangThaiHopDong(row: Row, trangThai: Row["trang_thai_hop_dong"]) {
+    const { error } = await supabase.from("hop_dong_khach_hang").update({ trang_thai_hop_dong: trangThai }).eq("id", row.id);
+    if (!error) {
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, trang_thai_hop_dong: trangThai } : r)));
+    } else {
+      window.alert(error.message);
+    }
   }
 
   async function handleExportExcel() {
@@ -410,6 +420,18 @@ export default function HopDongView({
                 canUpload={canEdit}
                 currentUserId={currentUserId}
               />
+              {canEdit && row.trang_thai_hop_dong !== "Đã có hợp đồng" && (
+                <label className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={row.trang_thai_hop_dong === "Không cần hợp đồng"}
+                    onChange={(e) =>
+                      handleSetTrangThaiHopDong(row, e.target.checked ? "Không cần hợp đồng" : "Chưa có hợp đồng")
+                    }
+                  />
+                  Không cần hợp đồng (VD: công ty con chỉ đứng tờ khai, không ký hợp đồng riêng) — bỏ khỏi nhắc nhở
+                </label>
+              )}
               {canEdit && (
                 <div className="mt-2 flex gap-3">
                   <button
