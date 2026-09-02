@@ -20,7 +20,8 @@ export default async function NhanVienPage() {
   // duoc nua (xem migration 0039 — thu hoi quyen SELECT 2 cot nay cho ca
   // "authenticated", vi Supabase dung chung 1 role cho moi phong ban). Lay
   // rieng qua RPC (chi Ke toan/Giam doc goi duoc het) roi gop vao.
-  const NHAN_VIEN_COLUMNS = "id, ho_ten, phong_ban_id, email_tai_khoan, so_dien_thoai, so_nguoi_phu_thuoc, dang_lam_viec";
+  const NHAN_VIEN_COLUMNS =
+    "id, ho_ten, phong_ban_id, email_tai_khoan, so_dien_thoai, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, dang_lam_viec";
   const [{ data: rowsCoBan }, { data: phongBanList }, { data: luongList }] = await Promise.all([
     supabase.from("nhan_vien").select(NHAN_VIEN_COLUMNS).order("ho_ten"),
     supabase.from("phong_ban").select("id, ten").order("ten"),
@@ -47,6 +48,18 @@ export default async function NhanVienPage() {
     },
     { key: "email_tai_khoan", label: "Email đăng nhập", type: "email", required: true },
     { key: "so_dien_thoai", label: "Số điện thoại", type: "tel" },
+    {
+      key: "loai_nhan_su",
+      label: "Loại nhân sự",
+      type: "select",
+      required: true,
+      options: [
+        { value: "Cố định", label: "Cố định" },
+        { value: "Outsource", label: "Outsource" },
+      ],
+      hint: "Quyết định chính sách chấm công/lương áp dụng (ngày phép, ngày lễ...)",
+    },
+    { key: "ngay_vao_lam", label: "Ngày vào làm", type: "text", hint: "yyyy-mm-dd — dùng tính ngày phép theo thâm niên" },
     { key: "luong_co_dinh", label: "Lương cố định", type: "number", hint: "Dùng để tính Bảng lương hàng tháng" },
     {
       key: "muc_dong_bhxh",
