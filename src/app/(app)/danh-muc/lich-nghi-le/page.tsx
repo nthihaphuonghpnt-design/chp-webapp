@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import DanhMucManager, { type FieldConfig, type Row } from "@/components/danh-muc/DanhMucManager";
+import ThemNgayLeHangLoat from "@/components/danh-muc/ThemNgayLeHangLoat";
 
 const fields: FieldConfig[] = [
   { key: "ngay", label: "Ngày", type: "text", required: true, hint: "yyyy-mm-dd" },
@@ -17,7 +18,13 @@ export default async function LichNghiLePage() {
 
   return (
     <div>
+      {canEdit && (
+        <div className="mx-auto max-w-5xl px-4 pt-6">
+          <ThemNgayLeHangLoat />
+        </div>
+      )}
       <DanhMucManager
+        key={(data ?? []).length}
         table="lich_nghi_le"
         title="Lịch nghỉ lễ"
         fields={fields}
