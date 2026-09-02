@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { homNayVN, laNgayCanChamCong, danhSachNgay, CHAM_CONG_COLOR, type TrangThaiChamCong } from "@/lib/chamCong";
+import { homNayVN, trangThaiHienThi, danhSachNgay, CHAM_CONG_COLOR, type TrangThaiChamCong } from "@/lib/chamCong";
 
 interface ChamCongRow {
   id: string;
@@ -16,19 +16,23 @@ interface ChamCongRow {
 export default function ChamCongCuaToiView({
   nhanVienId,
   initialRows,
+  ngayLeList = [],
   soNgayLichSu = 30,
 }: {
   nhanVienId?: string;
   initialRows: ChamCongRow[];
+  ngayLeList?: string[];
   soNgayLichSu?: number;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<ChamCongRow[]>(initialRows);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
 
   const homNay = homNayVN();
   const rowHomNay = rows.find((r) => r.ngay === homNay);
+  const homNayLaNgayLe = ngayLeSet.has(homNay);
 
   async function handleChamCong() {
     if (!nhanVienId) return;
@@ -65,6 +69,11 @@ export default function ChamCongCuaToiView({
         </div>
       ) : (
         <div className="mt-3">
+          {homNayLaNgayLe && (
+            <p className="mb-2 text-xs text-purple-600">
+              Hôm nay là ngày nghỉ lễ — không bắt buộc chấm công, trừ khi bạn có đi làm.
+            </p>
+          )}
           <button
             onClick={handleChamCong}
             disabled={saving || !nhanVienId}
@@ -81,8 +90,7 @@ export default function ChamCongCuaToiView({
         <div className="mt-2 flex flex-col gap-1">
           {ngayBatDau.map((ngay) => {
             const row = rows.find((r) => r.ngay === ngay);
-            const laThieu = !row && ngay < homNay && laNgayCanChamCong(ngay);
-            const trangThai: TrangThaiChamCong | null = row ? (row.trang_thai as TrangThaiChamCong) : laThieu ? "Thiếu chấm công" : null;
+            const trangThai = trangThaiHienThi(ngay, row, ngayLeSet, homNay);
             if (!trangThai) return null;
             return (
               <div key={ngay} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-1.5 text-sm">

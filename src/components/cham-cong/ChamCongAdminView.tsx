@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
-import { danhSachNgay, laNgayCanChamCong, homNayVN, CHAM_CONG_COLOR, TRANG_THAI_CHAM_CONG, type TrangThaiChamCong } from "@/lib/chamCong";
+import { danhSachNgay, trangThaiHienThi, homNayVN, CHAM_CONG_COLOR, TRANG_THAI_CHAM_CONG } from "@/lib/chamCong";
 
 interface NhanVien {
   id: string;
@@ -32,11 +32,13 @@ export default function ChamCongAdminView({
   thangNam,
   nhanVienList,
   initialRows,
+  ngayLeList = [],
   currentNhanVienId,
 }: {
   thangNam: string;
   nhanVienList: NhanVien[];
   initialRows: ChamCongRow[];
+  ngayLeList?: string[];
   currentNhanVienId?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -46,6 +48,7 @@ export default function ChamCongAdminView({
   const [editingNgay, setEditingNgay] = useState<string | null>(null);
   const [form, setForm] = useState({ trang_thai: "Đi làm", ly_do_dieu_chinh: "" });
   const [saving, setSaving] = useState(false);
+  const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
 
   const [y, m] = thangNam.split("-").map(Number);
   const soNgayTrongThang = new Date(y, m, 0).getDate();
@@ -64,11 +67,11 @@ export default function ChamCongAdminView({
     for (const t of TRANG_THAI_CHAM_CONG) dem[t] = 0;
     let thieu = 0;
     for (const ngay of cacNgayTrongThang) {
-      if (ngay >= homNay) continue;
-      if (!laNgayCanChamCong(ngay)) continue;
       const r = rs.find((x) => x.ngay === ngay);
-      if (r) dem[r.trang_thai] = (dem[r.trang_thai] ?? 0) + 1;
-      else thieu += 1;
+      const trangThai = trangThaiHienThi(ngay, r, ngayLeSet, homNay);
+      if (!trangThai) continue;
+      if (trangThai === "Thiếu chấm công") thieu += 1;
+      else dem[trangThai] = (dem[trangThai] ?? 0) + 1;
     }
     return { nv, dem, thieu };
   });
@@ -174,8 +177,7 @@ export default function ChamCongAdminView({
           <div className="flex flex-col gap-1">
             {cacNgayTrongThang.map((ngay) => {
               const row = rows.find((r) => r.nhan_vien_id === nhanVienIdChon && r.ngay === ngay);
-              const laThieu = !row && ngay < homNay && laNgayCanChamCong(ngay);
-              const trangThai: TrangThaiChamCong | null = row ? (row.trang_thai as TrangThaiChamCong) : laThieu ? "Thiếu chấm công" : null;
+              const trangThai = trangThaiHienThi(ngay, row, ngayLeSet, homNay);
               const nguoiDc = row ? one(row.nguoi_dieu_chinh) : null;
               return (
                 <div key={ngay} className="rounded-lg border border-slate-100 p-2 text-sm">

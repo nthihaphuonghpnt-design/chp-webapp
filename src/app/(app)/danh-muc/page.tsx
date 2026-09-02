@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/danh-muc/hang-hoa", label: "Hàng hóa", desc: "Danh mục loại hàng hóa" },
   { href: "/danh-muc/dia-diem", label: "Địa điểm", desc: "Cảng, kho, nơi giao nhận" },
   { href: "/danh-muc/xe-van-chuyen", label: "Xe vận chuyển", desc: "Xe thuê ngoài, chọn khi nhập lô hàng" },
+  { href: "/danh-muc/lich-nghi-le", label: "Lịch nghỉ lễ", desc: "Ngày lễ theo quy định, tự áp dụng vào Chấm công" },
 ];
 
 export default function DanhMucIndexPage() {

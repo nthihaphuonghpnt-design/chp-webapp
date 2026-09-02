@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import ChamCongCuaToiView from "@/components/cham-cong/ChamCongCuaToiView";
 import ChamCongAdminView from "@/components/cham-cong/ChamCongAdminView";
+import DonNghiPhepView from "@/components/cham-cong/DonNghiPhepView";
+import DonNghiPhepAdminView from "@/components/cham-cong/DonNghiPhepAdminView";
 
 export default async function ChamCongPage({
   searchParams,
@@ -22,9 +24,13 @@ export default async function ChamCongPage({
 
   const isAdmin = user && ["Kế toán", "Giám đốc"].includes(user.phong_ban);
 
-  const [{ data: choMinh }, adminData] = await Promise.all([
+  const [{ data: choMinh }, { data: ngayLeList }, { data: donCuaToi }, adminData] = await Promise.all([
     user
       ? supabase.from("cham_cong").select("*").eq("nhan_vien_id", user.id).gte("ngay", ngay30TruocIso).order("ngay", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    supabase.from("lich_nghi_le").select("ngay").eq("dang_hoat_dong", true),
+    user
+      ? supabase.from("don_xin_nghi_phep").select("*").eq("nhan_vien_id", user.id).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
     isAdmin
       ? Promise.all([
@@ -34,9 +40,16 @@ export default async function ChamCongPage({
             .select("*, nguoi_dieu_chinh:nguoi_dieu_chinh_id(ho_ten)")
             .gte("ngay", thangBatDau)
             .lt("ngay", thangKetThuc),
+          supabase
+            .from("don_xin_nghi_phep")
+            .select("*, nhan_vien:nhan_vien_id(ho_ten)")
+            .order("created_at", { ascending: false })
+            .limit(200),
         ])
       : Promise.resolve(null),
   ]);
+
+  const ngayLe = (ngayLeList ?? []).map((r) => r.ngay as string);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
@@ -46,16 +59,31 @@ export default async function ChamCongPage({
         nhanVienId={user?.id}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         initialRows={(choMinh ?? []) as any[]}
+        ngayLeList={ngayLe}
+      />
+
+      <DonNghiPhepView
+        nhanVienId={user?.id}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        initialRows={(donCuaToi ?? []) as any[]}
       />
 
       {isAdmin && adminData && (
-        <ChamCongAdminView
-          thangNam={thangNam}
-          nhanVienList={adminData[0].data ?? []}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          initialRows={(adminData[1].data ?? []) as any[]}
-          currentNhanVienId={user?.id}
-        />
+        <>
+          <ChamCongAdminView
+            thangNam={thangNam}
+            nhanVienList={adminData[0].data ?? []}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            initialRows={(adminData[1].data ?? []) as any[]}
+            ngayLeList={ngayLe}
+            currentNhanVienId={user?.id}
+          />
+          <DonNghiPhepAdminView
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            initialRows={(adminData[2].data ?? []) as any[]}
+            currentNhanVienId={user?.id}
+          />
+        </>
       )}
     </div>
   );

@@ -31,6 +31,26 @@ export function laNgayCanChamCong(ngayISO: string, ngayLeSet?: ReadonlySet<strin
   return true;
 }
 
+/**
+ * Trang thai hien thi cho 1 ngay cua 1 nhan vien: uu tien dong da luu, roi
+ * toi ngay le (khong can cham cong ma van hien "Nghi le" du chua co dong),
+ * roi Chu nhat/ngay tuong lai thi khong hien gi, con lai la ngay lam viec
+ * da qua chua co du lieu -> "Thieu cham cong".
+ */
+export function trangThaiHienThi(
+  ngay: string,
+  row: { trang_thai: string } | undefined,
+  ngayLeSet: ReadonlySet<string>,
+  homNay: string
+): TrangThaiChamCong | null {
+  if (row) return row.trang_thai as TrangThaiChamCong;
+  if (ngayLeSet.has(ngay)) return "Nghỉ lễ";
+  if (ngay >= homNay) return null;
+  const dow = new Date(`${ngay}T00:00:00`).getDay();
+  if (dow === 0) return null;
+  return "Thiếu chấm công";
+}
+
 /** Danh sach ngay (yyyy-mm-dd) tu ngayBatDau den ngayKetThuc (bao gom ca 2 dau). */
 export function danhSachNgay(ngayBatDau: string, ngayKetThuc: string): string[] {
   const out: string[] = [];
