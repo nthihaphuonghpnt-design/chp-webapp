@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mất kết nối - CHP</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f8fafc;
+        color: #334155;
+        text-align: center;
+        padding: 24px;
+      }
+      img { width: 64px; height: 64px; border-radius: 12px; }
+      h1 { font-size: 18px; margin: 0; }
+      p { font-size: 14px; color: #64748b; margin: 0; }
+      button {
+        margin-top: 8px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: none;
+        background: #1d4ed8;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="/icon-192.png" alt="CHP" />
+    <h1>Mất kết nối mạng</h1>
+    <p>Kiểm tra lại kết nối Internet rồi thử lại.</p>
+    <button onclick="location.reload()">Thử lại</button>
+  </body>
+</html>
