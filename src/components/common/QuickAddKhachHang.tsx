@@ -49,7 +49,6 @@ export default function QuickAddKhachHang({
   const fields: FieldConfig[] = useMemo(
     () => [
       { key: "ma_so_thue", label: "Mã số thuế", type: "text", hint: "Nhập rồi rời khỏi ô để tự động tra cứu tên, địa chỉ" },
-      { key: "ma_khach_hang", label: "Mã KH", type: "text", hint: "VD: Apple-000 (công ty mẹ/đại diện nhóm), Apple-001, Apple-002 (công ty con)" },
       { key: "ten_day_du", label: "Tên đầy đủ", type: "text", required: true },
       { key: "ten_viet_tat", label: "Tên viết tắt", type: "text" },
       {
