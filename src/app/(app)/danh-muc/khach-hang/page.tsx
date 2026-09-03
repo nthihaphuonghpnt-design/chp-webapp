@@ -13,6 +13,7 @@ export default async function KhachHangPage() {
 
   const fields: FieldConfig[] = [
     { key: "ma_so_thue", label: "Mã số thuế", type: "text", hint: "Nhập rồi rời khỏi ô để tự động tra cứu tên, địa chỉ" },
+    { key: "ma_khach_hang", label: "Mã KH", type: "text", hint: "VD: Apple-000 (công ty mẹ/đại diện nhóm), Apple-001, Apple-002 (công ty con) — tự đặt quy ước, hệ thống không tự sinh" },
     { key: "ten_day_du", label: "Tên đầy đủ", type: "text", required: true },
     { key: "ten_viet_tat", label: "Tên viết tắt", type: "text" },
     {
@@ -20,8 +21,9 @@ export default async function KhachHangPage() {
       label: "Nhóm khách hàng",
       type: "select",
       options: (nhomList ?? []).map((n) => ({ value: n.id, label: n.ten })),
-      hint: "Để trống nếu khách hàng độc lập, không thuộc nhóm nào. Quản lý nhóm ở Danh mục → Nhóm khách hàng.",
+      hint: "Để trống nếu khách hàng độc lập, không thuộc nhóm nào. Chưa có nhóm cần thì bấm \"+\" tạo ngay tại đây.",
       showInList: false,
+      quickAddTable: "nhom_khach_hang",
     },
     { key: "dia_chi", label: "Địa chỉ", type: "text", showInList: false },
     { key: "nguoi_lien_he", label: "Người liên hệ", type: "text", showInList: false },
@@ -38,7 +40,7 @@ export default async function KhachHangPage() {
       initialRows={(data ?? []) as Row[]}
       canEdit={!!user}
       searchField="ten_day_du"
-      extraSearchFields={["ten_viet_tat", "ma_so_thue"]}
+      extraSearchFields={["ten_viet_tat", "ma_so_thue", "ma_khach_hang"]}
       taxLookup={{ taxField: "ma_so_thue", nameField: "ten_day_du", addressField: "dia_chi" }}
     />
   );
