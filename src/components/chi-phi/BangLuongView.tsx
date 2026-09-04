@@ -14,6 +14,7 @@ import {
   THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG,
 } from "@/lib/luong";
 import { createClient } from "@/lib/supabase/client";
+import { laNhanVienVanPhong } from "@/lib/chamCong";
 import MoneyInput from "@/components/common/MoneyInput";
 
 interface PhongBan {
@@ -173,7 +174,7 @@ export default function BangLuongView({
     return nhanVienList.map((nv) => {
       const pb = one(nv.phong_ban)?.ten ?? "";
       const luongCoDinhGoc = nv.luong_co_dinh ?? 0;
-      const luongCoDinh = apDungChamCong
+      const luongCoDinh = apDungChamCong && laNhanVienVanPhong(pb)
         ? tinhLuongCoBanTheoChamCong({
             loaiNhanSu: nv.loai_nhan_su,
             luongCoDinh: luongCoDinhGoc,
@@ -345,8 +346,8 @@ export default function BangLuongView({
       </p>
       <p className="mb-4 text-xs text-slate-400">
         {apDungChamCong
-          ? `Lương cố định tháng ${thangHoatDong} đã được tính lại theo dữ liệu Chấm công (ngày Đi làm + Nghỉ lễ + Nghỉ phép trong hạn mức / ngày công chuẩn; Nghỉ không phép và Thiếu chấm công không được trả lương). Nhân viên Outsource tính theo đơn giá/ngày × số ngày Đi làm thực tế.`
-          : `Lương cố định tháng ${thangHoatDong} đang tính nguyên tháng (chưa trừ theo Chấm công) — việc trừ theo ngày công chỉ áp dụng từ tháng ${THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG} trở đi.`}
+          ? `Lương cố định tháng ${thangHoatDong} đã được tính lại theo dữ liệu Chấm công (ngày Đi làm + Nghỉ lễ + Nghỉ phép trong hạn mức / ngày công chuẩn; Nghỉ không phép và Thiếu chấm công không được trả lương). Nhân viên Outsource tính theo đơn giá/ngày × số ngày Đi làm thực tế. Riêng Hiện trường/Sale không chấm công nên vẫn tính lương cố định nguyên tháng như cũ.`
+          : `Lương cố định tháng ${thangHoatDong} đang tính nguyên tháng (chưa trừ theo Chấm công) — việc trừ theo ngày công chỉ áp dụng từ tháng ${THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG} trở đi (riêng Hiện trường/Sale không chấm công nên luôn tính nguyên tháng).`}
       </p>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">

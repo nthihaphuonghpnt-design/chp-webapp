@@ -12,6 +12,7 @@ import {
   tinhLuongCoBanTheoChamCong,
   THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG,
 } from "@/lib/luong";
+import { laNhanVienVanPhong } from "@/lib/chamCong";
 
 interface PhongBan {
   ten: string;
@@ -151,7 +152,7 @@ export default function LuongCuaToiView({
   const luong = useMemo(() => {
     if (!nv) return null;
     const luongCoDinhGoc = nv.luong_co_dinh ?? 0;
-    const luongCoDinh = apDungChamCong
+    const luongCoDinh = apDungChamCong && laNhanVienVanPhong(pb)
       ? tinhLuongCoBanTheoChamCong({
           loaiNhanSu: nv.loai_nhan_su,
           luongCoDinh: luongCoDinhGoc,
@@ -285,9 +286,11 @@ export default function LuongCuaToiView({
         liệu chưa khớp thực tế, liên hệ Kế toán để đối chiếu.
       </p>
       <p className="mt-1 text-xs text-slate-400">
-        {apDungChamCong
-          ? "Lương cố định đã được tính theo dữ liệu Chấm công tháng " + thangHoatDong + " — xem chi tiết ngày công tại mục Chấm công."
-          : "Lương cố định hiện tính nguyên tháng, chưa trừ theo Chấm công (sẽ áp dụng từ tháng " + THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG + " trở đi)."}
+        {!laNhanVienVanPhong(pb)
+          ? "Phòng ban của bạn không chấm công nên lương cố định luôn tính nguyên tháng."
+          : apDungChamCong
+            ? "Lương cố định đã được tính theo dữ liệu Chấm công tháng " + thangHoatDong + " — xem chi tiết ngày công tại mục Chấm công."
+            : "Lương cố định hiện tính nguyên tháng, chưa trừ theo Chấm công (sẽ áp dụng từ tháng " + THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG + " trở đi)."}
       </p>
     </div>
   );

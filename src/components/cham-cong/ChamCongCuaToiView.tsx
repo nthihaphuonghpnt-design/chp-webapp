@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { homNayVN, trangThaiHienThi, danhSachNgay, CHAM_CONG_COLOR, type TrangThaiChamCong } from "@/lib/chamCong";
+import { homNayVN, trangThaiHienThi, danhSachNgay, ngayCuoiThang, CHAM_CONG_COLOR, type TrangThaiChamCong } from "@/lib/chamCong";
 
 interface ChamCongRow {
   id: string;
@@ -15,24 +16,28 @@ interface ChamCongRow {
 
 export default function ChamCongCuaToiView({
   nhanVienId,
-  initialRows,
+  homNayRow,
+  initialRowsThang,
+  thangNam,
   ngayLeList = [],
-  soNgayLichSu = 30,
 }: {
   nhanVienId?: string;
-  initialRows: ChamCongRow[];
+  homNayRow: ChamCongRow | null;
+  initialRowsThang: ChamCongRow[];
+  thangNam: string;
   ngayLeList?: string[];
-  soNgayLichSu?: number;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const [rows, setRows] = useState<ChamCongRow[]>(initialRows);
+  const router = useRouter();
+  const [rowHomNay, setRowHomNay] = useState<ChamCongRow | null>(homNayRow);
+  const [rowsThang, setRowsThang] = useState<ChamCongRow[]>(initialRowsThang);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
 
   const homNay = homNayVN();
-  const rowHomNay = rows.find((r) => r.ngay === homNay);
   const homNayLaNgayLe = ngayLeSet.has(homNay);
+  const cacNgayTrongThang = danhSachNgay(`${thangNam}-01`, ngayCuoiThang(thangNam));
 
   async function handleChamCong() {
     if (!nhanVienId) return;
@@ -48,13 +53,15 @@ export default function ChamCongCuaToiView({
       setError(err.message);
       return;
     }
-    setRows((prev) => [data as ChamCongRow, ...prev]);
+    setRowHomNay(data as ChamCongRow);
+    if (homNay.slice(0, 7) === thangNam) {
+      setRowsThang((prev) => [...prev, data as ChamCongRow]);
+    }
   }
 
-  const ngayBatDau = danhSachNgay(
-    new Date(new Date(homNay).getTime() - soNgayLichSu * 86400000).toISOString().slice(0, 10),
-    homNay
-  ).reverse();
+  function doiThang(thangMoi: string) {
+    router.push(`/cham-cong?thang=${thangMoi}`);
+  }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -85,11 +92,19 @@ export default function ChamCongCuaToiView({
         </div>
       )}
 
-      <details className="mt-4">
-        <summary className="cursor-pointer text-xs font-medium text-blue-600">Xem lịch sử chấm công gần đây</summary>
-        <div className="mt-2 flex flex-col gap-1">
-          {ngayBatDau.map((ngay) => {
-            const row = rows.find((r) => r.ngay === ngay);
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-700">Bảng chấm công tháng</p>
+          <input
+            type="month"
+            value={thangNam}
+            onChange={(e) => doiThang(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          {cacNgayTrongThang.map((ngay) => {
+            const row = rowsThang.find((r) => r.ngay === ngay);
             const trangThai = trangThaiHienThi(ngay, row, ngayLeSet, homNay);
             if (!trangThai) return null;
             return (
@@ -99,8 +114,11 @@ export default function ChamCongCuaToiView({
               </div>
             );
           })}
+          {cacNgayTrongThang.every((ngay) => !trangThaiHienThi(ngay, rowsThang.find((r) => r.ngay === ngay), ngayLeSet, homNay)) && (
+            <p className="py-4 text-center text-sm text-slate-400">Chưa có dữ liệu chấm công tháng này.</p>
+          )}
         </div>
-      </details>
+      </div>
     </div>
   );
 }

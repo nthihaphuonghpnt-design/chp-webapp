@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { homNayVN, laNhanVienVanPhong } from "@/lib/chamCong";
 import ChamCongCuaToiView from "@/components/cham-cong/ChamCongCuaToiView";
 import ChamCongAdminView from "@/components/cham-cong/ChamCongAdminView";
 import DonNghiPhepView from "@/components/cham-cong/DonNghiPhepView";
@@ -19,22 +20,29 @@ export default async function ChamCongPage({
   const [thangY, thangM] = thangNam.split("-").map(Number);
   const thangBatDau = `${thangNam}-01`;
   const thangKetThuc = new Date(Date.UTC(thangY, thangM, 1)).toISOString().slice(0, 10);
-
-  const ngay30TruocIso = new Date(now.getTime() - 32 * 86400000).toISOString().slice(0, 10);
+  const homNay = homNayVN();
 
   const isAdmin = user && ["Kế toán", "Giám đốc"].includes(user.phong_ban);
+  const isVanPhong = laNhanVienVanPhong(user?.phong_ban);
 
-  const [{ data: choMinh }, { data: ngayLeList }, { data: donCuaToi }, adminData] = await Promise.all([
-    user
-      ? supabase.from("cham_cong").select("*").eq("nhan_vien_id", user.id).gte("ngay", ngay30TruocIso).order("ngay", { ascending: false })
+  const [{ data: homNayRow }, { data: choMinhThang }, { data: ngayLeList }, { data: donCuaToi }, adminData] = await Promise.all([
+    user && isVanPhong
+      ? supabase.from("cham_cong").select("*").eq("nhan_vien_id", user.id).eq("ngay", homNay).maybeSingle()
+      : Promise.resolve({ data: null }),
+    user && isVanPhong
+      ? supabase.from("cham_cong").select("*").eq("nhan_vien_id", user.id).gte("ngay", thangBatDau).lt("ngay", thangKetThuc)
       : Promise.resolve({ data: [] }),
     supabase.from("lich_nghi_le").select("ngay").eq("dang_hoat_dong", true),
-    user
+    user && isVanPhong
       ? supabase.from("don_xin_nghi_phep").select("*").eq("nhan_vien_id", user.id).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
     isAdmin
       ? Promise.all([
-          supabase.from("nhan_vien").select("id, ho_ten, loai_nhan_su").eq("dang_lam_viec", true).order("ho_ten"),
+          supabase
+            .from("nhan_vien")
+            .select("id, ho_ten, loai_nhan_su, phong_ban:phong_ban_id(ten)")
+            .eq("dang_lam_viec", true)
+            .order("ho_ten"),
           supabase
             .from("cham_cong")
             .select("*, nguoi_dieu_chinh:nguoi_dieu_chinh_id(ho_ten)")
@@ -51,28 +59,47 @@ export default async function ChamCongPage({
 
   const ngayLe = (ngayLeList ?? []).map((r) => r.ngay as string);
 
+  // Cham cong chi danh cho NVVP — loc bo Hien truong/Sale khoi danh sach
+  // Ke toan/Giam doc quan ly, khong can theo doi cham cong cho ho.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nhanVienVanPhongList = ((adminData?.[0].data ?? []) as any[]).filter((nv) => {
+    const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
+    return laNhanVienVanPhong(pb?.ten);
+  });
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Chấm công</h1>
 
-      <ChamCongCuaToiView
-        nhanVienId={user?.id}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        initialRows={(choMinh ?? []) as any[]}
-        ngayLeList={ngayLe}
-      />
+      {isVanPhong ? (
+        <>
+          <ChamCongCuaToiView
+            nhanVienId={user?.id}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            homNayRow={homNayRow as any}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            initialRowsThang={(choMinhThang ?? []) as any[]}
+            thangNam={thangNam}
+            ngayLeList={ngayLe}
+          />
 
-      <DonNghiPhepView
-        nhanVienId={user?.id}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        initialRows={(donCuaToi ?? []) as any[]}
-      />
+          <DonNghiPhepView
+            nhanVienId={user?.id}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            initialRows={(donCuaToi ?? []) as any[]}
+          />
+        </>
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
+          Chấm công không áp dụng cho phòng ban của bạn.
+        </div>
+      )}
 
       {isAdmin && adminData && (
         <>
           <ChamCongAdminView
             thangNam={thangNam}
-            nhanVienList={adminData[0].data ?? []}
+            nhanVienList={nhanVienVanPhongList}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             initialRows={(adminData[1].data ?? []) as any[]}
             ngayLeList={ngayLe}

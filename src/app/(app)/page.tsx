@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CONG_TY } from "@/lib/excel";
-import { homNayVN } from "@/lib/chamCong";
+import { homNayVN, laNhanVienVanPhong } from "@/lib/chamCong";
 import { trongCuaSoNhacCuoiThang } from "@/lib/nhacViec";
 
 function loiChao() {
@@ -27,106 +27,136 @@ export default async function HomePage() {
   let daChamCongHomNay = true;
   const lichSapToi: { noi_dung: string; ngay_du_kien: string; qua_han: boolean }[] = [];
   const congViecMucs: CongViecMuc[] = [];
+  const tamUngChoDuyet: { ten: string; soTien: number; loai: string }[] = [];
 
   if (user) {
     const supabase = await createClient();
+    const trongCuaSo = trongCuaSoNhacCuoiThang(homNay);
+    const isKtGd = ["Kế toán", "Giám đốc"].includes(user.phong_ban);
+    const isChungTu = user.phong_ban === "Chứng từ" || isKtGd;
+    const isSale = user.phong_ban === "Sale";
+    const isVanPhong = laNhanVienVanPhong(user.phong_ban);
+    const trongVong30Ngay = new Date(new Date(`${homNay}T00:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
+    const hopDongCot = "so_hop_dong, khach_hang:khach_hang_id(ten_day_du), nha_cung_cap:nha_cung_cap_id(ten), trang_thai_hop_dong, ngay_het_han";
 
-    const { data: cc } = await supabase
-      .from("cham_cong")
-      .select("id")
-      .eq("nhan_vien_id", user.id)
-      .eq("ngay", homNay)
-      .maybeSingle();
-    daChamCongHomNay = !!cc;
-
-    const { data: lnn } = await supabase
-      .from("lich_nhac_nho")
-      .select("noi_dung, ngay_du_kien")
-      .eq("nguoi_phu_trach_id", user.id)
-      .eq("trang_thai", "Chưa thực hiện")
-      .order("ngay_du_kien")
-      .limit(5);
-    for (const r of lnn ?? []) {
-      lichSapToi.push({ noi_dung: r.noi_dung, ngay_du_kien: r.ngay_du_kien, qua_han: r.ngay_du_kien < homNay });
-    }
-
-    if (trongCuaSoNhacCuoiThang(homNay)) {
-      const isKtGd = ["Kế toán", "Giám đốc"].includes(user.phong_ban);
-      const isChungTu = user.phong_ban === "Chứng từ" || isKtGd;
-
-      if (user.phong_ban === "Sale") {
-        const { data } = await supabase
-          .from("don_hang")
-          .select("so_don_hang")
-          .eq("sale_phu_trach_id", user.id)
-          .neq("trang_thai", "Hoàn tất");
-        if (data && data.length > 0) {
-          congViecMucs.push({ nhan: "Đơn hàng chưa Hoàn tất", href: "/don-hang", items: data.map((d) => d.so_don_hang) });
-        }
-      }
-
-      const [{ data: cp }, { data: tn }] = await Promise.all([
-        supabase
-          .from("phat_sinh_chi_phi")
-          .select("don_hang:don_hang_id(so_don_hang)")
-          .eq("nguoi_nhap_id", user.id)
-          .eq("trang_thai", "Chờ duyệt"),
-        supabase
-          .from("don_thue_ngoai")
-          .select("don_hang:don_hang_id(so_don_hang)")
-          .eq("nguoi_nhap_id", user.id)
-          .eq("trang_thai", "Chờ duyệt"),
-      ]);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tenChiPhi = [...(cp ?? []), ...(tn ?? [])].map((r: any) => {
-        const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
-        return dh?.so_don_hang ?? "—";
-      });
-      if (tenChiPhi.length > 0) {
-        congViecMucs.push({ nhan: "Chi phí / thuê ngoài chờ duyệt", href: "/don-hang", items: tenChiPhi });
-      }
-
-      if (isKtGd) {
-        const trongVong30Ngay = new Date(new Date(`${homNay}T00:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
-        const hopDongCot = "so_hop_dong, khach_hang:khach_hang_id(ten_day_du), nha_cung_cap:nha_cung_cap_id(ten), trang_thai_hop_dong, ngay_het_han";
-        const [{ data: hdChuaCo }, { data: hdSapHetHan }] = await Promise.all([
-          supabase.from("hop_dong_khach_hang").select(hopDongCot).eq("trang_thai_hop_dong", "Chưa có hợp đồng"),
-          supabase
+    // Chay song song toan bo truy van doc lap thay vi await tuan tu — trang
+    // chu la trang tai dau tien moi lan dang nhap nen cang nhieu round-trip
+    // noi tiep cang cam giac cham tren mang di dong.
+    const [
+      { data: cc },
+      { data: lnn },
+      { data: donHangSale },
+      { data: cp },
+      { data: tn },
+      { data: hdChuaCo },
+      { data: hdSapHetHan },
+      { data: tk },
+      { data: tamUng },
+    ] = await Promise.all([
+      isVanPhong
+        ? supabase.from("cham_cong").select("id").eq("nhan_vien_id", user.id).eq("ngay", homNay).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("lich_nhac_nho")
+        .select("noi_dung, ngay_du_kien")
+        .eq("nguoi_phu_trach_id", user.id)
+        .eq("trang_thai", "Chưa thực hiện")
+        .order("ngay_du_kien")
+        .limit(5),
+      trongCuaSo && isSale
+        ? supabase.from("don_hang").select("so_don_hang").eq("sale_phu_trach_id", user.id).neq("trang_thai", "Hoàn tất")
+        : Promise.resolve({ data: null }),
+      trongCuaSo
+        ? supabase
+            .from("phat_sinh_chi_phi")
+            .select("don_hang:don_hang_id(so_don_hang)")
+            .eq("nguoi_nhap_id", user.id)
+            .eq("trang_thai", "Chờ duyệt")
+        : Promise.resolve({ data: null }),
+      trongCuaSo
+        ? supabase
+            .from("don_thue_ngoai")
+            .select("don_hang:don_hang_id(so_don_hang)")
+            .eq("nguoi_nhap_id", user.id)
+            .eq("trang_thai", "Chờ duyệt")
+        : Promise.resolve({ data: null }),
+      trongCuaSo && isKtGd
+        ? supabase.from("hop_dong_khach_hang").select(hopDongCot).eq("trang_thai_hop_dong", "Chưa có hợp đồng")
+        : Promise.resolve({ data: null }),
+      trongCuaSo && isKtGd
+        ? supabase
             .from("hop_dong_khach_hang")
             .select(hopDongCot)
             .eq("trang_thai_hop_dong", "Đã có hợp đồng")
             .not("ngay_het_han", "is", null)
             .lte("ngay_het_han", trongVong30Ngay)
-            .gte("ngay_het_han", homNay),
-        ]);
-        const hd = [...(hdChuaCo ?? []), ...(hdSapHetHan ?? [])];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const tenHopDong = hd.map((r: any) => {
-          const kh = Array.isArray(r.khach_hang) ? r.khach_hang[0] : r.khach_hang;
-          const ncc = Array.isArray(r.nha_cung_cap) ? r.nha_cung_cap[0] : r.nha_cung_cap;
-          const ten = kh?.ten_day_du ?? ncc?.ten ?? "—";
-          return r.trang_thai_hop_dong === "Chưa có hợp đồng" ? `${ten} (chưa có HĐ)` : `${ten} (sắp hết hạn ${r.ngay_het_han})`;
-        });
-        if (tenHopDong.length > 0) {
-          congViecMucs.push({ nhan: "Hợp đồng chưa có / sắp hết hạn", href: "/khach-hang/hop-dong", items: tenHopDong });
-        }
-      }
+            .gte("ngay_het_han", homNay)
+        : Promise.resolve({ data: null }),
+      trongCuaSo && isChungTu
+        ? supabase
+            .from("to_khai_hai_quan")
+            .select("so_to_khai, don_hang:don_hang_id(so_don_hang)")
+            .neq("trang_thai", "Đã thông quan")
+            .neq("trang_thai", "Giải phóng hàng")
+        : Promise.resolve({ data: null }),
+      // Tam ung/giai chi cho duyet: luon hien cho Ke toan/Giam doc (khong
+      // doi den cuoi thang), vi nguoi de nghi thuong can tien gap.
+      isKtGd
+        ? supabase
+            .from("tam_ung_giai_chi")
+            .select("loai, so_tien, doi_tuong, ten_tai_xe, nhan_vien:nhan_vien_id(ho_ten)")
+            .eq("trang_thai", "Đề nghị")
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: null }),
+    ]);
 
-      if (isChungTu) {
-        const { data: tk } = await supabase
-          .from("to_khai_hai_quan")
-          .select("so_to_khai, don_hang:don_hang_id(so_don_hang)")
-          .neq("trang_thai", "Đã thông quan")
-          .neq("trang_thai", "Giải phóng hàng");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const tenTk = (tk ?? []).map((r: any) => {
-          const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
-          return `${dh?.so_don_hang ?? "—"}${r.so_to_khai ? ` — TK ${r.so_to_khai}` : " — chưa có số TK"}`;
-        });
-        if (tenTk.length > 0) {
-          congViecMucs.push({ nhan: "Tờ khai hải quan chưa hoàn tất", href: "/don-hang", items: tenTk });
-        }
-      }
+    daChamCongHomNay = !!cc;
+
+    for (const r of lnn ?? []) {
+      lichSapToi.push({ noi_dung: r.noi_dung, ngay_du_kien: r.ngay_du_kien, qua_han: r.ngay_du_kien < homNay });
+    }
+
+    if (donHangSale && donHangSale.length > 0) {
+      congViecMucs.push({ nhan: "Đơn hàng chưa Hoàn tất", href: "/don-hang", items: donHangSale.map((d) => d.so_don_hang) });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tenChiPhi = [...(cp ?? []), ...(tn ?? [])].map((r: any) => {
+      const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+      return dh?.so_don_hang ?? "—";
+    });
+    if (tenChiPhi.length > 0) {
+      congViecMucs.push({ nhan: "Chi phí / thuê ngoài chờ duyệt", href: "/don-hang", items: tenChiPhi });
+    }
+
+    const hd = [...(hdChuaCo ?? []), ...(hdSapHetHan ?? [])];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tenHopDong = hd.map((r: any) => {
+      const kh = Array.isArray(r.khach_hang) ? r.khach_hang[0] : r.khach_hang;
+      const ncc = Array.isArray(r.nha_cung_cap) ? r.nha_cung_cap[0] : r.nha_cung_cap;
+      const ten = kh?.ten_day_du ?? ncc?.ten ?? "—";
+      return r.trang_thai_hop_dong === "Chưa có hợp đồng" ? `${ten} (chưa có HĐ)` : `${ten} (sắp hết hạn ${r.ngay_het_han})`;
+    });
+    if (tenHopDong.length > 0) {
+      congViecMucs.push({ nhan: "Hợp đồng chưa có / sắp hết hạn", href: "/khach-hang/hop-dong", items: tenHopDong });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tenTk = (tk ?? []).map((r: any) => {
+      const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+      return `${dh?.so_don_hang ?? "—"}${r.so_to_khai ? ` — TK ${r.so_to_khai}` : " — chưa có số TK"}`;
+    });
+    if (tenTk.length > 0) {
+      congViecMucs.push({ nhan: "Tờ khai hải quan chưa hoàn tất", href: "/don-hang", items: tenTk });
+    }
+
+    for (const r of tamUng ?? []) {
+      const nv = Array.isArray(r.nhan_vien) ? r.nhan_vien[0] : r.nhan_vien;
+      tamUngChoDuyet.push({
+        ten: r.doi_tuong === "Tài xế" ? (r.ten_tai_xe ?? "—") : (nv?.ho_ten ?? "—"),
+        soTien: r.so_tien,
+        loai: r.loai,
+      });
     }
   }
 
@@ -139,6 +169,23 @@ export default async function HomePage() {
         >
           <span>⏰ Bạn chưa chấm công hôm nay — bấm để chấm công ngay.</span>
           <span className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white">Chấm công</span>
+        </Link>
+      )}
+
+      {tamUngChoDuyet.length > 0 && (
+        <Link
+          href="/tam-ung-giai-chi"
+          className="mb-4 block rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm hover:bg-amber-100"
+        >
+          <p className="text-sm font-semibold text-amber-800">💰 Có {tamUngChoDuyet.length} đề nghị tạm ứng/giải chi chờ duyệt:</p>
+          <div className="mt-1 flex flex-col gap-0.5 text-sm text-amber-700">
+            {tamUngChoDuyet.slice(0, 6).map((t, i) => (
+              <span key={i}>
+                {t.loai} — {t.ten}: {Math.round(t.soTien).toLocaleString("en-US")}
+              </span>
+            ))}
+            {tamUngChoDuyet.length > 6 && <span>... và {tamUngChoDuyet.length - 6} đề nghị khác</span>}
+          </div>
         </Link>
       )}
 

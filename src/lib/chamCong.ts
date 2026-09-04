@@ -7,6 +7,16 @@ export function homNayVN(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
 }
 
+/**
+ * Cham cong chi ap dung cho nhan vien van phong (NVVP) — Hien truong va
+ * Sale khong cham cong (lam viec ngoai hien truong/theo lo hang, khong
+ * theo gio hanh chinh co dinh nen khong phu hop mo hinh ngay cong nay).
+ */
+const PHONG_BAN_KHONG_CHAM_CONG = ["Hiện trường", "Sale"];
+export function laNhanVienVanPhong(phongBan: string | null | undefined): boolean {
+  return !!phongBan && !PHONG_BAN_KHONG_CHAM_CONG.includes(phongBan);
+}
+
 export const TRANG_THAI_CHAM_CONG = ["Đi làm", "Nghỉ phép", "Nghỉ lễ", "Nghỉ không phép", "Nghỉ khác"] as const;
 export type TrangThaiChamCong = (typeof TRANG_THAI_CHAM_CONG)[number] | "Thiếu chấm công";
 
