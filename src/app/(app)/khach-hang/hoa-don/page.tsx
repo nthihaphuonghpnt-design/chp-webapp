@@ -21,7 +21,11 @@ export default async function HoaDonPage() {
         .from("hoa_don_xuat")
         .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
         .order("ngay_xuat", { ascending: false }),
-      supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
+      supabase
+        .from("khach_hang")
+        .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
+        .eq("dang_hoat_dong", true)
+        .order("ten_day_du"),
       supabase.from("don_hang").select("id, so_don_hang, khach_hang_id").order("created_at", { ascending: false }).limit(500),
       supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id"),
       supabase.from("dinh_kem").select("*").not("hoa_don_id", "is", null).order("thoi_gian_upload", { ascending: false }),
@@ -49,7 +53,10 @@ export default async function HoaDonPage() {
     <HoaDonView
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       initialRows={(rows ?? []) as any[]}
-      khachHangList={khachHangList ?? []}
+      khachHangList={(khachHangList ?? []).map((k) => {
+        const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
+        return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_ten: nhom?.ten ?? null };
+      })}
       donHangList={donHangList ?? []}
       lienKetAll={lienKetAll ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

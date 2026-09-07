@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -13,21 +14,50 @@ interface NavItem {
   roles?: string[];
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Trang chủ" },
-  { href: "/don-hang", label: "Đơn hàng" },
-  { href: "/lich-nhac-nho", label: "Lịch nhắc nhở" },
-  { href: "/tam-ung-giai-chi", label: "Tạm ứng & Giải chi" },
-  { href: "/luong-cua-toi", label: "Lương của tôi" },
-  { href: "/khach-hang/hop-dong", label: "Hợp đồng khách hàng", roles: ["Sale", "Kế toán", "Giám đốc"] },
-  { href: "/khach-hang/hoa-don", label: "Hóa đơn xuất", roles: ["Sale", "Chứng từ", "Kế toán", "Giám đốc"] },
-  { href: "/khach-hang/bang-ke", label: "Bảng kê", roles: ["Kế toán"] },
-  { href: "/thu-chi/so-quy", label: "Sổ quỹ", roles: ["Kế toán", "Giám đốc"] },
-  { href: "/bao-cao", label: "Báo cáo", roles: ["Sale", "Kế toán", "Giám đốc"] },
-  { href: "/chi-phi/dinh-phi-thang", label: "Định phí tháng", roles: ["Kế toán", "Giám đốc"] },
-  { href: "/chi-phi/bang-luong", label: "Bảng lương", roles: ["Kế toán", "Giám đốc"] },
-  { href: "/danh-muc/bang-gia-khach-hang", label: "Bảng giá khách hàng", roles: ["Sale", "Kế toán", "Giám đốc"] },
-  { href: "/danh-muc", label: "Danh mục dùng chung" },
+interface NavSection {
+  /** Không có label = nhóm mở đầu, không hiện tiêu đề. */
+  label?: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    items: [
+      { href: "/", label: "Trang chủ" },
+      { href: "/cham-cong", label: "Chấm công" },
+      { href: "/lich-nhac-nho", label: "Lịch nhắc nhở" },
+    ],
+  },
+  {
+    label: "Đơn hàng & khách hàng",
+    items: [
+      { href: "/don-hang", label: "Đơn hàng" },
+      { href: "/khach-hang/hop-dong", label: "Hợp đồng khách hàng", roles: ["Sale", "Kế toán", "Giám đốc"] },
+      { href: "/khach-hang/hoa-don", label: "Hóa đơn xuất", roles: ["Sale", "Chứng từ", "Kế toán", "Giám đốc"] },
+      { href: "/khach-hang/bang-ke", label: "Bảng kê", roles: ["Kế toán"] },
+      { href: "/danh-muc/bang-gia-khach-hang", label: "Bảng giá khách hàng", roles: ["Sale", "Kế toán", "Giám đốc"] },
+    ],
+  },
+  {
+    label: "Tài chính",
+    items: [
+      { href: "/tam-ung-giai-chi", label: "Tạm ứng & Giải chi" },
+      { href: "/thu-chi/so-quy", label: "Sổ quỹ", roles: ["Kế toán", "Giám đốc"] },
+      { href: "/chi-phi/dinh-phi-thang", label: "Định phí tháng", roles: ["Kế toán", "Giám đốc"] },
+      { href: "/bao-cao", label: "Báo cáo", roles: ["Sale", "Kế toán", "Giám đốc"] },
+    ],
+  },
+  {
+    label: "Nhân sự",
+    items: [
+      { href: "/luong-cua-toi", label: "Lương của tôi" },
+      { href: "/chi-phi/bang-luong", label: "Bảng lương", roles: ["Kế toán", "Giám đốc"] },
+      { href: "/nhan-vien/hop-dong", label: "Hợp đồng nhân viên", roles: ["Kế toán", "Giám đốc"] },
+    ],
+  },
+  {
+    items: [{ href: "/danh-muc", label: "Danh mục dùng chung" }],
+  },
 ];
 
 export default function AppNav({ user }: { user: CurrentUser }) {
@@ -35,7 +65,10 @@ export default function AppNav({ user }: { user: CurrentUser }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user.phong_ban));
+  const visibleSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !item.roles || item.roles.includes(user.phong_ban)),
+  })).filter((section) => section.items.length > 0);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -53,7 +86,10 @@ export default function AppNav({ user }: { user: CurrentUser }) {
     <>
       {/* Top bar (mobile) */}
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:hidden">
-        <span className="font-semibold text-slate-900">CHP</span>
+        <div className="flex items-center gap-2">
+          <Image src="/logo-chp.jpg" alt="Châu Hoàng Phát" width={28} height={28} className="rounded" />
+          <span className="font-semibold text-slate-900">CHP</span>
+        </div>
         <button
           onClick={() => setMenuOpen((o) => !o)}
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600"
@@ -67,17 +103,24 @@ export default function AppNav({ user }: { user: CurrentUser }) {
           <p className="px-1 py-2 text-sm text-slate-500">
             {user.ho_ten} · {user.phong_ban}
           </p>
-          {visibleItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMenuOpen(false)}
-              className={`block rounded-lg px-3 py-2 text-sm font-medium ${
-                isActive(item.href) ? "bg-blue-50 text-blue-700" : "text-slate-700"
-              }`}
-            >
-              {item.label}
-            </Link>
+          {visibleSections.map((section, i) => (
+            <div key={section.label ?? `section-${i}`} className={i > 0 ? "mt-2 border-t border-slate-100 pt-2" : ""}>
+              {section.label && (
+                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{section.label}</p>
+              )}
+              {section.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`block rounded-lg px-3 py-2 text-sm font-medium ${
+                    isActive(item.href) ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           ))}
           <button
             onClick={handleSignOut}
@@ -90,23 +133,35 @@ export default function AppNav({ user }: { user: CurrentUser }) {
 
       {/* Sidebar (desktop) */}
       <aside className="hidden w-60 flex-col border-r border-slate-200 bg-white sm:flex">
-        <div className="border-b border-slate-100 px-5 py-5">
-          <p className="font-semibold text-slate-900">CHP</p>
-          <p className="text-xs text-slate-500">Quản lý nội bộ</p>
+        <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-5">
+          <Image src="/logo-chp.jpg" alt="Châu Hoàng Phát" width={38} height={38} className="rounded-lg" />
+          <div>
+            <p className="font-semibold text-slate-900">CHP</p>
+            <p className="text-xs text-slate-500">Quản lý nội bộ</p>
+          </div>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
-          {visibleItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                isActive(item.href)
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {item.label}
-            </Link>
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+          {visibleSections.map((section, i) => (
+            <div key={section.label ?? `section-${i}`} className={i > 0 ? "mt-3 border-t border-slate-100 pt-3" : ""}>
+              {section.label && (
+                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{section.label}</p>
+              )}
+              <div className="flex flex-col gap-1">
+                {section.items.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                      isActive(item.href)
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="border-t border-slate-100 px-5 py-4">

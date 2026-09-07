@@ -19,11 +19,15 @@ export default async function BangKePage({
     );
   }
 
-  const { data: khachHangList } = await supabase
+  const { data: khachHangRaw } = await supabase
     .from("khach_hang")
-    .select("id, ten_day_du, ten_viet_tat")
+    .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
     .eq("dang_hoat_dong", true)
     .order("ten_day_du");
+  const khachHangList = (khachHangRaw ?? []).map((k) => {
+    const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
+    return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_ten: nhom?.ten ?? null };
+  });
 
   let donHangIds: string[] = [];
   let donHangList: unknown[] = [];

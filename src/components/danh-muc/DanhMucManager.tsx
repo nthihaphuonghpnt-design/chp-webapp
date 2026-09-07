@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
+import { lookupTaxCode } from "@/lib/taxLookup";
 import MoneyInput from "@/components/common/MoneyInput";
 
 export type FieldType = "text" | "textarea" | "select" | "tel" | "email" | "number";
@@ -23,6 +24,12 @@ export interface FieldConfig {
   showInList?: boolean;
   /** Ghi chú nhỏ hiển thị dưới ô nhập trong form. */
   hint?: string;
+  /**
+   * Chi danh cho field type "select": ten bang de tao nhanh 1 option moi
+   * (chi co cot "ten") ngay trong form, khong phai thoat ra trang Danh muc
+   * rieng tao truoc roi quay lai chon (vd Nhom khach hang).
+   */
+  quickAddTable?: string;
 }
 
 export interface TaxLookupConfig {
@@ -51,6 +58,14 @@ interface Props {
   extraSearchFields?: string[];
   /** Tra cứu tự động theo mã số thuế (Khách hàng, Nhà cung cấp, Đối tác thuê ngoài). */
   taxLookup?: TaxLookupConfig;
+  /**
+   * Danh sach cot duoc phep doc lai sau khi luu (vd "id, ho_ten, ..."). Bo
+   * trong = doc het ("*"). Dung khi bang co cot bi gioi han quyen SELECT rieng
+   * (vi du nhan_vien.luong_co_dinh/muc_dong_bhxh — xem migration 0039) de
+   * tranh loi quyen lam hong ca thao tac luu; gia tri vua nhap van hien dung
+   * tren man hinh vi duoc gop truc tiep tu form, khong can doc lai tu DB.
+   */
+  selectColumns?: string;
 }
 
 export default function DanhMucManager({
@@ -64,6 +79,7 @@ export default function DanhMucManager({
   searchField,
   extraSearchFields,
   taxLookup,
+  selectColumns,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
@@ -130,26 +146,28 @@ export default function DanhMucManager({
         .from(table)
         .update(payload)
         .eq("id", editing.id)
-        .select()
+        .select(selectColumns)
         .single();
       if (err) {
         setError(err.message);
         setSaving(false);
         return;
       }
-      setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
+      // Gop payload vua luu de vao du du lieu tren man hinh du selectColumns co
+      // loai tru vai cot (vi du luong_co_dinh) khoi ket qua doc lai.
+      setRows((prev) => prev.map((r) => (r.id === editing.id ? { ...(data as unknown as Row), ...payload } : r)));
     } else {
       const { data, error: err } = await supabase
         .from(table)
         .insert({ ...payload, [statusField]: true })
-        .select()
+        .select(selectColumns)
         .single();
       if (err) {
         setError(err.message);
         setSaving(false);
         return;
       }
-      setRows((prev) => [data as Row, ...prev]);
+      setRows((prev) => [{ ...(data as unknown as Row), ...payload }, ...prev]);
     }
 
     setSaving(false);
@@ -164,10 +182,10 @@ export default function DanhMucManager({
       .from(table)
       .update({ [statusField]: newValue })
       .eq("id", row.id)
-      .select()
+      .select(selectColumns)
       .single();
     if (!err && data) {
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...(data as unknown as Row), [statusField]: newValue } : r)));
     }
   }
 
@@ -280,7 +298,7 @@ export default function DanhMucManager({
       return;
     }
 
-    const { data, error: err } = await supabase.from(table).insert(records).select();
+    const { data, error: err } = await supabase.from(table).insert(records).select(selectColumns);
     setImporting(false);
 
     if (err) {
@@ -288,7 +306,8 @@ export default function DanhMucManager({
       return;
     }
 
-    setRows((prev) => [...((data as Row[]) ?? []), ...prev]);
+    const savedRows = ((data as unknown as Row[]) ?? []).map((d, i) => ({ ...d, ...records[i] }));
+    setRows((prev) => [...savedRows, ...prev]);
     setImportSummary({ success: data?.length ?? 0, errors: rowErrors });
   }
 
@@ -510,21 +529,7 @@ export default function DanhMucManager({
   );
 }
 
-async function lookupTaxCode(taxCode: string): Promise<{ name: string; address: string } | null> {
-  try {
-    const res = await fetch(`https://api.vietqr.io/v2/business/${encodeURIComponent(taxCode)}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json?.code === "00" && json?.data) {
-      return { name: json.data.name ?? "", address: json.data.address ?? "" };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function FormModal({
+export function FormModal({
   fields,
   initial,
   saving,
@@ -550,9 +555,32 @@ function FormModal({
   });
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
+  const [extraOptions, setExtraOptions] = useState<Record<string, SelectOption[]>>({});
+  const [quickAddKey, setQuickAddKey] = useState<string | null>(null);
+  const [quickAddText, setQuickAddText] = useState("");
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
 
   function set(key: string, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleQuickAdd(f: FieldConfig) {
+    if (!f.quickAddTable || !quickAddText.trim()) return;
+    setQuickAddSaving(true);
+    setQuickAddError(null);
+    const supabase = createClient();
+    const { data, error: err } = await supabase.from(f.quickAddTable).insert({ ten: quickAddText.trim() }).select("id, ten").single();
+    setQuickAddSaving(false);
+    if (err) {
+      setQuickAddError(err.message);
+      return;
+    }
+    const opt = { value: data.id as string, label: data.ten as string };
+    setExtraOptions((prev) => ({ ...prev, [f.key]: [...(prev[f.key] ?? []), opt] }));
+    set(f.key, opt.value);
+    setQuickAddKey(null);
+    setQuickAddText("");
   }
 
   async function handleTaxBlur() {
@@ -608,19 +636,63 @@ function FormModal({
                   className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
                 />
               ) : f.type === "select" ? (
-                <select
-                  required={f.required}
-                  value={values[f.key]}
-                  onChange={(e) => set(f.key, e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">-- Chọn --</option>
-                  {f.options?.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <div className="flex gap-2">
+                    <select
+                      required={f.required}
+                      value={values[f.key]}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">-- Chọn --</option>
+                      {[...(f.options ?? []), ...(extraOptions[f.key] ?? [])].map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    {f.quickAddTable && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickAddKey(quickAddKey === f.key ? null : f.key);
+                          setQuickAddText("");
+                          setQuickAddError(null);
+                        }}
+                        title={`Thêm ${f.label.toLowerCase()} mới`}
+                        className="shrink-0 rounded-lg border border-slate-300 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                      >
+                        +
+                      </button>
+                    )}
+                  </div>
+                  {quickAddKey === f.key && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        autoFocus
+                        value={quickAddText}
+                        onChange={(e) => setQuickAddText(e.target.value)}
+                        placeholder={`Tên ${f.label.toLowerCase()} mới`}
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleQuickAdd(f);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={quickAddSaving || !quickAddText.trim()}
+                        onClick={() => handleQuickAdd(f)}
+                        className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      >
+                        {quickAddSaving ? "Đang lưu..." : "Lưu"}
+                      </button>
+                    </div>
+                  )}
+                  {quickAddKey === f.key && quickAddError && <p className="mt-1 text-xs text-red-600">{quickAddError}</p>}
+                </>
               ) : f.type === "number" ? (
                 <MoneyInput
                   required={f.required}

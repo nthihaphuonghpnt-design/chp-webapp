@@ -15,6 +15,12 @@ interface KhachHang {
   id: string;
   ten_day_du: string;
   ten_viet_tat: string | null;
+  nhom_khach_hang_ten?: string | null;
+}
+/** Kem ten nhom (vd Apple Trans) de chon dung phap nhan, tranh nham giua cac cong ty con cung nhom. */
+function khOptionLabel(k: KhachHang) {
+  const ten = k.ten_viet_tat || k.ten_day_du;
+  return k.nhom_khach_hang_ten ? `${ten} — (${k.nhom_khach_hang_ten})` : ten;
 }
 
 interface Row {
@@ -400,7 +406,7 @@ function BangGiaForm({
     setHangHoaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }));
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const loaiOptions = loaiChiPhiList.map((l) => ({ value: l.id, label: l.ten }));
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 

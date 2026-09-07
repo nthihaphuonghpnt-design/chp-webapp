@@ -10,6 +10,12 @@ interface KhachHang {
   id: string;
   ten_day_du: string;
   ten_viet_tat: string | null;
+  nhom_khach_hang_ten?: string | null;
+}
+/** Kem ten nhom (vd Apple Trans) de chon dung phap nhan, tranh nham giua cac cong ty con cung nhom. */
+function khOptionLabel(k: KhachHang) {
+  const ten = k.ten_viet_tat || k.ten_day_du;
+  return k.nhom_khach_hang_ten ? `${ten} — (${k.nhom_khach_hang_ten})` : ten;
 }
 interface KhachHangChiTiet {
   id: string;
@@ -100,7 +106,7 @@ export default function BangKeView({
   const [chonChiPhi, setChonChiPhi] = useState<Set<string>>(new Set(initialChiPhi.map((r) => r.id)));
   const [chonPhuThu, setChonPhuThu] = useState<Set<string>>(new Set(initialPhuThu.map((r) => r.id)));
 
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du }));
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const donHangOptions = donHangList.map((d) => ({
     value: d.id,
     label: `${d.so_don_hang} · ${d.ngay_len_don}${d.loai_kich_co ? ` · ${d.so_luong ?? 1}x${d.loai_kich_co}` : ""}`,

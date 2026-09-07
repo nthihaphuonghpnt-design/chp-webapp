@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import QuickAddSelect from "@/components/common/QuickAddSelect";
+import QuickAddKhachHang, { type KhachHangOption } from "@/components/common/QuickAddKhachHang";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { DonHang } from "@/types/database";
 
@@ -21,7 +23,8 @@ interface DiaDiemOption {
 }
 
 interface MasterData {
-  khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null }[];
+  khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null; nhom_khach_hang_ten?: string | null }[];
+  nhomKhachHang: { id: string; ten: string }[];
   loaiContainer: Option[];
   hangHoa: Option[];
   diaDiem: DiaDiemOption[];
@@ -47,6 +50,9 @@ export default function DonHangForm({
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaiContainerList, setLoaiContainerList] = useState(masterData.loaiContainer);
+  const [hangHoaList, setHangHoaList] = useState(masterData.hangHoa);
+  const [khachHangList, setKhachHangList] = useState<KhachHangOption[]>(masterData.khachHang);
 
   const [values, setValues] = useState({
     khach_hang_id: initial?.khach_hang_id ?? "",
@@ -85,6 +91,10 @@ export default function DonHangForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!values.khach_hang_id) {
+      setError("Vui lòng chọn khách hàng.");
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -144,19 +154,14 @@ export default function DonHangForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 pb-10">
       <Section title="Thông tin chung">
         <Field label="Khách hàng" required>
-          <select
-            required
+          <QuickAddKhachHang
+            options={khachHangList}
             value={values.khach_hang_id}
-            onChange={(e) => set("khach_hang_id", e.target.value)}
-            className={inputClass}
-          >
-            <option value="">-- Chọn khách hàng --</option>
-            {masterData.khachHang.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.ten_viet_tat || k.ten_day_du}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("khach_hang_id", v)}
+            onAdded={(row) => setKhachHangList((prev) => [...prev, row].sort((a, b) => (a.ten_viet_tat || a.ten_day_du || "").localeCompare(b.ten_viet_tat || b.ten_day_du || "")))}
+            nhomKhachHangList={masterData.nhomKhachHang}
+            placeholder="Gõ tên khách hàng..."
+          />
         </Field>
         <Field label="Sale phụ trách" required hint="Người nhận hoa hồng của đơn này">
           <select
@@ -194,14 +199,14 @@ export default function DonHangForm({
           </select>
         </Field>
         <Field label="Loại container">
-          <select value={values.loai_cont_hang_id} onChange={(e) => set("loai_cont_hang_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.loaiContainer.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <QuickAddSelect
+            table="loai_container"
+            label="loại container"
+            options={loaiContainerList}
+            value={values.loai_cont_hang_id}
+            onChange={(v) => set("loai_cont_hang_id", v)}
+            onAdded={(row) => setLoaiContainerList((prev) => [...prev, row].sort((a, b) => a.ten.localeCompare(b.ten)))}
+          />
         </Field>
         <Field label="Đơn vị tính">
           <select value={values.dvt} onChange={(e) => set("dvt", e.target.value)} className={inputClass}>
@@ -250,14 +255,14 @@ export default function DonHangForm({
 
       <Section title="Hàng hóa">
         <Field label="Hàng hóa">
-          <select value={values.hang_hoa_id} onChange={(e) => set("hang_hoa_id", e.target.value)} className={inputClass}>
-            <option value="">-- Chọn --</option>
-            {masterData.hangHoa.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.ten}
-              </option>
-            ))}
-          </select>
+          <QuickAddSelect
+            table="hang_hoa"
+            label="hàng hóa"
+            options={hangHoaList}
+            value={values.hang_hoa_id}
+            onChange={(v) => set("hang_hoa_id", v)}
+            onAdded={(row) => setHangHoaList((prev) => [...prev, row].sort((a, b) => a.ten.localeCompare(b.ten)))}
+          />
         </Field>
         <Field label="Kích thước (WxLxH)">
           <input value={values.kich_thuoc} onChange={(e) => set("kich_thuoc", e.target.value)} className={inputClass} />

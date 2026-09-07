@@ -6,6 +6,8 @@ import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } f
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
+import QuickAddKhachHang from "@/components/common/QuickAddKhachHang";
+import QuickAddNhaCungCap from "@/components/common/QuickAddNhaCungCap";
 import type { DinhKem } from "@/types/database";
 
 interface DoiTac {
@@ -13,6 +15,13 @@ interface DoiTac {
   ten_day_du?: string;
   ten_viet_tat?: string | null;
   ten?: string;
+  nhom_khach_hang_ten?: string | null;
+}
+
+/** Kem ten nhom (vd Apple Trans) de chon dung phap nhan, tranh nham giua cac cong ty con cung nhom. */
+function khOptionLabel(k: DoiTac) {
+  const ten = k.ten_viet_tat || k.ten_day_du || k.ten || "";
+  return k.nhom_khach_hang_ten ? `${ten} — (${k.nhom_khach_hang_ten})` : ten;
 }
 
 interface Row {
@@ -23,7 +32,7 @@ interface Row {
   loai_hop_dong: string | null;
   ngay_hieu_luc: string | null;
   ngay_het_han: string | null;
-  trang_thai_hop_dong: "Chưa có hợp đồng" | "Đã có hợp đồng";
+  trang_thai_hop_dong: "Chưa có hợp đồng" | "Đã có hợp đồng" | "Không cần hợp đồng";
   ghi_chu: string | null;
   khach_hang: DoiTac | DoiTac[] | null;
   nha_cung_cap: DoiTac | DoiTac[] | null;
@@ -53,12 +62,14 @@ function trangThaiHieuLuc(row: Row) {
 const HOP_DONG_COLOR: Record<string, string> = {
   "Chưa có hợp đồng": "bg-red-100 text-red-700",
   "Đã có hợp đồng": "bg-green-100 text-green-700",
+  "Không cần hợp đồng": "bg-slate-100 text-slate-500",
 };
 
 export default function HopDongView({
   initialRows,
-  khachHangList,
-  nhaCungCapList,
+  khachHangList: initialKhachHangList,
+  nhaCungCapList: initialNhaCungCapList,
+  nhomKhachHangList,
   dinhKemRows,
   canEdit,
   canDelete,
@@ -67,6 +78,7 @@ export default function HopDongView({
   initialRows: Row[];
   khachHangList: DoiTac[];
   nhaCungCapList: DoiTac[];
+  nhomKhachHangList: { id: string; ten: string }[];
   dinhKemRows: DinhKem[];
   canEdit: boolean;
   canDelete: boolean;
@@ -74,7 +86,11 @@ export default function HopDongView({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
+  const [khachHangList, setKhachHangList] = useState<DoiTac[]>(initialKhachHangList);
+  const [nhaCungCapList, setNhaCungCapList] = useState<DoiTac[]>(initialNhaCungCapList);
   const [query, setQuery] = useState("");
+  const [khFilter, setKhFilter] = useState("");
+  const [nccFilter, setNccFilter] = useState("");
   const [chuaCoHopDongOnly, setChuaCoHopDongOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -82,8 +98,13 @@ export default function HopDongView({
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
+  const nccOptions = nhaCungCapList.map((n) => ({ value: n.id, label: n.ten ?? "" }));
+
   const filtered = rows
     .filter((r) => !chuaCoHopDongOnly || r.trang_thai_hop_dong === "Chưa có hợp đồng")
+    .filter((r) => !khFilter || r.khach_hang_id === khFilter)
+    .filter((r) => !nccFilter || r.nha_cung_cap_id === nccFilter)
     .filter((r) => {
       if (!query) return true;
       const q = query.toLowerCase();
@@ -142,6 +163,15 @@ export default function HopDongView({
     if (!window.confirm(`Xóa hợp đồng "${row.so_hop_dong ?? ""}"?`)) return;
     const { error } = await supabase.from("hop_dong_khach_hang").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+  }
+
+  async function handleSetTrangThaiHopDong(row: Row, trangThai: Row["trang_thai_hop_dong"]) {
+    const { error } = await supabase.from("hop_dong_khach_hang").update({ trang_thai_hop_dong: trangThai }).eq("id", row.id);
+    if (!error) {
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, trang_thai_hop_dong: trangThai } : r)));
+    } else {
+      window.alert(error.message);
+    }
   }
 
   async function handleExportExcel() {
@@ -326,8 +356,30 @@ export default function HopDongView({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Tìm theo số hợp đồng, tên..."
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
         />
+        <div className="w-full sm:w-56">
+          <SearchableSelect
+            options={khOptions}
+            value={khFilter}
+            onChange={(v) => {
+              setKhFilter(v);
+              if (v) setNccFilter("");
+            }}
+            placeholder="Lọc theo khách hàng"
+          />
+        </div>
+        <div className="w-full sm:w-56">
+          <SearchableSelect
+            options={nccOptions}
+            value={nccFilter}
+            onChange={(v) => {
+              setNccFilter(v);
+              if (v) setKhFilter("");
+            }}
+            placeholder="Lọc theo nhà cung cấp"
+          />
+        </div>
         <label className="flex items-center gap-1.5 text-sm text-slate-600">
           <input type="checkbox" checked={chuaCoHopDongOnly} onChange={(e) => setChuaCoHopDongOnly(e.target.checked)} />
           Chỉ hiện chưa có hợp đồng
@@ -368,6 +420,18 @@ export default function HopDongView({
                 canUpload={canEdit}
                 currentUserId={currentUserId}
               />
+              {canEdit && row.trang_thai_hop_dong !== "Đã có hợp đồng" && (
+                <label className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={row.trang_thai_hop_dong === "Không cần hợp đồng"}
+                    onChange={(e) =>
+                      handleSetTrangThaiHopDong(row, e.target.checked ? "Không cần hợp đồng" : "Chưa có hợp đồng")
+                    }
+                  />
+                  Không cần hợp đồng (VD: công ty con chỉ đứng tờ khai, không ký hợp đồng riêng) — bỏ khỏi nhắc nhở
+                </label>
+              )}
               {canEdit && (
                 <div className="mt-2 flex gap-3">
                   <button
@@ -397,6 +461,9 @@ export default function HopDongView({
           initial={editing}
           khachHangList={khachHangList}
           nhaCungCapList={nhaCungCapList}
+          nhomKhachHangList={nhomKhachHangList}
+          onKhachHangAdded={(row) => setKhachHangList((prev) => [...prev, row])}
+          onNhaCungCapAdded={(row) => setNhaCungCapList((prev) => [...prev, row])}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
@@ -409,12 +476,18 @@ function HopDongForm({
   initial,
   khachHangList,
   nhaCungCapList,
+  nhomKhachHangList,
+  onKhachHangAdded,
+  onNhaCungCapAdded,
   onCancel,
   onSave,
 }: {
   initial: Row | null;
   khachHangList: DoiTac[];
   nhaCungCapList: DoiTac[];
+  nhomKhachHangList: { id: string; ten: string }[];
+  onKhachHangAdded: (row: DoiTac) => void;
+  onNhaCungCapAdded: (row: DoiTac) => void;
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
@@ -434,7 +507,7 @@ function HopDongForm({
   }
 
   const daCoDoiTuong = !!initial;
-  const khOptions = khachHangList.map((k) => ({ value: k.id, label: k.ten_viet_tat || k.ten_day_du || "" }));
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const nccOptions = nhaCungCapList.map((n) => ({ value: n.id, label: n.ten ?? "" }));
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 
@@ -469,11 +542,20 @@ function HopDongForm({
                 value={(values.doi_tuong === "khach_hang" ? khOptions : nccOptions).find((o) => o.value === values.doi_tuong_id)?.label ?? ""}
                 className={cls}
               />
-            ) : (
-              <SearchableSelect
-                options={values.doi_tuong === "khach_hang" ? khOptions : nccOptions}
+            ) : values.doi_tuong === "khach_hang" ? (
+              <QuickAddKhachHang
+                options={khachHangList}
                 value={values.doi_tuong_id}
                 onChange={(v) => set("doi_tuong_id", v)}
+                onAdded={onKhachHangAdded}
+                nhomKhachHangList={nhomKhachHangList}
+              />
+            ) : (
+              <QuickAddNhaCungCap
+                options={nhaCungCapList}
+                value={values.doi_tuong_id}
+                onChange={(v) => set("doi_tuong_id", v)}
+                onAdded={onNhaCungCapAdded}
               />
             )}
           </div>

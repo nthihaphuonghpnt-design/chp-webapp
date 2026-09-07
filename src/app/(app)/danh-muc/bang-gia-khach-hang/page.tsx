@@ -8,7 +8,11 @@ export default async function BangGiaKhachHangPage() {
 
   const [{ data }, { data: khachHangList }, { data: loaiChiPhiList }, { data: hangHoaList }] = await Promise.all([
     supabase.from("bang_gia_khach_hang").select("*").order("created_at", { ascending: false }),
-    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
+    supabase
+      .from("khach_hang")
+      .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
+      .eq("dang_hoat_dong", true)
+      .order("ten_day_du"),
     supabase.from("loai_chi_phi").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
@@ -19,7 +23,10 @@ export default async function BangGiaKhachHangPage() {
     <BangGiaView
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       initialRows={(data ?? []) as any[]}
-      khachHangList={khachHangList ?? []}
+      khachHangList={(khachHangList ?? []).map((k) => {
+        const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
+        return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_ten: nhom?.ten ?? null };
+      })}
       loaiChiPhiList={loaiChiPhiList ?? []}
       hangHoaList={hangHoaList ?? []}
       canEdit={canEdit}

@@ -2,6 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
+import {
+  TY_LE_BHXH_NV,
+  HOA_HONG_SALE,
+  giamTruGiaCanh,
+  tinhThueTNCN,
+  dungLuatThueMoi,
+  apDungTruLuongTheoChamCong,
+  tinhLuongCoBanTheoChamCong,
+  THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG,
+} from "@/lib/luong";
+import { laNhanVienVanPhong } from "@/lib/chamCong";
 
 interface PhongBan {
   ten: string;
@@ -11,7 +22,14 @@ interface NhanVien {
   ho_ten: string;
   luong_co_dinh: number | null;
   muc_dong_bhxh: number | null;
+  so_nguoi_phu_thuoc: number | null;
+  loai_nhan_su: string;
+  ngay_vao_lam: string | null;
   phong_ban: PhongBan | PhongBan[] | null;
+}
+interface ChamCongRow {
+  ngay: string;
+  trang_thai: string;
 }
 interface ChiPhiGiaoNhan {
   nhan_vien_id: string | null;
@@ -69,34 +87,6 @@ function monthRange() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-const GIAM_TRU_BAN_THAN = 11_000_000;
-const TY_LE_BHXH_NV = 0.105;
-const HOA_HONG_SALE = 0.4;
-
-const BAC_THUE = [
-  { den: 5_000_000, thue: 0.05 },
-  { den: 10_000_000, thue: 0.1 },
-  { den: 18_000_000, thue: 0.15 },
-  { den: 32_000_000, thue: 0.2 },
-  { den: 52_000_000, thue: 0.25 },
-  { den: 80_000_000, thue: 0.3 },
-  { den: Infinity, thue: 0.35 },
-];
-
-function tinhThueTNCN(thuNhapChiuThue: number) {
-  if (thuNhapChiuThue <= 0) return 0;
-  let thue = 0;
-  let truoc = 0;
-  for (const bac of BAC_THUE) {
-    if (thuNhapChiuThue > truoc) {
-      const phan = Math.min(thuNhapChiuThue, bac.den) - truoc;
-      thue += phan * bac.thue;
-      truoc = bac.den;
-    } else break;
-  }
-  return thue;
-}
-
 export default function LuongCuaToiView({
   nv,
   chiPhiGiaoNhanList,
@@ -107,6 +97,8 @@ export default function LuongCuaToiView({
   dinhPhiList,
   soLoTheoThangRaw,
   luongDaTraList,
+  chamCongList = [],
+  ngayLeList = [],
 }: {
   nv: NhanVien | null;
   chiPhiGiaoNhanList: ChiPhiGiaoNhan[];
@@ -117,6 +109,8 @@ export default function LuongCuaToiView({
   dinhPhiList: DinhPhi[];
   soLoTheoThangRaw: { ngay_len_don: string }[];
   luongDaTraList: LuongDaTra[];
+  chamCongList?: ChamCongRow[];
+  ngayLeList?: string[];
 }) {
   const [thangLuong, setThangLuong] = useState(monthRange());
   const [dangXuat, setDangXuat] = useState(false);
@@ -152,9 +146,22 @@ export default function LuongCuaToiView({
     return sell - buy - thueNgoaiBuy - dinhPhi;
   }
 
+  const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
+  const apDungChamCong = apDungTruLuongTheoChamCong(thangHoatDong);
+
   const luong = useMemo(() => {
     if (!nv) return null;
-    const luongCoDinh = nv.luong_co_dinh ?? 0;
+    const luongCoDinhGoc = nv.luong_co_dinh ?? 0;
+    const luongCoDinh = apDungChamCong && laNhanVienVanPhong(pb)
+      ? tinhLuongCoBanTheoChamCong({
+          loaiNhanSu: nv.loai_nhan_su,
+          luongCoDinh: luongCoDinhGoc,
+          ngayVaoLam: nv.ngay_vao_lam,
+          thangHoatDong,
+          chamCongCaNamList: chamCongList,
+          ngayLeSet,
+        })
+      : luongCoDinhGoc;
     let luongTheoLo = 0;
     let chiTietTheoLo: { soDon: string; soTien: number }[] = [];
     if (pb === "Sale") {
@@ -169,11 +176,12 @@ export default function LuongCuaToiView({
     const tongThuNhap = luongCoDinh + luongTheoLo;
     const mucDongBhxh = nv.muc_dong_bhxh ?? luongCoDinh;
     const bhxhNv = mucDongBhxh * TY_LE_BHXH_NV;
-    const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - GIAM_TRU_BAN_THAN);
-    const thueTncn = tinhThueTNCN(thuNhapChiuThue);
+    const giamTru = giamTruGiaCanh(thangLuong, nv.so_nguoi_phu_thuoc ?? 0);
+    const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - giamTru);
+    const thueTncn = tinhThueTNCN(thuNhapChiuThue, thangLuong);
     const thucLanh = tongThuNhap - bhxhNv - thueTncn;
-    return { luongCoDinh, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, thueTncn, thucLanh };
-  }, [nv, pb, donHangCuaToi, chiPhiGiaoNhanList, thangHoatDong]); // eslint-disable-line react-hooks/exhaustive-deps
+    return { luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, giamTru, thueTncn, thucLanh };
+  }, [nv, pb, donHangCuaToi, chiPhiGiaoNhanList, thangHoatDong, thangLuong, apDungChamCong, chamCongList, ngayLeSet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const daTra = luongDaTraList.find((d) => d.thang_luong === thangLuong) ?? null;
 
@@ -190,6 +198,7 @@ export default function LuongCuaToiView({
       ["Tổng thu nhập", luong.tongThuNhap],
       ["Mức đóng BHXH", luong.mucDongBhxh],
       ["BHXH (nhân viên đóng, 10.5%)", -Math.round(luong.bhxhNv)],
+      [`Giảm trừ gia cảnh (${nv.so_nguoi_phu_thuoc ?? 0} người phụ thuộc)`, luong.giamTru],
       ["Thuế TNCN", -Math.round(luong.thueTncn)],
       ["THỰC LÃNH", luong.thucLanh],
     ];
@@ -203,7 +212,6 @@ export default function LuongCuaToiView({
         { text: "PHIẾU LƯƠNG", bold: true, size: 14 },
         `Họ tên: ${nv.ho_ten}    Phòng ban: ${pb}`,
         `Tháng lương: ${thangLuong}`,
-        "Ngày công trong tháng: ____________ (kế toán/nhân viên tự điền, hệ thống chưa chấm công điện tử)",
         "",
       ],
       columns,
@@ -247,11 +255,15 @@ export default function LuongCuaToiView({
       {luong && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <dl className="divide-y divide-slate-100 text-sm">
-            <Row label="Lương cố định" value={luong.luongCoDinh} />
+            <Row
+              label={apDungChamCong && Math.round(luong.luongCoDinh) !== Math.round(luong.luongCoDinhGoc) ? `Lương cố định (đã trừ theo Chấm công, gốc ${fmt(luong.luongCoDinhGoc)})` : "Lương cố định"}
+              value={luong.luongCoDinh}
+            />
             <Row label={pb === "Sale" ? "Hoa hồng theo lô (tháng trước)" : "Lương theo lô/công việc"} value={luong.luongTheoLo} />
             <Row label="Tổng thu nhập" value={luong.tongThuNhap} bold />
             <Row label="Mức đóng BHXH" value={luong.mucDongBhxh} />
             <Row label="BHXH (bạn đóng, 10.5%)" value={-luong.bhxhNv} />
+            <Row label={`Giảm trừ gia cảnh (${nv.so_nguoi_phu_thuoc ?? 0} người phụ thuộc)`} value={luong.giamTru} />
             <Row label="Thuế TNCN" value={-luong.thueTncn} />
             <Row label="Thực lãnh" value={luong.thucLanh} bold big />
           </dl>
@@ -269,7 +281,16 @@ export default function LuongCuaToiView({
 
       <p className="mt-4 text-xs text-slate-400">
         Lương theo lô của tháng {thangLuong} được tính từ dữ liệu công việc tháng {thangHoatDong} (trễ 1 tháng theo quy định
-        công ty). Nếu số liệu chưa khớp thực tế, liên hệ Kế toán để đối chiếu.
+        công ty). Thuế TNCN tính theo{" "}
+        {dungLuatThueMoi(thangLuong) ? "Luật Thuế TNCN mới (109/2025/QH15, hiệu lực từ 1/7/2026)" : "biểu thuế cũ"}. Nếu số
+        liệu chưa khớp thực tế, liên hệ Kế toán để đối chiếu.
+      </p>
+      <p className="mt-1 text-xs text-slate-400">
+        {!laNhanVienVanPhong(pb)
+          ? "Phòng ban của bạn không chấm công nên lương cố định luôn tính nguyên tháng."
+          : apDungChamCong
+            ? "Lương cố định đã được tính theo dữ liệu Chấm công tháng " + thangHoatDong + " — xem chi tiết ngày công tại mục Chấm công."
+            : "Lương cố định hiện tính nguyên tháng, chưa trừ theo Chấm công (sẽ áp dụng từ tháng " + THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG + " trở đi)."}
       </p>
     </div>
   );

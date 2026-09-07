@@ -13,7 +13,11 @@ export default async function TamUngGiaiChiPage() {
       .order("ngay_thuc_hien", { ascending: false }),
     supabase.from("nhan_vien").select("id, ho_ten").eq("dang_lam_viec", true).order("ho_ten"),
     supabase.from("don_hang").select("id, so_don_hang").order("created_at", { ascending: false }).limit(300),
-    supabase.from("khach_hang").select("id, ten_day_du").eq("dang_hoat_dong", true).order("ten_day_du"),
+    supabase
+      .from("khach_hang")
+      .select("id, ten_day_du, nhom_khach_hang:nhom_khach_hang_id(ten)")
+      .eq("dang_hoat_dong", true)
+      .order("ten_day_du"),
     supabase
       .from("phat_sinh_chi_phi")
       .select("nguoi_nhap_id, don_hang_id, gia_von_buy")
@@ -35,7 +39,10 @@ export default async function TamUngGiaiChiPage() {
       initialRows={(rows ?? []) as any[]}
       nhanVienList={nhanVienList ?? []}
       donHangList={donHangList ?? []}
-      khachHangList={khachHangList ?? []}
+      khachHangList={(khachHangList ?? []).map((k) => {
+        const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
+        return { id: k.id, ten_day_du: k.ten_day_du, nhom_khach_hang_ten: nhom?.ten ?? null };
+      })}
       daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
       currentUserId={user?.id}
       currentPhongBan={user?.phong_ban ?? ""}

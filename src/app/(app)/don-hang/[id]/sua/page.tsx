@@ -20,10 +20,15 @@ export default async function DonHangSuaPage({ params }: { params: Promise<{ id:
 
   const { data: phongBanSale } = await supabase.from("phong_ban").select("id").eq("ten", "Sale").single();
 
-  const [{ data: order }, { data: khachHang }, { data: loaiContainer }, { data: hangHoa }, { data: diaDiem }, { data: saleList }] =
+  const [{ data: order }, { data: khachHang }, { data: nhomKhachHang }, { data: loaiContainer }, { data: hangHoa }, { data: diaDiem }, { data: saleList }] =
     await Promise.all([
       supabase.from("don_hang").select("*").eq("id", id).single(),
-      supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat").eq("dang_hoat_dong", true).order("ten_day_du"),
+      supabase
+        .from("khach_hang")
+        .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
+        .eq("dang_hoat_dong", true)
+        .order("ten_day_du"),
+      supabase.from("nhom_khach_hang").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
       supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
       supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
       supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
@@ -43,7 +48,11 @@ export default async function DonHangSuaPage({ params }: { params: Promise<{ id:
       <DonHangForm
         initial={order as DonHang}
         masterData={{
-          khachHang: khachHang ?? [],
+          khachHang: (khachHang ?? []).map((k) => {
+            const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
+            return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_ten: nhom?.ten ?? null };
+          }),
+          nhomKhachHang: nhomKhachHang ?? [],
           loaiContainer: loaiContainer ?? [],
           hangHoa: hangHoa ?? [],
           diaDiem: diaDiem ?? [],
