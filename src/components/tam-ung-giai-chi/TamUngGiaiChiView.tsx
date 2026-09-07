@@ -17,6 +17,15 @@ interface DonHangOpt {
   so_don_hang: string;
 }
 
+interface SoQuyRow {
+  id: string;
+  loai_so: string;
+  loai_giao_dich: "Thu" | "Chi";
+  so_tien: number;
+  ngay: string;
+  nguon_id: string;
+}
+
 interface KhachHangOpt {
   id: string;
   ten_day_du: string;
@@ -44,6 +53,7 @@ interface Row {
   trang_thai: "Đề nghị" | "Đã duyệt" | "Từ chối";
   nguoi_de_nghi_id: string | null;
   don_hang_id: string | null;
+  tam_ung_goc_id: string | null;
   nhan_vien: { ho_ten: string } | { ho_ten: string }[] | null;
   nguoi_de_nghi: { ho_ten: string } | { ho_ten: string }[] | null;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
@@ -73,12 +83,16 @@ function monthRange() {
   return { start, end };
 }
 
+const TAM_UNG_SELECT_COLS =
+  "*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)";
+
 export default function TamUngGiaiChiView({
   initialRows,
   nhanVienList,
   donHangList,
   khachHangList,
   daChiTheoNguoiVaLo,
+  soQuyList,
   currentUserId,
   currentPhongBan,
 }: {
@@ -87,6 +101,7 @@ export default function TamUngGiaiChiView({
   donHangList: DonHangOpt[];
   khachHangList: KhachHangOpt[];
   daChiTheoNguoiVaLo: Record<string, number>;
+  soQuyList: SoQuyRow[];
   currentUserId?: string;
   currentPhongBan: string;
 }) {
@@ -99,6 +114,7 @@ export default function TamUngGiaiChiView({
   const [giaiChiPrefill, setGiaiChiPrefill] = useState<{
     nhan_vien_id: string;
     don_hang_id: string;
+    tam_ung_goc_id: string;
     so_tien: string;
     ghi_chu: string;
   } | null>(null);
@@ -128,16 +144,34 @@ export default function TamUngGiaiChiView({
     return daChiTheoNguoiVaLo[`${row.nhan_vien_id}:${row.don_hang_id}`] ?? 0;
   }
 
-  function openGiaiChiNhanh(row: Row) {
+  /** Tong da hoan ung thuc te (cac dong Giai chi da duyet, gan voi dung dong Tam ung nay qua tam_ung_goc_id). */
+  function daHoanChoTamUng(row: Row): number {
+    return rows
+      .filter((r) => r.tam_ung_goc_id === row.id && r.loai === "Giải chi" && r.trang_thai === "Đã duyệt")
+      .reduce((s, r) => s + r.so_tien, 0);
+  }
+
+  /** Con phai hoan = tam ung - da chi cho lo (neu co gan lo) - da hoan ung thuc te. */
+  function conPhaiHoan(row: Row): number {
     const daChi = daChiChoLo(row) ?? 0;
+    return row.so_tien - daChi - daHoanChoTamUng(row);
+  }
+
+  function soQuyChoRow(row: Row): SoQuyRow | null {
+    return soQuyList.find((s) => s.nguon_id === row.id) ?? null;
+  }
+
+  function openGiaiChiNhanh(row: Row) {
+    const conLai = Math.max(0, conPhaiHoan(row));
     setEditing(null);
     setProposing(false);
     setKhachTamUngMode(false);
     setGiaiChiPrefill({
       nhan_vien_id: row.nhan_vien_id ?? "",
       don_hang_id: row.don_hang_id ?? "",
-      so_tien: daChi.toString(),
-      ghi_chu: `Quyết toán tạm ứng lô ${one(row.don_hang)?.so_don_hang ?? ""} (đã tạm ứng ${row.so_tien.toLocaleString("en-US")}, đã chi ${daChi.toLocaleString("en-US")})`,
+      tam_ung_goc_id: row.id,
+      so_tien: conLai.toString(),
+      ghi_chu: `Hoàn ứng lô ${one(row.don_hang)?.so_don_hang ?? ""} (đã tạm ứng ${row.so_tien.toLocaleString("en-US")}, còn phải hoàn ${conLai.toLocaleString("en-US")})`,
     });
     setShowForm(true);
   }
@@ -194,6 +228,7 @@ export default function TamUngGiaiChiView({
       ghi_chu: values.ghi_chu || null,
       trang_thai: values.trang_thai || "Đề nghị",
       don_hang_id: values.don_hang_id || null,
+      tam_ung_goc_id: values.tam_ung_goc_id || null,
       phuong_thuc: values.phuong_thuc || null,
     };
 
@@ -202,7 +237,7 @@ export default function TamUngGiaiChiView({
         .from("tam_ung_giai_chi")
         .update(payload)
         .eq("id", editing.id)
-        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
+        .select(TAM_UNG_SELECT_COLS)
         .single();
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
@@ -219,7 +254,7 @@ export default function TamUngGiaiChiView({
       const { data, error } = await supabase
         .from("tam_ung_giai_chi")
         .insert({ ...payload, nguoi_de_nghi_id: nv?.id })
-        .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
+        .select(TAM_UNG_SELECT_COLS)
         .single();
       if (!error && data) {
         setRows((prev) => [data as Row, ...prev]);
@@ -236,7 +271,7 @@ export default function TamUngGiaiChiView({
       .from("tam_ung_giai_chi")
       .update({ trang_thai: trangThai })
       .eq("id", row.id)
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
+      .select(TAM_UNG_SELECT_COLS)
       .single();
     if (!error && data) setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
     else if (error) window.alert(error.message);
@@ -410,7 +445,7 @@ export default function TamUngGiaiChiView({
     const { data, error } = await supabase
       .from("tam_ung_giai_chi")
       .insert(records)
-      .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)");
+      .select(TAM_UNG_SELECT_COLS);
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
@@ -606,16 +641,33 @@ export default function TamUngGiaiChiView({
               {one(row.don_hang)?.so_don_hang ? ` · Đơn: ${one(row.don_hang)?.so_don_hang}` : ""}
             </p>
             {row.ghi_chu && <p className="text-slate-500">{row.ghi_chu}</p>}
+
             {row.loai === "Tạm ứng" && row.don_hang_id && daChiChoLo(row) !== null && (
+              <p className="mt-1 text-slate-600">Đã chi (chứng từ) cho lô này: <strong>{daChiChoLo(row)!.toLocaleString("en-US")}</strong></p>
+            )}
+            {row.loai === "Tạm ứng" && row.trang_thai === "Đã duyệt" && (
               <p className="mt-1 text-slate-600">
-                Đã chi cho lô này: <strong>{daChiChoLo(row)!.toLocaleString("en-US")}</strong> ·{" "}
-                {row.so_tien - daChiChoLo(row)! >= 0 ? (
-                  <span className="text-green-700">Còn dư: {(row.so_tien - daChiChoLo(row)!).toLocaleString("en-US")}</span>
+                Đã hoàn ứng: <strong>{daHoanChoTamUng(row).toLocaleString("en-US")}</strong> ·{" "}
+                {conPhaiHoan(row) > 0 ? (
+                  <span className="font-medium text-amber-700">Còn phải hoàn: {conPhaiHoan(row).toLocaleString("en-US")}</span>
+                ) : conPhaiHoan(row) < 0 ? (
+                  <span className="font-medium text-red-700">Hoàn dư/chi vượt: {(-conPhaiHoan(row)).toLocaleString("en-US")}</span>
                 ) : (
-                  <span className="text-red-700">Còn thiếu: {(daChiChoLo(row)! - row.so_tien).toLocaleString("en-US")}</span>
+                  <span className="font-medium text-green-700">Đã hoàn đủ</span>
                 )}
               </p>
             )}
+            {row.tam_ung_goc_id && (
+              <p className="mt-1 text-xs text-purple-700">
+                ↳ Hoàn ứng cho khoản tạm ứng {rows.find((r) => r.id === row.tam_ung_goc_id)?.ngay_thuc_hien ?? ""}
+              </p>
+            )}
+            {soQuyChoRow(row) && (
+              <p className="mt-1 text-xs text-slate-400">
+                → Sổ quỹ: {soQuyChoRow(row)!.loai_giao_dich} {soQuyChoRow(row)!.so_tien.toLocaleString("en-US")} · {soQuyChoRow(row)!.ngay} · {soQuyChoRow(row)!.loai_so}
+              </p>
+            )}
+
             <div className="mt-2 flex flex-wrap gap-3">
               {isKeToan && (
                 <>
@@ -641,9 +693,9 @@ export default function TamUngGiaiChiView({
                       </button>
                     </>
                   )}
-                  {row.loai === "Tạm ứng" && row.don_hang_id && row.trang_thai === "Đã duyệt" && (
+                  {row.loai === "Tạm ứng" && row.trang_thai === "Đã duyệt" && (
                     <button onClick={() => openGiaiChiNhanh(row)} className="text-xs font-medium text-purple-700">
-                      Giải chi nhanh
+                      Ghi nhận hoàn ứng
                     </button>
                   )}
                   <button onClick={() => handleDelete(row)} className="text-xs font-medium text-red-600">
@@ -690,7 +742,7 @@ function TamUngForm({
   initial: Row | null;
   proposing: boolean;
   khachTamUngMode: boolean;
-  giaiChiPrefill: { nhan_vien_id: string; don_hang_id: string; so_tien: string; ghi_chu: string } | null;
+  giaiChiPrefill: { nhan_vien_id: string; don_hang_id: string; tam_ung_goc_id: string; so_tien: string; ghi_chu: string } | null;
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
   khachHangList: KhachHangOpt[];
@@ -710,6 +762,7 @@ function TamUngForm({
     muc_tam_ung_toi_da: initial?.muc_tam_ung_toi_da?.toString() ?? "",
     so_phieu: initial?.so_phieu ?? "",
     don_hang_id: initial?.don_hang_id ?? giaiChiPrefill?.don_hang_id ?? "",
+    tam_ung_goc_id: initial?.tam_ung_goc_id ?? giaiChiPrefill?.tam_ung_goc_id ?? "",
     ghi_chu: initial?.ghi_chu ?? giaiChiPrefill?.ghi_chu ?? "",
     trang_thai: initial?.trang_thai ?? "Đề nghị",
     phuong_thuc: initial?.phuong_thuc ?? "",
@@ -731,7 +784,15 @@ function TamUngForm({
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
         <h2 className="mb-4 text-lg font-semibold text-slate-900">
-          {initial ? "Sửa" : khachTamUngMode ? "Khách hàng tạm ứng" : proposing ? "Đề nghị tạm ứng" : "Thêm tạm ứng/giải chi"}
+          {initial
+            ? "Sửa"
+            : khachTamUngMode
+              ? "Khách hàng tạm ứng"
+              : proposing
+                ? "Đề nghị tạm ứng"
+                : giaiChiPrefill
+                  ? "Ghi nhận hoàn ứng"
+                  : "Thêm tạm ứng/giải chi"}
         </h2>
         {khachTamUngMode && !initial && (
           <p className="mb-3 rounded-lg bg-purple-50 p-2 text-xs text-purple-800">

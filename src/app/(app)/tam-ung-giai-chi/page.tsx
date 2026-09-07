@@ -6,7 +6,7 @@ export default async function TamUngGiaiChiPage() {
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: khachHangList }, { data: chiPhiRows }] = await Promise.all([
+  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: khachHangList }, { data: chiPhiRows }, { data: soQuyRows }] = await Promise.all([
     supabase
       .from("tam_ung_giai_chi")
       .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
@@ -24,6 +24,10 @@ export default async function TamUngGiaiChiPage() {
       .not("don_hang_id", "is", null)
       .not("nguoi_nhap_id", "is", null)
       .neq("trang_thai", "Từ chối"),
+    // nguon_bang/nguon_id la lien ket kieu "polymorphic" (khong phai FK that
+    // trong Postgres) nen phai truy van rieng roi ghep tay o phia component,
+    // khong dung duoc cach Supabase tu join qua quan he FK.
+    supabase.from("so_quy").select("id, loai_so, loai_giao_dich, so_tien, ngay, nguon_id").eq("nguon_bang", "tam_ung_giai_chi"),
   ]);
 
   // Gop tong da chi theo tung nguoi + tung lo hang, de doi chieu voi tam ung
@@ -44,6 +48,7 @@ export default async function TamUngGiaiChiPage() {
         return { id: k.id, ten_day_du: k.ten_day_du, nhom_khach_hang_ten: nhom?.ten ?? null };
       })}
       daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
+      soQuyList={soQuyRows ?? []}
       currentUserId={user?.id}
       currentPhongBan={user?.phong_ban ?? ""}
     />

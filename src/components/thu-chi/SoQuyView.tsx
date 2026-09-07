@@ -1,8 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import type { SoQuy } from "@/types/database";
+
+const NGUON_HREF: Record<string, string> = {
+  tam_ung_giai_chi: "/tam-ung-giai-chi",
+  phat_sinh_chi_phi: "/don-hang",
+  don_thue_ngoai: "/don-hang",
+  hoa_don_xuat: "/khach-hang/hoa-don",
+};
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString("en-US");
@@ -22,7 +30,13 @@ const NGUON_LABEL: Record<string, string> = {
   tam_ung_giai_chi: "Tạm ứng/Giải chi",
 };
 
-export default function SoQuyView({ initialRows }: { initialRows: SoQuy[] }) {
+export default function SoQuyView({
+  initialRows,
+  tamUngDetailMap = {},
+}: {
+  initialRows: SoQuy[];
+  tamUngDetailMap?: Record<string, string>;
+}) {
   const defaultRange = monthRange();
   const [loaiSo, setLoaiSo] = useState<"Tiền mặt" | "Tài khoản công ty">("Tiền mặt");
   const [tuNgay, setTuNgay] = useState(defaultRange.start);
@@ -144,7 +158,18 @@ export default function SoQuyView({ initialRows }: { initialRows: SoQuy[] }) {
             {rowsWithRunning.map((r) => (
               <tr key={r.id} className="border-t border-slate-100">
                 <td className="px-3 py-2">{r.ngay}</td>
-                <td className="px-3 py-2">{NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang}</td>
+                <td className="px-3 py-2">
+                  {NGUON_HREF[r.nguon_bang] ? (
+                    <Link href={NGUON_HREF[r.nguon_bang]} className="text-blue-600 hover:underline">
+                      {NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang}
+                    </Link>
+                  ) : (
+                    NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang
+                  )}
+                  {r.nguon_bang === "tam_ung_giai_chi" && tamUngDetailMap[r.nguon_id] && (
+                    <p className="text-xs text-slate-400">{tamUngDetailMap[r.nguon_id]}</p>
+                  )}
+                </td>
                 <td className="px-3 py-2">{r.noi_dung ?? "—"}</td>
                 <td className="px-3 py-2 text-green-600">{r.loai_giao_dich === "Thu" ? fmt(r.so_tien) : ""}</td>
                 <td className="px-3 py-2 text-red-600">{r.loai_giao_dich === "Chi" ? fmt(r.so_tien) : ""}</td>
