@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { taoWorkbook, themSheetKeO, taiWorkbook } from "@/lib/excel";
+import { phanLoaiChiPhi, tongPhanLoaiChiPhi } from "@/lib/baoCao";
 
 interface DonHang {
   id: string;
@@ -37,6 +38,10 @@ interface ThueNgoai {
   gia_ban_sell: number | null;
   so_tien_da_thanh_toan: number | null;
   ngay_thue: string;
+}
+interface ChiPhiGiaoNhan {
+  don_hang_id: string;
+  thanh_tien: number | null;
 }
 interface HoaDon {
   id: string;
@@ -91,6 +96,7 @@ export default function BaoCaoView({
   hoaDonList,
   hoaDonDonHangList,
   dinhPhiList,
+  chiPhiGiaoNhanList,
   nhaCungCapList,
   doiTacList,
   loaiChiPhiList,
@@ -106,6 +112,7 @@ export default function BaoCaoView({
   hoaDonList: HoaDon[];
   hoaDonDonHangList: HoaDonDonHang[];
   dinhPhiList: DinhPhi[];
+  chiPhiGiaoNhanList: ChiPhiGiaoNhan[];
   nhaCungCapList: Option[];
   doiTacList: Option[];
   loaiChiPhiList: Option[];
@@ -165,17 +172,19 @@ export default function BaoCaoView({
     if (!isKeToanOrGiamDoc) return [];
     return donHangTrongKy.map((d) => {
       const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
-      const buy = cp.filter((c) => c.noi_bo).reduce((s, c) => s + (c.gia_von_buy ?? 0), 0);
+      const { doanhThu, chiPhiThuc, chiHo } = tongPhanLoaiChiPhi(cp);
+      const buy = chiPhiThuc;
       const sell =
-        cp.reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
+        doanhThu +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
         thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
       const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.gia_von_buy ?? 0), 0);
+      const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
-      const lnTruocHoaHong = sell - buy - thueNgoaiBuy - dinhPhi;
-      return { donHang: d, sell, buy, thueNgoaiBuy, dinhPhi, lnTruocHoaHong, hoaHongSale: lnTruocHoaHong * 0.4, lnCongTy: lnTruocHoaHong * 0.6 };
+      const lnTruocHoaHong = sell - buy - thueNgoaiBuy - giaoNhan - dinhPhi;
+      return { donHang: d, sell, buy, thueNgoaiBuy, giaoNhan, dinhPhi, chiHo, lnTruocHoaHong, hoaHongSale: lnTruocHoaHong * 0.4, lnCongTy: lnTruocHoaHong * 0.6 };
     });
-  }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, chiPhiGiaoNhanList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 2b) Cong no theo lo (Ke toan/Giam doc): gia ban + chi ho + hoa don da xuat + con phai thu ---
   const congNoTheoLo = useMemo(() => {
@@ -219,7 +228,7 @@ export default function BaoCaoView({
       for (const d of donHangTrongKy) {
         const saleId = d.sale_phu_trach_id ?? "chua-gan";
         const sell =
-          chiPhiList.filter((c) => c.don_hang_id === d.id).reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
+          tongPhanLoaiChiPhi(chiPhiList.filter((c) => c.don_hang_id === d.id)).doanhThu +
           phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
         map.set(saleId, (map.get(saleId) ?? 0) + sell);
       }
@@ -236,14 +245,16 @@ export default function BaoCaoView({
   // --- 4) Bao cao chi phi theo loai ---
   const chiPhiTrongKy = chiPhiList.filter((c) => c.ngay_phat_sinh >= tuNgay && c.ngay_phat_sinh <= denNgay);
   const chiPhiTheoLoai = useMemo(() => {
-    const map = new Map<string, { ten: string; buy: number; sell: number }>();
+    const map = new Map<string, { ten: string; buy: number; sell: number; chiHo: number }>();
     for (const c of chiPhiTrongKy) {
       const key = c.loai_chi_phi_id ?? "khac";
       const ten = loaiChiPhiList.find((l) => l.id === c.loai_chi_phi_id)?.ten ?? "Khác";
-      if (!map.has(key)) map.set(key, { ten, buy: 0, sell: 0 });
+      if (!map.has(key)) map.set(key, { ten, buy: 0, sell: 0, chiHo: 0 });
       const m = map.get(key)!;
-      m.buy += c.gia_von_buy ?? 0;
-      m.sell += c.gia_ban_sell ?? 0;
+      const p = phanLoaiChiPhi(c);
+      m.buy += p.chiPhiThuc;
+      m.sell += p.doanhThu;
+      m.chiHo += p.chiHo;
     }
     return Array.from(map.values());
   }, [chiPhiTrongKy, loaiChiPhiList]);
@@ -324,7 +335,9 @@ export default function BaoCaoView({
           { header: "Sell", key: "sell", width: 14 },
           { header: "Buy", key: "buy", width: 14 },
           { header: "Buy thuê ngoài", key: "thueNgoaiBuy", width: 14 },
+          { header: "Chi phí giao nhận", key: "giaoNhan", width: 16 },
           { header: "Định phí phân bổ", key: "dinhPhi", width: 14 },
+          { header: "Chi hộ (không tính lãi/lỗ)", key: "chiHo", width: 18 },
           { header: "LN trước hoa hồng", key: "lnTruocHoaHong", width: 16 },
           { header: "Hoa hồng Sale", key: "hoaHongSale", width: 14 },
           { header: "LN công ty", key: "lnCongTy", width: 14 },
@@ -334,7 +347,9 @@ export default function BaoCaoView({
           r.sell,
           r.buy,
           r.thueNgoaiBuy,
+          r.giaoNhan,
           r.dinhPhi,
+          r.chiHo,
           r.lnTruocHoaHong,
           r.hoaHongSale,
           r.lnCongTy,
@@ -369,8 +384,9 @@ export default function BaoCaoView({
           { header: "Loại chi phí", key: "loai", width: 20 },
           { header: "Buy", key: "buy", width: 14 },
           { header: "Sell", key: "sell", width: 14 },
+          { header: "Chi hộ", key: "chiHo", width: 14 },
         ],
-        rows: chiPhiTheoLoai.map((r) => [r.ten, r.buy, r.sell]),
+        rows: chiPhiTheoLoai.map((r) => [r.ten, r.buy, r.sell, r.chiHo]),
       });
       themSheetKeO(wb, {
         sheetName: "Công nợ phải thu",
@@ -447,7 +463,7 @@ export default function BaoCaoView({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    {["Số đơn", "Sell", "Buy", "Buy thuê ngoài", "Định phí", "LN trước hoa hồng", "Hoa hồng Sale", "LN công ty"].map((h) => (
+                    {["Số đơn", "Sell", "Buy", "Buy thuê ngoài", "CP giao nhận", "Định phí", "Chi hộ", "LN trước hoa hồng", "Hoa hồng Sale", "LN công ty"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium">
                         {h}
                       </th>
@@ -465,7 +481,9 @@ export default function BaoCaoView({
                       <td className="px-3 py-2">{fmt(r.sell)}</td>
                       <td className="px-3 py-2">{fmt(r.buy)}</td>
                       <td className="px-3 py-2">{fmt(r.thueNgoaiBuy)}</td>
+                      <td className="px-3 py-2">{fmt(r.giaoNhan)}</td>
                       <td className="px-3 py-2">{fmt(r.dinhPhi)}</td>
+                      <td className="px-3 py-2 text-slate-500">{r.chiHo > 0 ? fmt(r.chiHo) : "—"}</td>
                       <td className="px-3 py-2">{fmt(r.lnTruocHoaHong)}</td>
                       <td className="px-3 py-2">{fmt(r.hoaHongSale)}</td>
                       <td className="px-3 py-2 font-medium">{fmt(r.lnCongTy)}</td>
@@ -473,7 +491,7 @@ export default function BaoCaoView({
                   ))}
                   {loiNhuanTheoLo.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                      <td colSpan={10} className="px-3 py-6 text-center text-slate-400">
                         Không có đơn hàng trong khoảng thời gian này.
                       </td>
                     </tr>
@@ -481,6 +499,9 @@ export default function BaoCaoView({
                 </tbody>
               </table>
             </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Cột &quot;Chi hộ&quot; chỉ để theo dõi (tiền ứng hộ khách, không phải doanh thu/chi phí của công ty) — không cộng vào LN.
+            </p>
           </Section>
 
           <Section title="Công nợ theo lô hàng (giá bán + chi hộ + hóa đơn)">
@@ -540,7 +561,10 @@ export default function BaoCaoView({
           </Section>
 
           <Section title="Báo cáo chi phí theo loại">
-            <SimpleTable cols={["Loại chi phí", "Buy", "Sell"]} rows={chiPhiTheoLoai.map((r) => [r.ten, fmt(r.buy), fmt(r.sell)])} />
+            <SimpleTable
+              cols={["Loại chi phí", "Buy", "Sell", "Chi hộ"]}
+              rows={chiPhiTheoLoai.map((r) => [r.ten, fmt(r.buy), fmt(r.sell), r.chiHo > 0 ? fmt(r.chiHo) : "—"])}
+            />
           </Section>
 
           <Section title="Công nợ phải thu (theo khách hàng)">
