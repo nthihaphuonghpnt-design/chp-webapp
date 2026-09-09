@@ -14,9 +14,10 @@
 -- lien quan, chot so lieu) -> Da thanh toan (tao dong so_quy, khoa vinh vien)
 -- | Da huy (chi tu Nhap/Da duyet, GIAI PHONG lai moi thu da khoa).
 --
--- UNIQUE(don_hang_id) tren bang chi tiet — 1 don hang khong the nam trong 2
--- phieu dang hoat dong cung luc, la rang buoc DATABASE khong phai kiem tra o
--- frontend.
+-- Mot don hang duoc phep xuat hien trong NHIEU phieu quyet toan khac nhau qua
+-- thoi gian (quyet toan lan 1 xong, sau phat sinh them tam ung/chi phi moi
+-- thi lap phieu lan 2, chi lay phan chua quyet toan) — chi tiet o duoi, ngay
+-- truoc doan tao bang phieu_quyet_toan_chi_tiet.
 -- ============================================================================
 
 create table if not exists phieu_quyet_toan_tam_ung (
@@ -40,15 +41,21 @@ create table if not exists phieu_quyet_toan_chi_tiet (
   id uuid primary key default gen_random_uuid(),
   phieu_id uuid not null references phieu_quyet_toan_tam_ung(id) on delete cascade,
   don_hang_id uuid not null references don_hang(id),
-  created_at timestamptz not null default now(),
-  unique (don_hang_id)
+  created_at timestamptz not null default now()
 );
--- Han che da biet: vi UNIQUE(don_hang_id) la vinh vien (khong tu giai phong
--- sau khi phieu "Da thanh toan" — row nay o lai mai de giu lich su), 1 don
--- hang chi di qua co che Phieu quyet toan nay DUNG 1 LAN trong doi. Neu thuc
--- te can quyet toan lai lan 2 cho cung 1 don hang (vd co them tam ung/chi phi
--- moi rat lau sau khi da quyet toan xong), can xu ly thu cong — chua gap yeu
--- cau nay nen chua thiet ke rieng, se bo sung neu can.
+-- KHONG dat UNIQUE(don_hang_id) o day: 1 don hang PHAI duoc phep xuat hien
+-- trong NHIEU phieu quyet toan khac nhau qua thoi gian (vd quyet toan lan 1
+-- xong, sau do phat sinh them tam ung/chi phi moi thi lap phieu lan 2 — chi
+-- lay phan CHUA quyet toan). Chong trung khong nam o bang chi tiet nay, ma
+-- nam o tung DONG tam_ung_giai_chi/phat_sinh_chi_phi/don_thue_ngoai: moi dong
+-- chi co the co dung 1 phieu_quyet_toan_id (chi khoa luc "Da duyet", dieu
+-- kien "phieu_quyet_toan_id is null" o enforce_phieu_quyet_toan_trang_thai
+-- ben duoi dam bao 1 dong khong bao gio bi khoa boi 2 phieu). Ham
+-- tao_phieu_quyet_toan_tam_ung ben duoi co them 1 lop kiem tra mem (khong
+-- phai constraint DB) de bao loi ro rang neu co 1 phieu Nhap/Da duyet khac
+-- CHUA XONG cung dang giu don hang do cho cung nhan vien do — tranh nham lan
+-- khi thao tac binh thuong, nhung khong phai co che chong trung chinh (co che
+-- chinh la kiem tra tren tung dong o buoc Duyet, khong the bi vuot qua).
 
 alter table tam_ung_giai_chi add column if not exists phieu_quyet_toan_id uuid
   references phieu_quyet_toan_tam_ung(id) on delete set null;
@@ -116,14 +123,14 @@ create policy "pqtct_delete" on phieu_quyet_toan_chi_tiet for delete to authenti
   );
 
 -- ----------------------------------------------------------------------------
--- "Da hoan thanh phan viec": chi Hien truong (ops_xac_nhan) va Chung tu
--- (cs_xac_nhan) co khai niem nay — dung dung 2 co da co san tren don_hang, tu
--- nut "Xac nhan hoan thanh" rieng cua tung bo phan (khong lien quan
--- da_ban_giao_ke_toan, cung khong phai trang_thai chung "Hoan tat" cua don
--- hang). Phong ban khac (Dieu phoi, Ke toan...) khong co khai niem tam
--- ung/quyet toan nen luon tra ve false — khong bao gio du dieu kien qua duong
--- nay (dung y voi 0062: cac phong ban do khong duoc tu gan "Tam ung nhan
--- vien" tu dau).
+-- "Da hoan thanh phan viec": dieu kien du de dua 1 (don_hang, nhan_vien) vao
+-- Phieu quyet toan la KE TOAN DA TIEP NHAN (trang_thai = 'Đã tiếp nhận' trong
+-- cong_viec_hoan_thanh — bang tao o 0064, chay TRUOC file nay dung vi ly do
+-- nay). KHONG dung "Da hoan thanh" (nhan vien tu bao) — phai doi Ke toan tiep
+-- nhan (khoa nhap lieu) thi so lieu moi coi la chot, moi an toan de quyet
+-- toan. Neu chua co dong nao trong cong_viec_hoan_thanh (chua ai bam gi ca,
+-- hoac phong ban khong tham gia co che nay nhu Dieu phoi/Ke toan) thi coi
+-- nhu chua du dieu kien, tra ve false.
 -- ----------------------------------------------------------------------------
 create or replace function da_hoan_thanh_phan_viec(p_don_hang_id uuid, p_nhan_vien_id uuid)
 returns boolean
@@ -132,31 +139,22 @@ security definer
 set search_path = public
 as $$
 declare
-  v_phong_ban text;
-  v_ops boolean;
-  v_cs boolean;
+  v_trang_thai text;
 begin
-  select pb.ten into v_phong_ban
-  from nhan_vien nv join phong_ban pb on pb.id = nv.phong_ban_id
-  where nv.id = p_nhan_vien_id;
+  select trang_thai into v_trang_thai
+  from cong_viec_hoan_thanh
+  where don_hang_id = p_don_hang_id and nhan_vien_id = p_nhan_vien_id;
 
-  select ops_xac_nhan, cs_xac_nhan into v_ops, v_cs from don_hang where id = p_don_hang_id;
-
-  if v_phong_ban = 'Hiện trường' then
-    return coalesce(v_ops, false);
-  elsif v_phong_ban = 'Chứng từ' then
-    return coalesce(v_cs, false);
-  else
-    return false;
-  end if;
+  return coalesce(v_trang_thai = 'Đã tiếp nhận', false);
 end;
 $$;
 
 -- ----------------------------------------------------------------------------
 -- Tao phieu Nhap: chon 1 nhan vien + danh sach don hang MA PHAN VIEC CUA
 -- NHAN VIEN DO DA HOAN THANH tren tung don. Chi tao header + lien ket chi
--- tiet, KHONG khoa gi ca. UNIQUE(don_hang_id) tu chan neu 1 don hang bi 1
--- request khac dua vao 1 phieu Nhap khac song song.
+-- tiet, KHONG khoa gi ca. Co kiem tra mem chan neu 1 don hang dang nam trong
+-- 1 phieu Nhap/Da duyet khac CHUA XONG cua cung nhan vien (xem chi tiet trong
+-- than ham ben duoi).
 -- ----------------------------------------------------------------------------
 create or replace function tao_phieu_quyet_toan_tam_ung(p_nhan_vien_id uuid, p_don_hang_ids uuid[])
 returns uuid
@@ -176,6 +174,15 @@ begin
     if not da_hoan_thanh_phan_viec(v_don_hang_id, p_nhan_vien_id) then
       raise exception 'Đơn hàng % chưa xác nhận hoàn thành phần việc của nhân viên này — chưa thể đưa vào quyết toán', v_don_hang_id;
     end if;
+    if exists (
+      select 1 from phieu_quyet_toan_chi_tiet c
+      join phieu_quyet_toan_tam_ung p on p.id = c.phieu_id
+      where c.don_hang_id = v_don_hang_id
+        and p.nhan_vien_id = p_nhan_vien_id
+        and p.trang_thai in ('Nháp', 'Đã duyệt')
+    ) then
+      raise exception 'Đơn hàng % đang nằm trong 1 phiếu quyết toán khác chưa hoàn tất của nhân viên này', v_don_hang_id;
+    end if;
   end loop;
 
   insert into phieu_quyet_toan_tam_ung (nhan_vien_id) values (p_nhan_vien_id)
@@ -192,11 +199,11 @@ grant execute on function tao_phieu_quyet_toan_tam_ung(uuid, uuid[]) to authenti
 
 -- ----------------------------------------------------------------------------
 -- Danh sach don hang du dieu kien de UI hien cho Ke toan chon khi lap phieu
--- moi cho 1 nhan vien: da hoan thanh phan viec (da_hoan_thanh_phan_viec) VA
--- CHUA TUNG nam trong bat ky phieu_quyet_toan_chi_tiet nao (kie ca phieu da
--- huy — nhung chi_tiet cua phieu huy da bi xoa nen tu dong khong con vuong ket
--- qua nay) — dam bao 1 don hang da quyet toan roi se KHONG BAO GIO "nhay len"
--- lai trong danh sach chon cua lan sau, dung y anh hoi.
+-- moi cho 1 nhan vien: da hoan thanh phan viec (da_hoan_thanh_phan_viec), CO
+-- it nhat 1 khoan tam ung/chi phi CHUA quyet toan, VA khong dang nam trong 1
+-- phieu Nhap/Da duyet khac CHUA XONG cua chinh nhan vien nay (phieu da "Da
+-- thanh toan"/"Da huy" thi khong con can tro — don hang duoc phep quay lai
+-- danh sach nay o dot sau, dung yeu cau "quyet toan nhieu lan").
 -- ----------------------------------------------------------------------------
 create or replace function don_hang_cho_quyet_toan(p_nhan_vien_id uuid)
 returns table(don_hang_id uuid, so_don_hang text, tong_tam_ung numeric, tong_chi_treo numeric)
@@ -228,7 +235,11 @@ begin
   from don_hang dh
   where da_hoan_thanh_phan_viec(dh.id, p_nhan_vien_id)
     and not exists (
-      select 1 from phieu_quyet_toan_chi_tiet c where c.don_hang_id = dh.id
+      select 1 from phieu_quyet_toan_chi_tiet c
+      join phieu_quyet_toan_tam_ung p on p.id = c.phieu_id
+      where c.don_hang_id = dh.id
+        and p.nhan_vien_id = p_nhan_vien_id
+        and p.trang_thai in ('Nháp', 'Đã duyệt')
     )
     and (
       exists (

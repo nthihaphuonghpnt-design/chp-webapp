@@ -11,10 +11,10 @@
 -- Mot don hang co the co NHIEU khoan tam ung (nhieu lan ung) — KHONG chan,
 -- KHONG bat chon dung khoan nao. Khi Hien truong nhap chi phi, tu dong lay
 -- khoan tam ung CU NHAT con mo lam dai dien (tam_ung_id) de thoa man rang
--- buoc "cung don hang" — nhung luc quyet toan (0064), Ke toan chon CA NHOM
--- tam ung con mo cua don hang do vao chung 1 phieu, va tong duoc cong dung
--- tren toan bo nhom (khong phu thuoc tung dong chi phi dang tro vao khoan
--- tam ung cu the nao trong nhom).
+-- buoc "cung don hang" — nhung luc quyet toan (0065 — Phieu quyet toan), Ke
+-- toan chon CA NHOM tam ung con mo cua don hang do vao chung 1 phieu, va tong
+-- duoc cong dung tren toan bo nhom (khong phu thuoc tung dong chi phi dang
+-- tro vao khoan tam ung cu the nao trong nhom).
 --
 -- Cho phep chi thuc te vuot/thap hon tong tam ung (khong chan cung) — chenh
 -- lech xu ly o buoc Phieu quyet toan. Chi chan sai doi tuong: tam ung duoc
@@ -24,7 +24,7 @@
 -- truoc, cong ty hoan lai sau — vi du tam ung 0, chi 5tr thi coi nhu -5tr):
 -- KHONG chan nhap, van gan nguon_thanh_toan = "Tam ung nhan vien" nhung
 -- tam_ung_id de trong. Khoan nay VAN duoc gop chung vao dot Phieu quyet toan
--- (0064) cua nguoi do — luc quyet toan se tu hieu don hang nay co 0 tam ung
+-- (0065) cua nguoi do — luc quyet toan se tu hieu don hang nay co 0 tam ung
 -- + X tien da chi, cong don chung voi cac lo khac trong cung dot va hoan lai
 -- dung phan chenh lech rong cho nguoi nhap, KHONG tach rieng thanh 1 lan
 -- "Ke toan thanh toan truc tiep" doc lap.
@@ -39,6 +39,17 @@ alter table don_thue_ngoai add column if not exists nguon_thanh_toan text
   check (nguon_thanh_toan in ('Tiền mặt', 'Tài khoản công ty', 'Tạm ứng nhân viên'));
 alter table don_thue_ngoai add column if not exists tam_ung_id uuid
   references tam_ung_giai_chi(id) on delete set null;
+
+-- Bat buoc tam_ung_id CHI duoc gan khi nguon_thanh_toan = 'Tam ung nhan vien'
+-- — neu tra bang Tien mat/TK cong ty thi tam_ung_id phai la null. Rang buoc
+-- o cap database, khong the bi bypass tu code/API.
+alter table phat_sinh_chi_phi drop constraint if exists psc_tam_ung_id_dung_nguon;
+alter table phat_sinh_chi_phi add constraint psc_tam_ung_id_dung_nguon
+  check (tam_ung_id is null or nguon_thanh_toan = 'Tạm ứng nhân viên');
+
+alter table don_thue_ngoai drop constraint if exists dtn_tam_ung_id_dung_nguon;
+alter table don_thue_ngoai add constraint dtn_tam_ung_id_dung_nguon
+  check (tam_ung_id is null or nguon_thanh_toan = 'Tạm ứng nhân viên');
 
 -- Cot moi khong tu thua huong GRANT cap cot da ap dung o 0061 (revoke toan
 -- bang + grant danh sach cot cu the) — phai grant rieng cho 2 cot moi nay.
@@ -63,21 +74,25 @@ begin
   from nhan_vien nv join phong_ban pb on pb.id = nv.phong_ban_id
   where nv.id = new.nguoi_nhap_id;
 
-  -- Chi Hien truong va Chung tu moi co khai niem tam ung/quyet toan (gan voi
-  -- ops_xac_nhan/cs_xac_nhan tren don_hang — xem 0064). Dieu phoi khong tu bo
-  -- tien/tam ung nen KHONG tu gan gi — cung nhu Ke toan, phai chon tay nguon
-  -- thanh toan.
+  -- Chi Hien truong va Chung tu moi co khai niem tam ung/quyet toan (co chu
+  -- trinh "Hoan thanh cong viec" -> "Ke toan tiep nhan" rieng, xem 0064). Dieu
+  -- phoi khong tu bo tien/tam ung nen KHONG tu gan gi — cung nhu Ke toan,
+  -- phai chon tay nguon thanh toan.
   if v_phong_ban not in ('Hiện trường', 'Chứng từ') then
     return new;
   end if;
 
+  -- LUU Y: cot tam_ung_giai_chi.phieu_quyet_toan_id CHUA TON TAI o buoc nay
+  -- (chi duoc them o 0065 — Phieu quyet toan) nen KHONG loc theo no o day —
+  -- tai thoi diem 0062 chay, chua co phieu quyet toan nao ton tai nen khong
+  -- the co tam ung nao "da khoa" ca. Ham nay se duoc create or replace lai o
+  -- 0066 (sau khi 0065 da them cot) de bo sung dung dieu kien "chua bi khoa".
   select id into v_tam_ung_id
   from tam_ung_giai_chi
   where don_hang_id = new.don_hang_id
     and nhan_vien_id = new.nguoi_nhap_id
     and loai = 'Tạm ứng'
     and trang_thai = 'Đã duyệt'
-    and phieu_quyet_toan_id is null
   order by ngay_thuc_hien asc, created_at asc
   limit 1;
 
@@ -91,7 +106,7 @@ $$;
 
 -- Trigger kiem tra tam_ung_id hop le (kiem_tra_tam_ung_id_hop_le) can tham
 -- chieu cot tam_ung_giai_chi.phieu_quyet_toan_id, chua ton tai luc nay — tao
--- o migration 0065, sau khi 0064 da them cot do.
+-- o migration 0066, sau khi 0065 da them cot do.
 --
 -- Thu tu chay giua 2 trigger nay (Postgres chay BEFORE trigger theo thu tu
 -- ten, khong dam bao truoc) KHONG anh huong ket qua: trigger o day chi tu
