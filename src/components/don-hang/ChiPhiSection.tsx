@@ -10,6 +10,7 @@ import QuickAddDoiTacThueNgoai from "@/components/common/QuickAddDoiTacThueNgoai
 import MoneyInput from "@/components/common/MoneyInput";
 import ChiPhiBulkForm, { type BulkRowValues } from "@/components/don-hang/ChiPhiBulkForm";
 import type { BangGiaKhachHang, ChiTietVanChuyen, PhatSinhChiPhi } from "@/types/database";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS } from "@/lib/giaBan";
 
 interface Option {
   id: string;
@@ -109,15 +110,19 @@ export default function ChiPhiSection({
       }
     }
 
+    // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — select() chi lay
+    // cac cot an toan, roi ghep lai gia_ban_sell tu chinh payload vua gui (biet
+    // truoc gia tri, khong can goi RPC round-trip cho dong minh vua ghi).
     if (editing) {
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
         .update(payload)
         .eq("id", editing.id)
-        .select()
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
       if (!error && data) {
-        setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as PhatSinhChiPhi) : r)));
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as PhatSinhChiPhi;
+        setRows((prev) => prev.map((r) => (r.id === editing.id ? rowDayDu : r)));
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
@@ -131,10 +136,11 @@ export default function ChiPhiSection({
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
         .insert({ ...payload, nguoi_nhap_id: nv?.id, trang_thai: "Chờ duyệt" })
-        .select()
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
       if (!error && data) {
-        setRows((prev) => [data as PhatSinhChiPhi, ...prev]);
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as PhatSinhChiPhi;
+        setRows((prev) => [rowDayDu, ...prev]);
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
@@ -162,12 +168,18 @@ export default function ChiPhiSection({
       trang_thai: "Chờ duyệt",
     }));
 
-    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select();
+    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select(PHAT_SINH_CHI_PHI_SAFE_COLS);
     if (error) {
       window.alert(error.message);
       return;
     }
-    setRows((prev) => [...((data as PhatSinhChiPhi[]) ?? []), ...prev]);
+    // Insert nhieu dong giu dung thu tu voi records (Postgres RETURNING theo
+    // thu tu VALUES) — ghep lai gia_ban_sell tung dong tu chinh records da gui.
+    const rowsDayDu = ((data ?? []) as PhatSinhChiPhi[]).map((row, i) => ({
+      ...row,
+      gia_ban_sell: records[i]?.gia_ban_sell ?? null,
+    }));
+    setRows((prev) => [...rowsDayDu, ...prev]);
     setShowBulkForm(false);
   }
 
@@ -187,10 +199,12 @@ export default function ChiPhiSection({
       .from("phat_sinh_chi_phi")
       .update({ trang_thai: trangThai, nguoi_duyet_id: nv?.id })
       .eq("id", row.id)
-      .select()
+      .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
       .single();
     if (!error && data) {
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as PhatSinhChiPhi) : r)));
+      // gia_ban_sell khong doi trong thao tac duyet — giu nguyen tu row cu.
+      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as PhatSinhChiPhi;
+      setRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
     } else if (error) {
       window.alert(error.message);
     }
@@ -342,13 +356,17 @@ export default function ChiPhiSection({
       return;
     }
 
-    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select();
+    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select(PHAT_SINH_CHI_PHI_SAFE_COLS);
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
       return;
     }
-    setRows((prev) => [...((data as PhatSinhChiPhi[]) ?? []), ...prev]);
+    const rowsDayDu = ((data ?? []) as PhatSinhChiPhi[]).map((row, i) => ({
+      ...row,
+      gia_ban_sell: (records[i]?.gia_ban_sell as number | null | undefined) ?? null,
+    }));
+    setRows((prev) => [...rowsDayDu, ...prev]);
     setImportMsg(`Đã nhập ${data?.length ?? 0} dòng${errors.length ? `, ${errors.length} dòng lỗi: ${errors.join(" | ")}` : "."}`);
   }
 

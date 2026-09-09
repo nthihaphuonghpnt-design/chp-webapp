@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import LuongCuaToiView from "@/components/luong/LuongCuaToiView";
+import { ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function LuongCuaToiPage() {
   const supabase = await createClient();
@@ -48,11 +49,18 @@ export default async function LuongCuaToiPage() {
   const [{ data: chiPhiList }, { data: phuThuList }, { data: thueNgoaiList }] =
     donHangIds.length > 0
       ? await Promise.all([
-          supabase.from("phat_sinh_chi_phi").select("don_hang_id, so_tien_da_chi, gia_ban_sell, noi_bo, trang_thai").in("don_hang_id", donHangIds),
+          supabase.from("phat_sinh_chi_phi").select("id, don_hang_id, so_tien_da_chi, noi_bo, trang_thai").in("don_hang_id", donHangIds),
           supabase.from("phu_thu").select("don_hang_id, thanh_tien").in("don_hang_id", donHangIds),
-          supabase.from("don_thue_ngoai").select("don_hang_id, so_tien_da_chi, gia_ban_sell").in("don_hang_id", donHangIds),
+          supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi").in("don_hang_id", donHangIds),
         ])
       : [{ data: [] }, { data: [] }, { data: [] }];
+
+  // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng
+  // (chi thuc su co du lieu khi chinh chu la Sale, xem lay_gia_ban_chi_phi).
+  const [chiPhiListDayDu, thueNgoaiListDayDu] = await Promise.all([
+    ghepGiaBanChiPhi(supabase, chiPhiList ?? []),
+    ghepGiaBanThueNgoai(supabase, thueNgoaiList ?? []),
+  ]);
 
   return (
     <LuongCuaToiView
@@ -60,10 +68,9 @@ export default async function LuongCuaToiPage() {
       nv={nv as any}
       chiPhiGiaoNhanList={chiPhiGiaoNhanList ?? []}
       donHangCuaToi={donHangCuaToi ?? []}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      chiPhiList={(chiPhiList ?? []) as any[]}
+      chiPhiList={chiPhiListDayDu}
       phuThuList={phuThuList ?? []}
-      thueNgoaiList={thueNgoaiList ?? []}
+      thueNgoaiList={thueNgoaiListDayDu}
       dinhPhiList={dinhPhiList ?? []}
       soLoTheoThangRaw={soLoRaw ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

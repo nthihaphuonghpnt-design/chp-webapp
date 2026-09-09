@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import HoaDonView from "@/components/khach-hang/HoaDonView";
+import { ghepGiaBanChiPhi } from "@/lib/giaBan";
 
 export default async function HoaDonPage() {
   const supabase = await createClient();
@@ -37,7 +38,7 @@ export default async function HoaDonPage() {
       ? await Promise.all([
           supabase
             .from("phat_sinh_chi_phi")
-            .select("id, hoa_don_id, don_hang_id, chi_ho, so_tien_da_chi, gia_ban_sell, vat_percent, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+            .select("id, hoa_don_id, don_hang_id, chi_ho, so_tien_da_chi, vat_percent, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
             .in("hoa_don_id", hoaDonIds),
           supabase
             .from("phu_thu")
@@ -48,6 +49,9 @@ export default async function HoaDonPage() {
 
   const canEdit = user?.phong_ban === "Chứng từ" || user?.phong_ban === "Kế toán";
   const canDelete = user?.phong_ban === "Kế toán";
+
+  // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng.
+  const chiPhiRowsDayDu = await ghepGiaBanChiPhi(supabase, chiPhiRows ?? []);
 
   return (
     <HoaDonView
@@ -62,7 +66,7 @@ export default async function HoaDonPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dinhKemRows={(dinhKemRows ?? []) as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      chiPhiRows={(chiPhiRows ?? []) as any[]}
+      chiPhiRows={chiPhiRowsDayDu as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       phuThuRows={(phuThuRows ?? []) as any[]}
       canEdit={canEdit}

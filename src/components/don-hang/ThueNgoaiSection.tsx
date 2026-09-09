@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import QuickAddDoiTacThueNgoai from "@/components/common/QuickAddDoiTacThueNgoai";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { DonThueNgoai } from "@/types/database";
+import { DON_THUE_NGOAI_SAFE_COLS } from "@/lib/giaBan";
 
 interface Option {
   id: string;
@@ -63,10 +64,18 @@ export default function ThueNgoaiSection({
       }
     }
 
+    // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — ghep lai tu
+    // chinh payload vua gui, khong can goi RPC round-trip.
     if (editing) {
-      const { data, error } = await supabase.from("don_thue_ngoai").update(payload).eq("id", editing.id).select().single();
+      const { data, error } = await supabase
+        .from("don_thue_ngoai")
+        .update(payload)
+        .eq("id", editing.id)
+        .select(DON_THUE_NGOAI_SAFE_COLS)
+        .single();
       if (!error && data) {
-        setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as DonThueNgoai) : r)));
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as DonThueNgoai;
+        setRows((prev) => prev.map((r) => (r.id === editing.id ? rowDayDu : r)));
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
@@ -80,10 +89,11 @@ export default function ThueNgoaiSection({
       const { data, error } = await supabase
         .from("don_thue_ngoai")
         .insert({ ...payload, nguoi_nhap_id: nv?.id })
-        .select()
+        .select(DON_THUE_NGOAI_SAFE_COLS)
         .single();
       if (!error && data) {
-        setRows((prev) => [data as DonThueNgoai, ...prev]);
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as DonThueNgoai;
+        setRows((prev) => [rowDayDu, ...prev]);
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
@@ -102,10 +112,11 @@ export default function ThueNgoaiSection({
       .from("don_thue_ngoai")
       .update({ trang_thai: trangThai })
       .eq("id", row.id)
-      .select()
+      .select(DON_THUE_NGOAI_SAFE_COLS)
       .single();
     if (!error && data) {
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as DonThueNgoai) : r)));
+      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as DonThueNgoai;
+      setRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
     } else if (error) {
       window.alert(error.message);
     }
@@ -222,13 +233,17 @@ export default function ThueNgoaiSection({
       return;
     }
 
-    const { data, error } = await supabase.from("don_thue_ngoai").insert(records).select();
+    const { data, error } = await supabase.from("don_thue_ngoai").insert(records).select(DON_THUE_NGOAI_SAFE_COLS);
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
       return;
     }
-    setRows((prev) => [...((data as DonThueNgoai[]) ?? []), ...prev]);
+    const rowsDayDu = ((data ?? []) as DonThueNgoai[]).map((row, i) => ({
+      ...row,
+      gia_ban_sell: (records[i]?.gia_ban_sell as number | null | undefined) ?? null,
+    }));
+    setRows((prev) => [...rowsDayDu, ...prev]);
     setImportMsg(`Đã nhập ${data?.length ?? 0} dòng${errors.length ? `, lỗi: ${errors.join(" | ")}` : "."}`);
   }
 
