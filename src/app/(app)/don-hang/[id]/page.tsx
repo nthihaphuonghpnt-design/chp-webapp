@@ -36,6 +36,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: thueNgoaiRows },
     { data: doiTacList },
     { data: nhanVienList },
+    { data: congViecRows },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -63,6 +64,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       .select("id, ho_ten, phong_ban:phong_ban_id(ten)")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
+    supabase.from("cong_viec_hoan_thanh").select("id, nhan_vien_id, trang_thai").eq("don_hang_id", id),
   ]);
 
   if (!order) notFound();
@@ -127,6 +129,32 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
       return { value: nv.id, label: `${nv.ho_ten} (${pb?.ten ?? ""})` };
     });
+
+  // Ke toan chon "tam ung nhan vien" khi nhap ho chi phi/thue ngoai — chi cho
+  // dung phong ban thuc su tham gia chu trinh Hoan thanh/Tiep nhan lam nguoi
+  // nhap (xem 0064): Chi phi cho Hien truong + Chung tu, Thue ngoai chi Hien
+  // truong (Chung tu khong nhap thue ngoai).
+  function nhanVienTamUngOption(nv: NonNullable<typeof nhanVienList>[number]) {
+    const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
+    return { id: nv.id, ten: `${nv.ho_ten} (${pb?.ten ?? ""})`, phongBan: pb?.ten ?? "" };
+  }
+  const nhanVienChiPhiTamUngOptions = (nhanVienList ?? [])
+    .map(nhanVienTamUngOption)
+    .filter((nv) => nv.phongBan === "Hiện trường" || nv.phongBan === "Chứng từ")
+    .map(({ id, ten }) => ({ id, ten }));
+  const nhanVienThueNgoaiTamUngOptions = (nhanVienList ?? [])
+    .map(nhanVienTamUngOption)
+    .filter((nv) => nv.phongBan === "Hiện trường")
+    .map(({ id, ten }) => ({ id, ten }));
+
+  // Map nhan_vien_id -> trang_thai "cong_viec_hoan_thanh" cua don hang nay,
+  // dung de khoa Sua/Xoa chi phi/thue ngoai o dung UI voi dieu kien DB da
+  // enforce san (enforce_phat_sinh_chi_phi_update/enforce_don_thue_ngoai_update,
+  // 0064) — chi hien trang thai, khong thay the kiem tra o DB.
+  const congViecMap: Record<string, string> = {};
+  for (const c of congViecRows ?? []) {
+    if (c.nhan_vien_id) congViecMap[c.nhan_vien_id] = c.trang_thai;
+  }
 
   const kh = Array.isArray(order.khach_hang) ? order.khach_hang[0] : order.khach_hang;
   const hangHoa = Array.isArray(order.hang_hoa) ? order.hang_hoa[0] : order.hang_hoa;
@@ -248,6 +276,9 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           khachHangId={order.khach_hang_id}
           hangHoaId={order.hang_hoa_id}
           phongBan={user?.phong_ban ?? ""}
+          currentNhanVienId={user?.id ?? null}
+          nhanVienTamUngOptions={nhanVienChiPhiTamUngOptions}
+          congViecMap={congViecMap}
         />
       </div>
 
@@ -293,6 +324,9 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           initialRows={thueNgoaiRowsDayDu}
           doiTacList={doiTacList ?? []}
           phongBan={user?.phong_ban ?? ""}
+          currentNhanVienId={user?.id ?? null}
+          nhanVienTamUngOptions={nhanVienThueNgoaiTamUngOptions}
+          congViecMap={congViecMap}
         />
       </div>
 
