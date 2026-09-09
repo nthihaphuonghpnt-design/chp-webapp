@@ -48,9 +48,9 @@ export default async function LuongCuaToiPage() {
   const [{ data: chiPhiList }, { data: phuThuList }, { data: thueNgoaiList }] =
     donHangIds.length > 0
       ? await Promise.all([
-          supabase.from("phat_sinh_chi_phi").select("don_hang_id, gia_von_buy, gia_ban_sell, noi_bo, trang_thai").in("don_hang_id", donHangIds),
+          supabase.from("phat_sinh_chi_phi").select("don_hang_id, so_tien_da_chi, gia_ban_sell, noi_bo, trang_thai").in("don_hang_id", donHangIds),
           supabase.from("phu_thu").select("don_hang_id, thanh_tien").in("don_hang_id", donHangIds),
-          supabase.from("don_thue_ngoai").select("don_hang_id, gia_von_buy, gia_ban_sell").in("don_hang_id", donHangIds),
+          supabase.from("don_thue_ngoai").select("don_hang_id, so_tien_da_chi, gia_ban_sell").in("don_hang_id", donHangIds),
         ])
       : [{ data: [] }, { data: [] }, { data: [] }];
 

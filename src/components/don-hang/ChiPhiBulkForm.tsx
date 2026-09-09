@@ -16,7 +16,7 @@ export interface BulkRowValues {
   nha_cung_cap_id: string | null;
   doi_tac_thue_ngoai_id: string | null;
   chi_tiet_van_chuyen_id: string | null;
-  gia_von_buy: string;
+  so_tien_da_chi: string;
   gia_ban_sell: string;
   noi_bo: boolean;
   chi_ho: boolean;
@@ -31,7 +31,7 @@ function blankRow(): { key: number } & BulkRowValues {
     nha_cung_cap_id: null,
     doi_tac_thue_ngoai_id: null,
     chi_tiet_van_chuyen_id: null,
-    gia_von_buy: "",
+    so_tien_da_chi: "",
     gia_ban_sell: "",
     noi_bo: true,
     chi_ho: false,
@@ -98,7 +98,7 @@ export default function ChiPhiBulkForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const filled = rows.filter((r) => r.loai_chi_phi_id && r.gia_von_buy);
+    const filled = rows.filter((r) => r.loai_chi_phi_id && r.so_tien_da_chi);
     if (filled.length === 0) {
       window.alert("Chưa có dòng nào điền đủ Loại chi phí + Giá vốn.");
       return;
@@ -153,7 +153,7 @@ export default function ChiPhiBulkForm({
                   />
                 </div>
                 <div className="col-span-1">
-                  <MoneyInput value={r.gia_von_buy} onChange={(v) => update(r.key, { gia_von_buy: v })} className={cls} />
+                  <MoneyInput value={r.so_tien_da_chi} onChange={(v) => update(r.key, { so_tien_da_chi: v })} className={cls} />
                 </div>
                 {canSeeSell && (
                   <div className="col-span-1">

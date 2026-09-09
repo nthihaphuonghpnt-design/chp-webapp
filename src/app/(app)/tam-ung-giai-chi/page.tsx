@@ -20,7 +20,7 @@ export default async function TamUngGiaiChiPage() {
       .order("ten_day_du"),
     supabase
       .from("phat_sinh_chi_phi")
-      .select("nguoi_nhap_id, don_hang_id, gia_von_buy")
+      .select("nguoi_nhap_id, don_hang_id, so_tien_da_chi")
       .not("don_hang_id", "is", null)
       .not("nguoi_nhap_id", "is", null)
       .neq("trang_thai", "Từ chối"),
@@ -34,7 +34,7 @@ export default async function TamUngGiaiChiPage() {
   const daChiTheoNguoiVaLo: Record<string, number> = {};
   for (const r of chiPhiRows ?? []) {
     const key = `${r.nguoi_nhap_id}:${r.don_hang_id}`;
-    daChiTheoNguoiVaLo[key] = (daChiTheoNguoiVaLo[key] ?? 0) + (r.gia_von_buy ?? 0);
+    daChiTheoNguoiVaLo[key] = (daChiTheoNguoiVaLo[key] ?? 0) + (r.so_tien_da_chi ?? 0);
   }
 
   return (

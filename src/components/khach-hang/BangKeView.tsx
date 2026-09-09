@@ -47,7 +47,7 @@ interface DonHangOpt {
 interface ChiPhiRow {
   id: string;
   don_hang_id: string;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   vat_percent: number | null;
   chi_ho: boolean;
@@ -160,7 +160,7 @@ export default function BangKeView({
   const dongChiHo = chiPhiRows.filter((r) => r.chi_ho);
   const dongGiaBan = chiPhiRows.filter((r) => !r.chi_ho);
 
-  const tongChiHo = dongChiHo.filter((r) => chonChiPhi.has(r.id)).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
+  const tongChiHo = dongChiHo.filter((r) => chonChiPhi.has(r.id)).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
   const tongGiaBanChiPhi = dongGiaBan.filter((r) => chonChiPhi.has(r.id)).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongPhuThu = phuThuRows.filter((r) => chonPhuThu.has(r.id)).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
   const tongTruocThue = tongGiaBanChiPhi + tongPhuThu;
@@ -193,7 +193,7 @@ export default function BangKeView({
       coTheSuaVat: boolean;
     }[] = [];
     for (const r of chiPhiRows) {
-      const soTien = r.chi_ho ? r.gia_von_buy ?? 0 : r.gia_ban_sell ?? 0;
+      const soTien = r.chi_ho ? r.so_tien_da_chi ?? 0 : r.gia_ban_sell ?? 0;
       // Ưu tiên VAT% nhập tay ở khung "Tạo hóa đơn" (áp cho cả bảng); nếu chưa nhập,
       // dùng VAT% đã lưu sẵn theo từng dòng chi phí lúc tạo ở Đơn hàng.
       const vatDong = r.chi_ho ? 0 : vat || r.vat_percent || 0;
@@ -520,7 +520,7 @@ export default function BangKeView({
                 checked={chonChiPhi.has(r.id)}
                 onToggleCheck={() => toggle(chonChiPhi, r.id, setChonChiPhi)}
                 label={`${one(r.loai_chi_phi)?.ten ?? "—"} · Đơn ${one(r.don_hang)?.so_don_hang ?? "—"}`}
-                amount={r.gia_von_buy ?? 0}
+                amount={r.so_tien_da_chi ?? 0}
                 actionLabel="Chuyển sang Giá bán"
                 onAction={() => toggleChiHo(r)}
               />

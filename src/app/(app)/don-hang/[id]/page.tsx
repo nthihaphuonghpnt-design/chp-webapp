@@ -93,13 +93,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const tongDinhPhiThang = (dinhPhiRows ?? []).reduce((s, r) => s + (r.so_tien ?? 0), 0);
   const dinhPhiPhanBo = soLoTrongThang && soLoTrongThang > 0 ? tongDinhPhiThang / soLoTrongThang : 0;
 
-  const tongBuyNoiBo = (chiPhiRows ?? []).filter((r) => r.noi_bo).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
+  const tongBuyNoiBo = (chiPhiRows ?? []).filter((r) => r.noi_bo).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
   const tongSell =
     (chiPhiRows ?? []).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0) +
     (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0) +
     (thueNgoaiRows ?? []).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongChiPhiGiaoNhan = (chiPhiGiaoNhanRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
-  const tongChiPhiThueNgoai = (thueNgoaiRows ?? []).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
+  const tongChiPhiThueNgoai = (thueNgoaiRows ?? []).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
 
   const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - tongChiPhiThueNgoai - dinhPhiPhanBo;
   const chiPhiSale = loiNhuanTruocHoaHong * 0.4;

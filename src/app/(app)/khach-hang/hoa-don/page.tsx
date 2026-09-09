@@ -37,7 +37,7 @@ export default async function HoaDonPage() {
       ? await Promise.all([
           supabase
             .from("phat_sinh_chi_phi")
-            .select("id, hoa_don_id, don_hang_id, chi_ho, gia_von_buy, gia_ban_sell, vat_percent, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+            .select("id, hoa_don_id, don_hang_id, chi_ho, so_tien_da_chi, gia_ban_sell, vat_percent, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
             .in("hoa_don_id", hoaDonIds),
           supabase
             .from("phu_thu")

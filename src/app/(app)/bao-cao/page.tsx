@@ -38,10 +38,10 @@ export default async function BaoCaoPage() {
     // chi phi cua don hang do minh phu trach, khong can chan them o day.
     supabase
       .from("phat_sinh_chi_phi")
-      .select("don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, gia_von_buy, gia_ban_sell, chi_ho, noi_bo, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai"),
+      .select("don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, so_tien_da_chi, gia_ban_sell, chi_ho, noi_bo, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
     isKeToanOrGiamDoc
-      ? supabase.from("don_thue_ngoai").select("don_hang_id, doi_tac_thue_ngoai_id, gia_von_buy, gia_ban_sell, so_tien_da_thanh_toan, ngay_thue")
+      ? supabase.from("don_thue_ngoai").select("don_hang_id, doi_tac_thue_ngoai_id, so_tien_da_chi, gia_ban_sell, so_tien_da_thanh_toan, ngay_thue")
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc
       ? supabase.from("hoa_don_xuat").select("id, khach_hang_id, so_hoa_don, ngay_xuat, tong_tien, tien_chi_ho, so_tien_da_thu, trang_thai_thanh_toan")

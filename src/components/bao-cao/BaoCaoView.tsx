@@ -18,7 +18,7 @@ interface ChiPhi {
   loai_chi_phi_id: string | null;
   nha_cung_cap_id: string | null;
   doi_tac_thue_ngoai_id: string | null;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   chi_ho: boolean;
   noi_bo: boolean;
@@ -34,7 +34,7 @@ interface PhuThu {
 interface ThueNgoai {
   don_hang_id: string;
   doi_tac_thue_ngoai_id: string | null;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   so_tien_da_thanh_toan: number | null;
   ngay_thue: string;
@@ -178,7 +178,7 @@ export default function BaoCaoView({
         doanhThu +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
         thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
-      const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.gia_von_buy ?? 0), 0);
+      const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
       const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
       const lnTruocHoaHong = sell - buy - thueNgoaiBuy - giaoNhan - dinhPhi;
@@ -194,7 +194,7 @@ export default function BaoCaoView({
       const giaBan =
         cp.filter((c) => !c.chi_ho).reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
-      const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.gia_von_buy ?? 0), 0);
+      const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
       const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id));
       const tongHoaDon = hoaDonLienQuan.reduce((s, h) => s + h.tong_tien, 0);
@@ -282,7 +282,7 @@ export default function BaoCaoView({
       if (!key) continue;
       if (!map.has(key)) map.set(key, { ten: nccTen(key), tongNo: 0, daTra: 0 });
       const m = map.get(key)!;
-      m.tongNo += c.gia_von_buy ?? 0;
+      m.tongNo += c.so_tien_da_chi ?? 0;
       m.daTra += c.so_tien_da_thanh_toan ?? 0;
     }
     for (const t of thueNgoaiTrongKy) {
@@ -290,7 +290,7 @@ export default function BaoCaoView({
       if (!key) continue;
       if (!map.has(key)) map.set(key, { ten: nccTen(key), tongNo: 0, daTra: 0 });
       const m = map.get(key)!;
-      m.tongNo += t.gia_von_buy ?? 0;
+      m.tongNo += t.so_tien_da_chi ?? 0;
       m.daTra += t.so_tien_da_thanh_toan ?? 0;
     }
     return Array.from(map.values()).map((m) => ({ ...m, conPhaiTra: m.tongNo - m.daTra }));
@@ -303,7 +303,7 @@ export default function BaoCaoView({
       const key = t.doi_tac_thue_ngoai_id ?? "khac";
       if (!map.has(key)) map.set(key, { ten: nccTen(t.doi_tac_thue_ngoai_id), buy: 0, sell: 0 });
       const m = map.get(key)!;
-      m.buy += t.gia_von_buy ?? 0;
+      m.buy += t.so_tien_da_chi ?? 0;
       m.sell += t.gia_ban_sell ?? 0;
     }
     return Array.from(map.values()).map((m) => ({ ...m, chenhLech: m.sell - m.buy }));

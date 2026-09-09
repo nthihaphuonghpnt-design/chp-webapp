@@ -56,7 +56,7 @@ export default function ThueNgoaiSection({
   async function handleSave(values: Record<string, string>) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
     for (const [k, v] of Object.entries(values)) {
-      if (["gia_von_buy", "gia_ban_sell", "so_tien_da_thanh_toan"].includes(k)) {
+      if (["so_tien_da_chi", "gia_ban_sell", "so_tien_da_thanh_toan"].includes(k)) {
         payload[k] = v === "" ? null : Number(v);
       } else {
         payload[k] = v === "" ? null : v;
@@ -128,11 +128,11 @@ export default function ThueNgoaiSection({
       r.loai_dich_vu_thue ?? "",
       doiTacTen(r.doi_tac_thue_ngoai_id),
       r.noi_dung ?? "",
-      r.gia_von_buy ?? "",
+      r.so_tien_da_chi ?? "",
       ...(canSeeSell ? [r.gia_ban_sell ?? ""] : []),
       r.tinh_trang_thanh_toan,
       r.so_tien_da_thanh_toan ?? "",
-      (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0),
+      (r.so_tien_da_chi ?? 0) - (r.so_tien_da_thanh_toan ?? 0),
       r.ngay_thue,
       r.trang_thai,
     ]);
@@ -209,7 +209,7 @@ export default function ThueNgoaiSection({
         loai_dich_vu_thue: loai,
         doi_tac_thue_ngoai_id: doiTac.id,
         noi_dung: get("Nội dung") || null,
-        gia_von_buy: Number(giaVon),
+        so_tien_da_chi: Number(giaVon),
         gia_ban_sell: canSeeSell && get("Giá bán (sell)") ? Number(get("Giá bán (sell)")) : null,
         ngay_thue: get("Ngày thuê (yyyy-mm-dd)") || new Date().toISOString().slice(0, 10),
         nguoi_nhap_id: nv?.id,
@@ -232,7 +232,7 @@ export default function ThueNgoaiSection({
     setImportMsg(`Đã nhập ${data?.length ?? 0} dòng${errors.length ? `, lỗi: ${errors.join(" | ")}` : "."}`);
   }
 
-  const tongPhaiTra = rows.reduce((s, r) => s + ((r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0)), 0);
+  const tongPhaiTra = rows.reduce((s, r) => s + ((r.so_tien_da_chi ?? 0) - (r.so_tien_da_thanh_toan ?? 0)), 0);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -286,7 +286,7 @@ export default function ThueNgoaiSection({
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TRANG_THAI_COLOR[row.trang_thai]}`}>{row.trang_thai}</span>
             </div>
             <p className="text-slate-500">
-              {doiTacTen(row.doi_tac_thue_ngoai_id)} · Buy: {(row.gia_von_buy ?? 0).toLocaleString("en-US")}
+              {doiTacTen(row.doi_tac_thue_ngoai_id)} · Buy: {(row.so_tien_da_chi ?? 0).toLocaleString("en-US")}
               {canSeeSell && row.gia_ban_sell ? ` · Sell: ${row.gia_ban_sell.toLocaleString("en-US")}` : ""}
             </p>
             <p className="text-slate-500">
@@ -365,7 +365,7 @@ function ThueNgoaiForm({
     loai_dich_vu_thue: initial?.loai_dich_vu_thue ?? "",
     doi_tac_thue_ngoai_id: initial?.doi_tac_thue_ngoai_id ?? "",
     noi_dung: initial?.noi_dung ?? "",
-    gia_von_buy: initial?.gia_von_buy?.toString() ?? "",
+    so_tien_da_chi: initial?.so_tien_da_chi?.toString() ?? "",
     gia_ban_sell: initial?.gia_ban_sell?.toString() ?? "",
     tinh_trang_thanh_toan: initial?.tinh_trang_thanh_toan ?? "Chưa thanh toán",
     so_tien_da_thanh_toan: initial?.so_tien_da_thanh_toan?.toString() ?? "",
@@ -416,7 +416,7 @@ function ThueNgoaiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Giá vốn (buy)</label>
-            <MoneyInput required value={values.gia_von_buy} onChange={(v) => set("gia_von_buy", v)} className={cls} />
+            <MoneyInput required value={values.so_tien_da_chi} onChange={(v) => set("so_tien_da_chi", v)} className={cls} />
           </div>
           {canSeeSell && (
             <div>

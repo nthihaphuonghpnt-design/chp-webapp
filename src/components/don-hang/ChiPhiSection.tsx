@@ -86,7 +86,7 @@ export default function ChiPhiSection({
     for (const [k, v] of Object.entries(values)) {
       if (typeof v === "boolean") {
         payload[k] = v;
-      } else if (["so_luong", "don_gia", "gia_von_buy", "gia_ban_sell", "vat_percent", "so_tien_da_thanh_toan"].includes(k)) {
+      } else if (["so_luong", "don_gia", "so_tien_da_chi", "gia_ban_sell", "vat_percent", "so_tien_da_thanh_toan"].includes(k)) {
         payload[k] = v === "" ? null : Number(v);
       } else {
         payload[k] = v === "" ? null : v;
@@ -154,7 +154,7 @@ export default function ChiPhiSection({
       nha_cung_cap_id: r.nha_cung_cap_id,
       doi_tac_thue_ngoai_id: r.doi_tac_thue_ngoai_id,
       chi_tiet_van_chuyen_id: r.chi_tiet_van_chuyen_id,
-      gia_von_buy: Number(r.gia_von_buy),
+      so_tien_da_chi: Number(r.so_tien_da_chi),
       gia_ban_sell: r.gia_ban_sell ? Number(r.gia_ban_sell) : null,
       noi_bo: r.noi_bo,
       chi_ho: r.chi_ho,
@@ -225,7 +225,7 @@ export default function ChiPhiSection({
       changTen(r.chi_tiet_van_chuyen_id) ?? "",
       r.so_luong ?? "",
       r.don_gia ?? "",
-      r.gia_von_buy ?? "",
+      r.so_tien_da_chi ?? "",
       ...(canSeeSell ? [r.gia_ban_sell ?? ""] : []),
       r.vat_percent ?? "",
       r.tien_thue,
@@ -323,7 +323,7 @@ export default function ChiPhiSection({
         doi_tac_thue_ngoai_id: doiTac?.id ?? null,
         so_luong: get("Số lượng") ? Number(get("Số lượng")) : null,
         don_gia: get("Đơn giá") ? Number(get("Đơn giá")) : null,
-        gia_von_buy: Number(giaVon),
+        so_tien_da_chi: Number(giaVon),
         gia_ban_sell: canSeeSell && get("Giá bán (sell)") ? Number(get("Giá bán (sell)")) : null,
         vat_percent: get("VAT %") ? Number(get("VAT %")) : null,
         noi_bo: get("Nội bộ (Có/Không)").toLowerCase() !== "không",
@@ -352,9 +352,9 @@ export default function ChiPhiSection({
     setImportMsg(`Đã nhập ${data?.length ?? 0} dòng${errors.length ? `, ${errors.length} dòng lỗi: ${errors.join(" | ")}` : "."}`);
   }
 
-  const tongBuy = rows.filter((r) => r.noi_bo).reduce((s, r) => s + (r.gia_von_buy ?? 0), 0);
+  const tongBuy = rows.filter((r) => r.noi_bo).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
   const tongSell = rows.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
-  const tongPhaiTra = rows.reduce((s, r) => s + (r.gia_von_buy ?? 0) - (r.so_tien_da_thanh_toan ?? 0), 0);
+  const tongPhaiTra = rows.reduce((s, r) => s + (r.so_tien_da_chi ?? 0) - (r.so_tien_da_thanh_toan ?? 0), 0);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -422,7 +422,7 @@ export default function ChiPhiSection({
             </div>
             <p className="text-slate-500">
               {row.nha_cung_cap_id ? nccTen(row.nha_cung_cap_id) : doiTacTen(row.doi_tac_thue_ngoai_id)} · Buy:{" "}
-              {(row.gia_von_buy ?? 0).toLocaleString("en-US")}
+              {(row.so_tien_da_chi ?? 0).toLocaleString("en-US")}
               {canSeeSell && ` · Sell: ${(row.gia_ban_sell ?? 0).toLocaleString("en-US")}`}
               {" · "}
               {row.noi_bo ? "Nội bộ" : row.chi_ho ? "Chi hộ" : "—"}
@@ -569,7 +569,7 @@ function ChiPhiForm({
     phuong_thuc_thanh_toan: initial?.phuong_thuc_thanh_toan ?? "",
     so_luong: initial?.so_luong?.toString() ?? "",
     don_gia: initial?.don_gia?.toString() ?? "",
-    gia_von_buy: initial?.gia_von_buy?.toString() ?? "",
+    so_tien_da_chi: initial?.so_tien_da_chi?.toString() ?? "",
     gia_ban_sell: initial?.gia_ban_sell?.toString() ?? "",
     vat_percent: initial?.vat_percent?.toString() ?? "",
     ngay_phat_sinh: initial?.ngay_phat_sinh ?? new Date().toISOString().slice(0, 10),
@@ -670,7 +670,7 @@ function ChiPhiForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Giá vốn (buy)</label>
-            <MoneyInput disabled={isSaleOnly} value={values.gia_von_buy} onChange={(v) => set("gia_von_buy", v)} className={cls} />
+            <MoneyInput disabled={isSaleOnly} value={values.so_tien_da_chi} onChange={(v) => set("so_tien_da_chi", v)} className={cls} />
           </div>
           {canSeeSell && (
             <div>

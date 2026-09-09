@@ -3,7 +3,7 @@
 // o tung cho, de tranh lech nhau giua cac bao cao (chi_ho tung bi tinh nham vao doanh thu
 // o loiNhuanTheoLo/chiPhiTheoLoai/doanhSoTheoSale trong khi congNoTheoLo lai loc dung).
 export interface ChiPhiPhanLoaiInput {
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   chi_ho: boolean;
   noi_bo: boolean;
@@ -17,11 +17,11 @@ export interface PhanLoaiChiPhiKetQua {
 
 export function phanLoaiChiPhi(c: ChiPhiPhanLoaiInput): PhanLoaiChiPhiKetQua {
   if (c.chi_ho) {
-    return { doanhThu: 0, chiPhiThuc: 0, chiHo: c.gia_von_buy ?? 0 };
+    return { doanhThu: 0, chiPhiThuc: 0, chiHo: c.so_tien_da_chi ?? 0 };
   }
   return {
     doanhThu: c.gia_ban_sell ?? 0,
-    chiPhiThuc: c.noi_bo ? (c.gia_von_buy ?? 0) : 0,
+    chiPhiThuc: c.noi_bo ? (c.so_tien_da_chi ?? 0) : 0,
     chiHo: 0,
   };
 }

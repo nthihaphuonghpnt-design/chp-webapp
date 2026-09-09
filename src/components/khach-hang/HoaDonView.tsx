@@ -28,7 +28,7 @@ interface ChiPhiDoiChieu {
   hoa_don_id: string | null;
   don_hang_id: string;
   chi_ho: boolean;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   vat_percent: number | null;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
@@ -364,7 +364,7 @@ export default function HoaDonView({
 function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiChieu[]; row: Row }) {
   const dong = [
     ...cp.map((r) => {
-      const soTien = r.chi_ho ? r.gia_von_buy ?? 0 : r.gia_ban_sell ?? 0;
+      const soTien = r.chi_ho ? r.so_tien_da_chi ?? 0 : r.gia_ban_sell ?? 0;
       const vatPercent = r.chi_ho ? 0 : row.vat_percent || r.vat_percent || 0;
       const tienVat = r.chi_ho ? 0 : Math.round((soTien * vatPercent) / 100);
       return {

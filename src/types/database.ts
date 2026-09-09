@@ -288,7 +288,7 @@ export interface PhatSinhChiPhi {
   phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;
   so_luong: number | null;
   don_gia: number | null;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   vat_percent: number | null;
   tien_thue: number;
@@ -340,7 +340,7 @@ export interface DonThueNgoai {
   loai_dich_vu_thue: LoaiDichVuThue | null;
   doi_tac_thue_ngoai_id: string | null;
   noi_dung: string | null;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;

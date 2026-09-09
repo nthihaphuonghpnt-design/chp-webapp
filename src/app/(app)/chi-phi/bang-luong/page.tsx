@@ -36,9 +36,9 @@ export default async function BangLuongPage() {
     supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id"),
     supabase
       .from("phat_sinh_chi_phi")
-      .select("don_hang_id, gia_von_buy, gia_ban_sell, noi_bo, trang_thai"),
+      .select("don_hang_id, so_tien_da_chi, gia_ban_sell, noi_bo, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
-    supabase.from("don_thue_ngoai").select("don_hang_id, gia_von_buy, gia_ban_sell"),
+    supabase.from("don_thue_ngoai").select("don_hang_id, so_tien_da_chi, gia_ban_sell"),
     supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     supabase.from("luong_da_tra").select("*"),
     supabase.from("cham_cong").select("nhan_vien_id, ngay, trang_thai"),

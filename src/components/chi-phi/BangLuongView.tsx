@@ -47,7 +47,7 @@ interface DonHang {
 }
 interface ChiPhi {
   don_hang_id: string;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   noi_bo: boolean;
   trang_thai: string;
@@ -58,7 +58,7 @@ interface PhuThu {
 }
 interface ThueNgoai {
   don_hang_id: string;
-  gia_von_buy: number | null;
+  so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
 }
 interface DinhPhi {
@@ -155,12 +155,12 @@ export default function BangLuongView({
 
   function loiNhuanTruocHoaHongCuaDon(donHangId: string, thangKey: string) {
     const cp = chiPhiList.filter((c) => c.don_hang_id === donHangId && c.trang_thai !== "Từ chối");
-    const buy = cp.filter((c) => c.noi_bo).reduce((s, c) => s + (c.gia_von_buy ?? 0), 0);
+    const buy = cp.filter((c) => c.noi_bo).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
     const sell =
       cp.reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
       phuThuList.filter((p) => p.don_hang_id === donHangId).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
       thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
-    const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.gia_von_buy ?? 0), 0);
+    const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
     const tongDinhPhi = dinhPhiTheoThang.get(thangKey) ?? 0;
     const soLo = soLoTheoThang.get(thangKey) ?? 0;
     const dinhPhi = soLo > 0 ? tongDinhPhi / soLo : 0;
