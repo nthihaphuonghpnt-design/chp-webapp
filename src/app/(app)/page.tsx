@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import ChamCongNhanhCard from "@/components/cham-cong/ChamCongNhanhCard";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CONG_TY } from "@/lib/excel";
@@ -162,15 +163,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      {!daChamCongHomNay && (
-        <Link
-          href="/cham-cong"
-          className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-800 shadow-sm"
-        >
-          <span>⏰ Bạn chưa chấm công hôm nay — bấm để chấm công ngay.</span>
-          <span className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white">Chấm công</span>
-        </Link>
-      )}
+      {!daChamCongHomNay && user && <ChamCongNhanhCard nhanVienId={user.id} />}
 
       {tamUngChoDuyet.length > 0 && (
         <Link
