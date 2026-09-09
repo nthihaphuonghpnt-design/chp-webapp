@@ -25,6 +25,7 @@ export default async function BaoCaoPage() {
     { data: hoaDonList },
     { data: hoaDonDonHangList },
     { data: dinhPhiList },
+    { data: chiPhiGiaoNhanList },
     { data: nhaCungCapList },
     { data: doiTacList },
     { data: loaiChiPhiList },
@@ -32,11 +33,12 @@ export default async function BaoCaoPage() {
     { data: nhanVienList },
   ] = await Promise.all([
     supabase.from("don_hang").select("id, so_don_hang, ngay_len_don, trang_thai, sale_phu_trach_id, khach_hang_id"),
-    isKeToanOrGiamDoc
-      ? supabase
-          .from("phat_sinh_chi_phi")
-          .select("don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, gia_von_buy, gia_ban_sell, chi_ho, noi_bo, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai")
-      : Promise.resolve({ data: [] }),
+    // Khong gate theo isKeToanOrGiamDoc: Sale can chinh du lieu nay de tinh "Doanh so
+    // theo Sale" cua rieng minh — RLS (0040/0041) da tu gioi han Sale chi thay dong
+    // chi phi cua don hang do minh phu trach, khong can chan them o day.
+    supabase
+      .from("phat_sinh_chi_phi")
+      .select("don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, gia_von_buy, gia_ban_sell, chi_ho, noi_bo, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
     isKeToanOrGiamDoc
       ? supabase.from("don_thue_ngoai").select("don_hang_id, doi_tac_thue_ngoai_id, gia_von_buy, gia_ban_sell, so_tien_da_thanh_toan, ngay_thue")
@@ -46,6 +48,7 @@ export default async function BaoCaoPage() {
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc ? supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id") : Promise.resolve({ data: [] }),
     supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
+    isKeToanOrGiamDoc ? supabase.from("chi_phi_giao_nhan").select("don_hang_id, thanh_tien") : Promise.resolve({ data: [] }),
     supabase.from("nha_cung_cap").select("id, ten"),
     supabase.from("doi_tac_thue_ngoai").select("id, ten"),
     supabase.from("loai_chi_phi").select("id, ten"),
@@ -65,6 +68,7 @@ export default async function BaoCaoPage() {
       hoaDonList={(hoaDonList ?? []) as any[]}
       hoaDonDonHangList={hoaDonDonHangList ?? []}
       dinhPhiList={dinhPhiList ?? []}
+      chiPhiGiaoNhanList={chiPhiGiaoNhanList ?? []}
       nhaCungCapList={nhaCungCapList ?? []}
       doiTacList={doiTacList ?? []}
       loaiChiPhiList={loaiChiPhiList ?? []}
