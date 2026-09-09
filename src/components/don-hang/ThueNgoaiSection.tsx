@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import QuickAddDoiTacThueNgoai from "@/components/common/QuickAddDoiTacThueNgoai";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { DonThueNgoai } from "@/types/database";
+import { DON_THUE_NGOAI_SAFE_COLS } from "@/lib/giaBan";
 
 interface Option {
   id: string;
@@ -28,12 +30,18 @@ export default function ThueNgoaiSection({
   initialRows,
   doiTacList: initialDoiTacList,
   phongBan,
+  currentNhanVienId,
+  nhanVienTamUngOptions,
+  congViecMap,
 }: {
   donHangId: string;
   soDonHang: string;
   initialRows: DonThueNgoai[];
   doiTacList: Option[];
   phongBan: string;
+  currentNhanVienId: string | null;
+  nhanVienTamUngOptions: Option[];
+  congViecMap: Record<string, string>;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<DonThueNgoai[]>(initialRows);
@@ -48,6 +56,19 @@ export default function ThueNgoaiSection({
   const canApprove = phongBan === "Kế toán";
   const canEditRow = ["Hiện trường", "Điều phối", "Kế toán"].includes(phongBan);
   const canSeeSell = !["Hiện trường", "Điều phối"].includes(phongBan);
+  const canChonNguonThanhToan = ["Điều phối", "Kế toán"].includes(phongBan);
+
+  // Giong ChiPhiSection (0064): "Da duyet" khoa Hien truong/Dieu phoi; "Ke
+  // toan da tiep nhan" CHI khoa Hien truong (Dieu phoi khong tham gia chu
+  // trinh nay — xem enforce_don_thue_ngoai_update).
+  function traLoiKhoa(row: DonThueNgoai): string | null {
+    if (!["Hiện trường", "Điều phối"].includes(phongBan)) return null;
+    if (row.trang_thai === "Đã duyệt") return "Đơn thuê ngoài đã được duyệt, không thể sửa.";
+    if (phongBan === "Hiện trường" && row.nguoi_nhap_id && congViecMap[row.nguoi_nhap_id] === "Đã tiếp nhận") {
+      return "Kế toán đã tiếp nhận phần việc này — liên hệ Kế toán để sửa.";
+    }
+    return null;
+  }
 
   function doiTacTen(id: string | null) {
     return doiTacList.find((d) => d.id === id)?.ten ?? "—";
@@ -56,6 +77,12 @@ export default function ThueNgoaiSection({
   async function handleSave(values: Record<string, string>) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
     for (const [k, v] of Object.entries(values)) {
+      // nhan_vien_tam_ung_id chi la field UI de Ke toan chon "nhap ho ai" —
+      // khong phai cot trong bang.
+      if (k === "nhan_vien_tam_ung_id") continue;
+      // Hien truong khong tu chon nguon thanh toan — de trong de trigger
+      // tu_dong_nguon_thanh_toan_hien_truong (0062/0066) tu gan.
+      if (["nguon_thanh_toan", "tam_ung_id"].includes(k) && !canChonNguonThanhToan) continue;
       if (["so_tien_da_chi", "gia_ban_sell", "so_tien_da_thanh_toan"].includes(k)) {
         payload[k] = v === "" ? null : Number(v);
       } else {
@@ -63,27 +90,44 @@ export default function ThueNgoaiSection({
       }
     }
 
+    // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — ghep lai tu
+    // chinh payload vua gui, khong can goi RPC round-trip.
     if (editing) {
-      const { data, error } = await supabase.from("don_thue_ngoai").update(payload).eq("id", editing.id).select().single();
+      const { data, error } = await supabase
+        .from("don_thue_ngoai")
+        .update(payload)
+        .eq("id", editing.id)
+        .select(DON_THUE_NGOAI_SAFE_COLS)
+        .single();
       if (!error && data) {
-        setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as DonThueNgoai) : r)));
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as DonThueNgoai;
+        setRows((prev) => prev.map((r) => (r.id === editing.id ? rowDayDu : r)));
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
       }
     } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+      // Ke toan nhap ho: nguoi_nhap_id phai la nhan vien duoc chon o
+      // ThueNgoaiForm (khop dieu kien tam_ung.nhan_vien_id = nguoi_nhap_id,
+      // xem kiem_tra_tam_ung_id_hop_le o 0066).
+      const nhanVienGhiDe = values.nhan_vien_tam_ung_id as string | undefined;
+      let nguoiNhapId = nhanVienGhiDe || undefined;
+      if (!nguoiNhapId) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+        nguoiNhapId = nv?.id;
+      }
 
       const { data, error } = await supabase
         .from("don_thue_ngoai")
-        .insert({ ...payload, nguoi_nhap_id: nv?.id })
-        .select()
+        .insert({ ...payload, nguoi_nhap_id: nguoiNhapId })
+        .select(DON_THUE_NGOAI_SAFE_COLS)
         .single();
       if (!error && data) {
-        setRows((prev) => [data as DonThueNgoai, ...prev]);
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as DonThueNgoai;
+        setRows((prev) => [rowDayDu, ...prev]);
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
@@ -102,10 +146,11 @@ export default function ThueNgoaiSection({
       .from("don_thue_ngoai")
       .update({ trang_thai: trangThai })
       .eq("id", row.id)
-      .select()
+      .select(DON_THUE_NGOAI_SAFE_COLS)
       .single();
     if (!error && data) {
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as DonThueNgoai) : r)));
+      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as DonThueNgoai;
+      setRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
     } else if (error) {
       window.alert(error.message);
     }
@@ -222,13 +267,17 @@ export default function ThueNgoaiSection({
       return;
     }
 
-    const { data, error } = await supabase.from("don_thue_ngoai").insert(records).select();
+    const { data, error } = await supabase.from("don_thue_ngoai").insert(records).select(DON_THUE_NGOAI_SAFE_COLS);
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
       return;
     }
-    setRows((prev) => [...((data as DonThueNgoai[]) ?? []), ...prev]);
+    const rowsDayDu = ((data ?? []) as DonThueNgoai[]).map((row, i) => ({
+      ...row,
+      gia_ban_sell: (records[i]?.gia_ban_sell as number | null | undefined) ?? null,
+    }));
+    setRows((prev) => [...rowsDayDu, ...prev]);
     setImportMsg(`Đã nhập ${data?.length ?? 0} dòng${errors.length ? `, lỗi: ${errors.join(" | ")}` : "."}`);
   }
 
@@ -279,7 +328,9 @@ export default function ThueNgoaiSection({
       {importMsg && <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">{importMsg}</p>}
 
       <div className="flex flex-col gap-2">
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const lyDoKhoa = traLoiKhoa(row);
+          return (
           <div key={row.id} className="rounded-lg border border-slate-100 p-3 text-sm">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-slate-900">{row.loai_dich_vu_thue}</span>
@@ -288,13 +339,14 @@ export default function ThueNgoaiSection({
             <p className="text-slate-500">
               {doiTacTen(row.doi_tac_thue_ngoai_id)} · Buy: {(row.so_tien_da_chi ?? 0).toLocaleString("en-US")}
               {canSeeSell && row.gia_ban_sell ? ` · Sell: ${row.gia_ban_sell.toLocaleString("en-US")}` : ""}
+              {row.nguon_thanh_toan ? ` · Nguồn: ${row.nguon_thanh_toan}` : ""}
             </p>
             <p className="text-slate-500">
               Thanh toán: {row.tinh_trang_thanh_toan}
               {row.so_tien_da_thanh_toan ? ` (đã trả ${row.so_tien_da_thanh_toan.toLocaleString("en-US")})` : ""}
             </p>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {canEditRow && (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {canEditRow && !lyDoKhoa && (
                 <button
                   onClick={() => {
                     setEditing(row);
@@ -305,6 +357,7 @@ export default function ThueNgoaiSection({
                   Sửa
                 </button>
               )}
+              {canEditRow && lyDoKhoa && <span className="text-xs text-slate-400">{lyDoKhoa}</span>}
               {canApprove && row.trang_thai === "Chờ duyệt" && (
                 <>
                   <button onClick={() => handleApprove(row, "Đã duyệt")} className="text-xs font-medium text-green-600">
@@ -322,7 +375,8 @@ export default function ThueNgoaiSection({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
         {rows.length === 0 && <p className="text-sm text-slate-400">Chưa có đơn thuê ngoài nào.</p>}
       </div>
 
@@ -338,6 +392,11 @@ export default function ThueNgoaiSection({
           doiTacList={doiTacList}
           onDoiTacAdded={(row) => setDoiTacList((prev) => [...prev, row])}
           canSeeSell={canSeeSell}
+          canChonNguonThanhToan={canChonNguonThanhToan}
+          phongBan={phongBan}
+          donHangId={donHangId}
+          currentNhanVienId={currentNhanVienId}
+          nhanVienTamUngOptions={nhanVienTamUngOptions}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
@@ -351,6 +410,11 @@ function ThueNgoaiForm({
   doiTacList,
   onDoiTacAdded,
   canSeeSell,
+  canChonNguonThanhToan,
+  phongBan,
+  donHangId,
+  currentNhanVienId,
+  nhanVienTamUngOptions,
   onCancel,
   onSave,
 }: {
@@ -358,9 +422,17 @@ function ThueNgoaiForm({
   doiTacList: Option[];
   onDoiTacAdded: (row: Option) => void;
   canSeeSell: boolean;
+  canChonNguonThanhToan: boolean;
+  phongBan: string;
+  donHangId: string;
+  currentNhanVienId: string | null;
+  nhanVienTamUngOptions: Option[];
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
+  const isKeToan = phongBan === "Kế toán";
+  const isDieuPhoi = phongBan === "Điều phối";
+
   const [values, setValues] = useState({
     loai_dich_vu_thue: initial?.loai_dich_vu_thue ?? "",
     doi_tac_thue_ngoai_id: initial?.doi_tac_thue_ngoai_id ?? "",
@@ -371,10 +443,67 @@ function ThueNgoaiForm({
     so_tien_da_thanh_toan: initial?.so_tien_da_thanh_toan?.toString() ?? "",
     phuong_thuc_thanh_toan: initial?.phuong_thuc_thanh_toan ?? "",
     ngay_thue: initial?.ngay_thue ?? new Date().toISOString().slice(0, 10),
+    nguon_thanh_toan: initial?.nguon_thanh_toan ?? "",
+    tam_ung_id: initial?.tam_ung_id ?? "",
+    nhan_vien_tam_ung_id: "",
   });
 
   function set(key: keyof typeof values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const supabase = useMemo(() => createClient(), []);
+  const [tamUngOptions, setTamUngOptions] = useState<
+    { id: string; so_tien: number; ngay_thuc_hien: string; so_phieu: string | null }[]
+  >([]);
+  const [loadingTamUng, setLoadingTamUng] = useState(false);
+
+  async function taiKhoanTamUng(nhanVienId: string) {
+    setLoadingTamUng(true);
+    const { data } = await supabase
+      .from("tam_ung_giai_chi")
+      .select("id, so_tien, ngay_thuc_hien, so_phieu")
+      .eq("don_hang_id", donHangId)
+      .eq("nhan_vien_id", nhanVienId)
+      .eq("loai", "Tạm ứng")
+      .eq("trang_thai", "Đã duyệt")
+      .is("phieu_quyet_toan_id", null)
+      .order("ngay_thuc_hien", { ascending: true });
+    setTamUngOptions(data ?? []);
+    setLoadingTamUng(false);
+  }
+
+  useEffect(() => {
+    if (!canChonNguonThanhToan) return;
+    // Chi chay 1 lan luc mo form (deps []) — khong phai vong lap render, an
+    // toan de goi setState (bat co loading) ngay dau ham async ben trong.
+    if (!initial) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (isDieuPhoi && currentNhanVienId) taiKhoanTamUng(currentNhanVienId);
+      return;
+    }
+    if (initial.nguon_thanh_toan === "Tạm ứng nhân viên" && initial.nguoi_nhap_id) {
+      taiKhoanTamUng(initial.nguoi_nhap_id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleNguonThanhToanChange(v: string) {
+    setValues((prev) => ({
+      ...prev,
+      nguon_thanh_toan: v,
+      tam_ung_id: v === "Tạm ứng nhân viên" ? prev.tam_ung_id : "",
+      nhan_vien_tam_ung_id: v === "Tạm ứng nhân viên" ? prev.nhan_vien_tam_ung_id : "",
+    }));
+    if (v !== "Tạm ứng nhân viên") {
+      setTamUngOptions([]);
+      return;
+    }
+    if (isDieuPhoi && currentNhanVienId) {
+      taiKhoanTamUng(currentNhanVienId);
+    } else if (isKeToan && initial?.nguoi_nhap_id) {
+      taiKhoanTamUng(initial.nguoi_nhap_id);
+    }
   }
 
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
@@ -451,6 +580,71 @@ function ThueNgoaiForm({
             </select>
           </div>
         </div>
+
+        {canChonNguonThanhToan && (
+          <div className="mt-3 rounded-lg border border-slate-200 p-3">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Nguồn thanh toán</label>
+            <select
+              required
+              value={values.nguon_thanh_toan}
+              onChange={(e) => handleNguonThanhToanChange(e.target.value)}
+              className={cls}
+            >
+              <option value="">-- Chọn --</option>
+              <option value="Tiền mặt">Tiền mặt</option>
+              <option value="Tài khoản công ty">Tài khoản công ty</option>
+              <option value="Tạm ứng nhân viên">Tạm ứng nhân viên</option>
+            </select>
+
+            {values.nguon_thanh_toan === "Tạm ứng nhân viên" && (
+              <div className="mt-2 space-y-2">
+                {isKeToan && !initial && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Nhân viên (nhập hộ)</label>
+                    <SearchableSelect
+                      options={nhanVienTamUngOptions.map((n) => ({ value: n.id, label: n.ten }))}
+                      value={values.nhan_vien_tam_ung_id}
+                      onChange={(v) => {
+                        set("nhan_vien_tam_ung_id", v);
+                        set("tam_ung_id", "");
+                        if (v) taiKhoanTamUng(v);
+                        else setTamUngOptions([]);
+                      }}
+                    />
+                  </div>
+                )}
+                {isKeToan && initial && (
+                  <p className="text-xs text-slate-500">
+                    Nhân viên: {nhanVienTamUngOptions.find((n) => n.id === initial.nguoi_nhap_id)?.ten ?? "—"} (không đổi được khi sửa)
+                  </p>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Khoản tạm ứng (có thể để trống)</label>
+                  <select
+                    value={values.tam_ung_id}
+                    onChange={(e) => set("tam_ung_id", e.target.value)}
+                    className={cls}
+                    disabled={loadingTamUng}
+                  >
+                    <option value="">-- Để trống (chưa có / tự chọn sau) --</option>
+                    {tamUngOptions.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.ngay_thuc_hien} · {t.so_tien.toLocaleString("en-US")}
+                        {t.so_phieu ? ` · ${t.so_phieu}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingTamUng && <p className="mt-1 text-xs text-slate-400">Đang tải...</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {!canChonNguonThanhToan && initial?.nguon_thanh_toan && (
+          <p className="mt-3 text-xs text-slate-500">
+            Nguồn thanh toán: {initial.nguon_thanh_toan} (tự động theo tạm ứng, không sửa được)
+          </p>
+        )}
 
         <div className="mt-6 flex gap-3">
           <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">

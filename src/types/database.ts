@@ -276,6 +276,11 @@ export interface DinhKem {
 
 export type TrangThaiChiPhi = "Nháp" | "Chờ duyệt" | "Đã duyệt" | "Từ chối";
 
+// Nguon tien thanh toan cho 1 khoan chi phi/thue ngoai — Hien truong/Chung tu
+// duoc he thong TU DONG gan "Tạm ứng nhân viên" (khong tu chon), Dieu
+// phoi/Ke toan chon tay. Xem migration 0062.
+export type NguonThanhToan = "Tiền mặt" | "Tài khoản công ty" | "Tạm ứng nhân viên";
+
 export interface PhatSinhChiPhi {
   id: string;
   don_hang_id: string;
@@ -286,6 +291,9 @@ export interface PhatSinhChiPhi {
   to_khai_id: string | null;
   nguon_tu_dong: string | null;
   phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;
+  nguon_thanh_toan: NguonThanhToan | null;
+  tam_ung_id: string | null;
+  phieu_quyet_toan_id: string | null;
   so_luong: number | null;
   don_gia: number | null;
   so_tien_da_chi: number | null;
@@ -345,6 +353,9 @@ export interface DonThueNgoai {
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;
   phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;
+  nguon_thanh_toan: NguonThanhToan | null;
+  tam_ung_id: string | null;
+  phieu_quyet_toan_id: string | null;
   ngay_thue: string;
   trang_thai: TrangThaiThueNgoai;
   nguoi_nhap_id: string | null;
@@ -411,8 +422,60 @@ export interface TamUngGiaiChi {
   phuong_thuc: "Tiền mặt" | "Tài khoản công ty" | null;
   nguoi_de_nghi_id: string | null;
   don_hang_id: string | null;
+  phieu_quyet_toan_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// "Kế toán đã tiếp nhận" (khong phai "Đã hoàn thành") moi la dieu kien du de
+// khoa nhap/sua chi phi va dua vao Phieu quyet toan — xem migration 0064.
+export type TrangThaiCongViec = "Chưa hoàn thành" | "Đã hoàn thành" | "Đã tiếp nhận";
+
+export interface CongViecHoanThanh {
+  id: string;
+  don_hang_id: string;
+  nhan_vien_id: string;
+  trang_thai: TrangThaiCongViec;
+  hoan_thanh_luc: string | null;
+  hoan_thanh_boi: string | null;
+  tiep_nhan_luc: string | null;
+  tiep_nhan_boi: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TrangThaiPhieuQuyetToan = "Nháp" | "Đã duyệt" | "Đã thanh toán" | "Đã hủy";
+
+export interface PhieuQuyetToanTamUng {
+  id: string;
+  so_phieu: string | null;
+  nhan_vien_id: string;
+  ngay_quyet_toan: string;
+  tong_da_tam_ung: number;
+  tong_chi_thuc_te: number;
+  chenh_lech_rong: number;
+  trang_thai: TrangThaiPhieuQuyetToan;
+  phuong_thuc: "Tiền mặt" | "Tài khoản công ty" | null;
+  nguoi_duyet_id: string | null;
+  ghi_chu: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhieuQuyetToanChiTiet {
+  id: string;
+  phieu_id: string;
+  don_hang_id: string;
+  created_at: string;
+}
+
+// Ket qua tra ve tu RPC don_hang_cho_quyet_toan(p_nhan_vien_id) — danh sach
+// don hang du dieu kien lap phieu quyet toan cho 1 nhan vien.
+export interface DonHangChoQuyetToan {
+  don_hang_id: string;
+  so_don_hang: string;
+  tong_tam_ung: number;
+  tong_chi_treo: number;
 }
 
 export type LoaiHopDong = "Dịch vụ logistics" | "Ủy thác XNK" | "Khác";

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BangKeView from "@/components/khach-hang/BangKeView";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS, ghepGiaBanChiPhi } from "@/lib/giaBan";
 
 export default async function BangKePage({
   searchParams,
@@ -60,7 +61,7 @@ export default async function BangKePage({
       const [{ data: cp }, { data: pt }, { data: ctvc }, { data: tk }, { data: cont }] = await Promise.all([
         supabase
           .from("phat_sinh_chi_phi")
-          .select("*, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+          .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
           .in("don_hang_id", donHangIds)
           .is("hoa_don_id", null)
           .neq("trang_thai", "Từ chối")
@@ -87,7 +88,7 @@ export default async function BangKePage({
           .in("don_hang_id", donHangIds)
           .not("so_cont", "is", null),
       ]);
-      chiPhiRows = cp ?? [];
+      chiPhiRows = await ghepGiaBanChiPhi(supabase, cp ?? []);
       phuThuRows = pt ?? [];
       bienSoMap = {};
       for (const r of ctvc ?? []) {

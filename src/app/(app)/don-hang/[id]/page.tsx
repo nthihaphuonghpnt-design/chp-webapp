@@ -12,6 +12,7 @@ import DinhKemSection from "@/components/don-hang/DinhKemSection";
 import ChiPhiSection from "@/components/don-hang/ChiPhiSection";
 import LineItemsSection from "@/components/don-hang/LineItemsSection";
 import ThueNgoaiSection from "@/components/don-hang/ThueNgoaiSection";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,6 +36,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: thueNgoaiRows },
     { data: doiTacList },
     { data: nhanVienList },
+    { data: congViecRows },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -49,22 +51,31 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("dinh_kem").select("*").eq("don_hang_id", id).order("thoi_gian_upload", { ascending: false }),
     supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-    supabase.from("phat_sinh_chi_phi").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
+    supabase.from("phat_sinh_chi_phi").select(PHAT_SINH_CHI_PHI_SAFE_COLS).eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("phu_thu").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("chi_phi_giao_nhan").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("loai_chi_phi").select("id, ten, ma:ma_loai_chi_phi").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("bang_gia_khach_hang").select("*").eq("dang_hoat_dong", true),
-    supabase.from("don_thue_ngoai").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
+    supabase.from("don_thue_ngoai").select(DON_THUE_NGOAI_SAFE_COLS).eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("doi_tac_thue_ngoai").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase
       .from("nhan_vien")
       .select("id, ho_ten, phong_ban:phong_ban_id(ten)")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
+    supabase.from("cong_viec_hoan_thanh").select("id, nhan_vien_id, trang_thai").eq("don_hang_id", id),
   ]);
 
   if (!order) notFound();
+
+  // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng
+  // (tu kiem tra dung quyen theo phong ban), giu dung shape PhatSinhChiPhi/
+  // DonThueNgoai nhu truoc de ChiPhiSection/ThueNgoaiSection khong doi gi.
+  const [chiPhiRowsDayDu, thueNgoaiRowsDayDu] = await Promise.all([
+    ghepGiaBanChiPhi(supabase, chiPhiRows ?? []),
+    ghepGiaBanThueNgoai(supabase, thueNgoaiRows ?? []),
+  ]);
 
   const toKhaiIds = (toKhaiRows ?? []).map((t) => t.id);
   const { data: toKhaiDinhKemRows } =
@@ -93,13 +104,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const tongDinhPhiThang = (dinhPhiRows ?? []).reduce((s, r) => s + (r.so_tien ?? 0), 0);
   const dinhPhiPhanBo = soLoTrongThang && soLoTrongThang > 0 ? tongDinhPhiThang / soLoTrongThang : 0;
 
-  const tongBuyNoiBo = (chiPhiRows ?? []).filter((r) => r.noi_bo).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
+  const tongBuyNoiBo = chiPhiRowsDayDu.filter((r) => r.noi_bo).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
   const tongSell =
-    (chiPhiRows ?? []).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0) +
+    chiPhiRowsDayDu.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0) +
     (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0) +
-    (thueNgoaiRows ?? []).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
+    thueNgoaiRowsDayDu.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongChiPhiGiaoNhan = (chiPhiGiaoNhanRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
-  const tongChiPhiThueNgoai = (thueNgoaiRows ?? []).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
+  const tongChiPhiThueNgoai = thueNgoaiRowsDayDu.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
 
   const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - tongChiPhiThueNgoai - dinhPhiPhanBo;
   const chiPhiSale = loiNhuanTruocHoaHong * 0.4;
@@ -118,6 +129,32 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
       return { value: nv.id, label: `${nv.ho_ten} (${pb?.ten ?? ""})` };
     });
+
+  // Ke toan chon "tam ung nhan vien" khi nhap ho chi phi/thue ngoai — chi cho
+  // dung phong ban thuc su tham gia chu trinh Hoan thanh/Tiep nhan lam nguoi
+  // nhap (xem 0064): Chi phi cho Hien truong + Chung tu, Thue ngoai chi Hien
+  // truong (Chung tu khong nhap thue ngoai).
+  function nhanVienTamUngOption(nv: NonNullable<typeof nhanVienList>[number]) {
+    const pb = Array.isArray(nv.phong_ban) ? nv.phong_ban[0] : nv.phong_ban;
+    return { id: nv.id, ten: `${nv.ho_ten} (${pb?.ten ?? ""})`, phongBan: pb?.ten ?? "" };
+  }
+  const nhanVienChiPhiTamUngOptions = (nhanVienList ?? [])
+    .map(nhanVienTamUngOption)
+    .filter((nv) => nv.phongBan === "Hiện trường" || nv.phongBan === "Chứng từ")
+    .map(({ id, ten }) => ({ id, ten }));
+  const nhanVienThueNgoaiTamUngOptions = (nhanVienList ?? [])
+    .map(nhanVienTamUngOption)
+    .filter((nv) => nv.phongBan === "Hiện trường")
+    .map(({ id, ten }) => ({ id, ten }));
+
+  // Map nhan_vien_id -> trang_thai "cong_viec_hoan_thanh" cua don hang nay,
+  // dung de khoa Sua/Xoa chi phi/thue ngoai o dung UI voi dieu kien DB da
+  // enforce san (enforce_phat_sinh_chi_phi_update/enforce_don_thue_ngoai_update,
+  // 0064) — chi hien trang thai, khong thay the kiem tra o DB.
+  const congViecMap: Record<string, string> = {};
+  for (const c of congViecRows ?? []) {
+    if (c.nhan_vien_id) congViecMap[c.nhan_vien_id] = c.trang_thai;
+  }
 
   const kh = Array.isArray(order.khach_hang) ? order.khach_hang[0] : order.khach_hang;
   const hangHoa = Array.isArray(order.hang_hoa) ? order.hang_hoa[0] : order.hang_hoa;
@@ -230,7 +267,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <ChiPhiSection
           donHangId={order.id}
           soDonHang={order.so_don_hang}
-          initialRows={chiPhiRows ?? []}
+          initialRows={chiPhiRowsDayDu}
           loaiChiPhiList={loaiChiPhiList ?? []}
           nhaCungCapList={nhaCungCapList ?? []}
           doiTacThueNgoaiList={doiTacList ?? []}
@@ -239,6 +276,9 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           khachHangId={order.khach_hang_id}
           hangHoaId={order.hang_hoa_id}
           phongBan={user?.phong_ban ?? ""}
+          currentNhanVienId={user?.id ?? null}
+          nhanVienTamUngOptions={nhanVienChiPhiTamUngOptions}
+          congViecMap={congViecMap}
         />
       </div>
 
@@ -281,9 +321,12 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <ThueNgoaiSection
           donHangId={order.id}
           soDonHang={order.so_don_hang}
-          initialRows={thueNgoaiRows ?? []}
+          initialRows={thueNgoaiRowsDayDu}
           doiTacList={doiTacList ?? []}
           phongBan={user?.phong_ban ?? ""}
+          currentNhanVienId={user?.id ?? null}
+          nhanVienTamUngOptions={nhanVienThueNgoaiTamUngOptions}
+          congViecMap={congViecMap}
         />
       </div>
 

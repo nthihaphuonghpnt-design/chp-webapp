@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +10,7 @@ import QuickAddDoiTacThueNgoai from "@/components/common/QuickAddDoiTacThueNgoai
 import MoneyInput from "@/components/common/MoneyInput";
 import ChiPhiBulkForm, { type BulkRowValues } from "@/components/don-hang/ChiPhiBulkForm";
 import type { BangGiaKhachHang, ChiTietVanChuyen, PhatSinhChiPhi } from "@/types/database";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS } from "@/lib/giaBan";
 
 interface Option {
   id: string;
@@ -38,6 +39,9 @@ export default function ChiPhiSection({
   khachHangId,
   hangHoaId,
   phongBan,
+  currentNhanVienId,
+  nhanVienTamUngOptions,
+  congViecMap,
 }: {
   donHangId: string;
   soDonHang: string;
@@ -50,6 +54,9 @@ export default function ChiPhiSection({
   khachHangId: string | null;
   hangHoaId: string | null;
   phongBan: string;
+  currentNhanVienId: string | null;
+  nhanVienTamUngOptions: Option[];
+  congViecMap: Record<string, string>;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<PhatSinhChiPhi[]>(initialRows);
@@ -66,6 +73,24 @@ export default function ChiPhiSection({
   const canApprove = phongBan === "Kế toán";
   const canEditRow = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán", "Sale"].includes(phongBan);
   const canSeeSell = !["Hiện trường", "Điều phối"].includes(phongBan);
+  const canChonNguonThanhToan = ["Điều phối", "Kế toán"].includes(phongBan);
+
+  // Phan anh dung dieu kien khoa da enforce o DB (enforce_phat_sinh_chi_phi_update,
+  // 0064): "Da duyet" khoa Hien truong/Dieu phoi/Chung tu; "Ke toan da tiep nhan"
+  // CHI khoa Hien truong/Chung tu (Dieu phoi khong tham gia chu trinh nay). Ke
+  // toan va Sale khong bao gio bi khoa boi dieu kien nay.
+  function traLoiKhoa(row: PhatSinhChiPhi): string | null {
+    if (!["Hiện trường", "Điều phối", "Chứng từ"].includes(phongBan)) return null;
+    if (row.trang_thai === "Đã duyệt") return "Chi phí đã được duyệt, không thể sửa.";
+    if (
+      phongBan !== "Điều phối" &&
+      row.nguoi_nhap_id &&
+      congViecMap[row.nguoi_nhap_id] === "Đã tiếp nhận"
+    ) {
+      return "Kế toán đã tiếp nhận phần việc này — liên hệ Kế toán để sửa.";
+    }
+    return null;
+  }
 
   function loaiTen(id: string | null) {
     return loaiChiPhiList.find((l) => l.id === id)?.ten ?? "—";
@@ -84,6 +109,13 @@ export default function ChiPhiSection({
   async function handleSave(values: Record<string, string | boolean>, luuGiaMoi?: boolean) {
     const payload: Record<string, unknown> = { don_hang_id: donHangId };
     for (const [k, v] of Object.entries(values)) {
+      // nhan_vien_tam_ung_id chi la field UI de Ke toan chon "nhap ho ai" —
+      // khong phai cot trong bang, khong duoc gui thang len DB.
+      if (k === "nhan_vien_tam_ung_id") continue;
+      // Hien truong/Chung tu khong tu chon nguon thanh toan — de trong de
+      // trigger tu_dong_nguon_thanh_toan_hien_truong (0062/0066) tu gan, tranh
+      // gui gia tri rong de "" len cot co CHECK constraint.
+      if (["nguon_thanh_toan", "tam_ung_id"].includes(k) && !canChonNguonThanhToan) continue;
       if (typeof v === "boolean") {
         payload[k] = v;
       } else if (["so_luong", "don_gia", "so_tien_da_chi", "gia_ban_sell", "vat_percent", "so_tien_da_thanh_toan"].includes(k)) {
@@ -109,32 +141,46 @@ export default function ChiPhiSection({
       }
     }
 
+    // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — select() chi lay
+    // cac cot an toan, roi ghep lai gia_ban_sell tu chinh payload vua gui (biet
+    // truoc gia tri, khong can goi RPC round-trip cho dong minh vua ghi).
     if (editing) {
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
         .update(payload)
         .eq("id", editing.id)
-        .select()
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
       if (!error && data) {
-        setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as PhatSinhChiPhi) : r)));
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as PhatSinhChiPhi;
+        setRows((prev) => prev.map((r) => (r.id === editing.id ? rowDayDu : r)));
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
       }
     } else {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+      // Ke toan nhap ho: khi chon "Tam ung nhan vien" + chon dung nhan vien o
+      // ChiPhiForm, cot nguoi_nhap_id phai la NHAN VIEN DO (khong phai Ke
+      // toan dang dang nhap) de khop dieu kien tam_ung.nhan_vien_id =
+      // nguoi_nhap_id ma kiem_tra_tam_ung_id_hop_le (0066) bat buoc.
+      const nhanVienGhiDe = values.nhan_vien_tam_ung_id as string | undefined;
+      let nguoiNhapId = nhanVienGhiDe || undefined;
+      if (!nguoiNhapId) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+        nguoiNhapId = nv?.id;
+      }
 
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
-        .insert({ ...payload, nguoi_nhap_id: nv?.id, trang_thai: "Chờ duyệt" })
-        .select()
+        .insert({ ...payload, nguoi_nhap_id: nguoiNhapId, trang_thai: "Chờ duyệt" })
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
       if (!error && data) {
-        setRows((prev) => [data as PhatSinhChiPhi, ...prev]);
+        const rowDayDu = { ...data, gia_ban_sell: (payload.gia_ban_sell as number | null) ?? null } as PhatSinhChiPhi;
+        setRows((prev) => [rowDayDu, ...prev]);
         setShowForm(false);
       } else if (error) {
         window.alert(error.message);
@@ -162,12 +208,18 @@ export default function ChiPhiSection({
       trang_thai: "Chờ duyệt",
     }));
 
-    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select();
+    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select(PHAT_SINH_CHI_PHI_SAFE_COLS);
     if (error) {
       window.alert(error.message);
       return;
     }
-    setRows((prev) => [...((data as PhatSinhChiPhi[]) ?? []), ...prev]);
+    // Insert nhieu dong giu dung thu tu voi records (Postgres RETURNING theo
+    // thu tu VALUES) — ghep lai gia_ban_sell tung dong tu chinh records da gui.
+    const rowsDayDu = ((data ?? []) as PhatSinhChiPhi[]).map((row, i) => ({
+      ...row,
+      gia_ban_sell: records[i]?.gia_ban_sell ?? null,
+    }));
+    setRows((prev) => [...rowsDayDu, ...prev]);
     setShowBulkForm(false);
   }
 
@@ -187,10 +239,12 @@ export default function ChiPhiSection({
       .from("phat_sinh_chi_phi")
       .update({ trang_thai: trangThai, nguoi_duyet_id: nv?.id })
       .eq("id", row.id)
-      .select()
+      .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
       .single();
     if (!error && data) {
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as PhatSinhChiPhi) : r)));
+      // gia_ban_sell khong doi trong thao tac duyet — giu nguyen tu row cu.
+      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as PhatSinhChiPhi;
+      setRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
     } else if (error) {
       window.alert(error.message);
     }
@@ -342,13 +396,17 @@ export default function ChiPhiSection({
       return;
     }
 
-    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select();
+    const { data, error } = await supabase.from("phat_sinh_chi_phi").insert(records).select(PHAT_SINH_CHI_PHI_SAFE_COLS);
     setImporting(false);
     if (error) {
       setImportMsg(`Lỗi: ${error.message}`);
       return;
     }
-    setRows((prev) => [...((data as PhatSinhChiPhi[]) ?? []), ...prev]);
+    const rowsDayDu = ((data ?? []) as PhatSinhChiPhi[]).map((row, i) => ({
+      ...row,
+      gia_ban_sell: (records[i]?.gia_ban_sell as number | null | undefined) ?? null,
+    }));
+    setRows((prev) => [...rowsDayDu, ...prev]);
     setImportMsg(`Đã nhập ${data?.length ?? 0} dòng${errors.length ? `, ${errors.length} dòng lỗi: ${errors.join(" | ")}` : "."}`);
   }
 
@@ -412,7 +470,9 @@ export default function ChiPhiSection({
       {importMsg && <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">{importMsg}</p>}
 
       <div className="flex flex-col gap-2">
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const lyDoKhoa = traLoiKhoa(row);
+          return (
           <div key={row.id} className="rounded-lg border border-slate-100 p-3 text-sm">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-slate-900">{loaiTen(row.loai_chi_phi_id)}</span>
@@ -427,6 +487,7 @@ export default function ChiPhiSection({
               {" · "}
               {row.noi_bo ? "Nội bộ" : row.chi_ho ? "Chi hộ" : "—"}
               {changTen(row.chi_tiet_van_chuyen_id) ? ` · Chặng: ${changTen(row.chi_tiet_van_chuyen_id)}` : ""}
+              {row.nguon_thanh_toan ? ` · Nguồn: ${row.nguon_thanh_toan}` : ""}
             </p>
             {canApprove && (
               <p className="text-slate-500">
@@ -434,8 +495,8 @@ export default function ChiPhiSection({
                 {row.so_tien_da_thanh_toan ? ` (đã trả ${row.so_tien_da_thanh_toan.toLocaleString("en-US")})` : ""}
               </p>
             )}
-            <div className="mt-2 flex flex-wrap gap-3">
-              {canEditRow && (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {canEditRow && !lyDoKhoa && (
                 <button
                   onClick={() => {
                     setEditing(row);
@@ -446,6 +507,7 @@ export default function ChiPhiSection({
                   Sửa
                 </button>
               )}
+              {canEditRow && lyDoKhoa && <span className="text-xs text-slate-400">{lyDoKhoa}</span>}
               {canApprove && ["Nháp", "Chờ duyệt"].includes(row.trang_thai) && (
                 <>
                   <button onClick={() => handleApprove(row, "Đã duyệt")} className="text-xs font-medium text-green-600">
@@ -463,7 +525,8 @@ export default function ChiPhiSection({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
         {rows.length === 0 && <p className="text-sm text-slate-400">Chưa có chi phí nào.</p>}
       </div>
 
@@ -497,6 +560,10 @@ export default function ChiPhiSection({
           hangHoaId={hangHoaId}
           phongBan={phongBan}
           canSeeSell={canSeeSell}
+          canChonNguonThanhToan={canChonNguonThanhToan}
+          donHangId={donHangId}
+          currentNhanVienId={currentNhanVienId}
+          nhanVienTamUngOptions={nhanVienTamUngOptions}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
@@ -530,6 +597,10 @@ function ChiPhiForm({
   hangHoaId,
   phongBan,
   canSeeSell,
+  canChonNguonThanhToan,
+  donHangId,
+  currentNhanVienId,
+  nhanVienTamUngOptions,
   onCancel,
   onSave,
 }: {
@@ -545,11 +616,16 @@ function ChiPhiForm({
   hangHoaId: string | null;
   phongBan: string;
   canSeeSell: boolean;
+  canChonNguonThanhToan: boolean;
+  donHangId: string;
+  currentNhanVienId: string | null;
+  nhanVienTamUngOptions: Option[];
   onCancel: () => void;
   onSave: (values: Record<string, string | boolean>, luuGiaMoi?: boolean) => void;
 }) {
   const isSaleOnly = phongBan === "Sale";
   const isKeToan = phongBan === "Kế toán";
+  const isDieuPhoi = phongBan === "Điều phối";
 
   function timGiaGoiY(loaiChiPhiId: string): BangGiaKhachHang | null {
     const ungVien = bangGiaList.filter((b) => b.loai_chi_phi_id === loaiChiPhiId);
@@ -577,7 +653,71 @@ function ChiPhiForm({
     noi_bo: initial?.noi_bo ?? true,
     chi_ho: initial?.chi_ho ?? false,
     tt_thue: initial?.tt_thue ?? false,
+    nguon_thanh_toan: initial?.nguon_thanh_toan ?? "",
+    tam_ung_id: initial?.tam_ung_id ?? "",
+    // Chi dung khi Ke toan tao moi + chon "Tam ung nhan vien": nhan vien nao
+    // dang duoc nhap ho — quyet dinh nguoi_nhap_id cua dong chi phi (xem
+    // handleSave o ChiPhiSection). Khong dung khi sua dong da co san.
+    nhan_vien_tam_ung_id: "",
   });
+
+  const supabase = useMemo(() => createClient(), []);
+  const [tamUngOptions, setTamUngOptions] = useState<
+    { id: string; so_tien: number; ngay_thuc_hien: string; so_phieu: string | null }[]
+  >([]);
+  const [loadingTamUng, setLoadingTamUng] = useState(false);
+
+  async function taiKhoanTamUng(nhanVienId: string) {
+    setLoadingTamUng(true);
+    const { data } = await supabase
+      .from("tam_ung_giai_chi")
+      .select("id, so_tien, ngay_thuc_hien, so_phieu")
+      .eq("don_hang_id", donHangId)
+      .eq("nhan_vien_id", nhanVienId)
+      .eq("loai", "Tạm ứng")
+      .eq("trang_thai", "Đã duyệt")
+      .is("phieu_quyet_toan_id", null)
+      .order("ngay_thuc_hien", { ascending: true });
+    setTamUngOptions(data ?? []);
+    setLoadingTamUng(false);
+  }
+
+  // Dieu phoi: tu dong tai tam ung cua chinh minh (RLS 0024 da gioi han ho
+  // chi thay cua chinh ho). Ke toan sua dong da co san "Tam ung nhan vien":
+  // tai lai dung nhan vien cua dong do (khong doi duoc khi sua). Ke toan tao
+  // moi: cho ho chon nhan vien truoc, xem handleNguonThanhToanChange.
+  useEffect(() => {
+    if (!canChonNguonThanhToan) return;
+    // Chi chay 1 lan luc mo form (deps []) — khong phai vong lap render, an
+    // toan de goi setState (bat co loading) ngay dau ham async ben trong.
+    if (!initial) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (isDieuPhoi && currentNhanVienId) taiKhoanTamUng(currentNhanVienId);
+      return;
+    }
+    if (initial.nguon_thanh_toan === "Tạm ứng nhân viên" && initial.nguoi_nhap_id) {
+      taiKhoanTamUng(initial.nguoi_nhap_id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleNguonThanhToanChange(v: string) {
+    setValues((prev) => ({
+      ...prev,
+      nguon_thanh_toan: v,
+      tam_ung_id: v === "Tạm ứng nhân viên" ? prev.tam_ung_id : "",
+      nhan_vien_tam_ung_id: v === "Tạm ứng nhân viên" ? prev.nhan_vien_tam_ung_id : "",
+    }));
+    if (v !== "Tạm ứng nhân viên") {
+      setTamUngOptions([]);
+      return;
+    }
+    if (isDieuPhoi && currentNhanVienId) {
+      taiKhoanTamUng(currentNhanVienId);
+    } else if (isKeToan && initial?.nguoi_nhap_id) {
+      taiKhoanTamUng(initial.nguoi_nhap_id);
+    }
+  }
 
   function set<K extends keyof typeof values>(key: K, value: (typeof values)[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -742,6 +882,71 @@ function ChiPhiForm({
             </>
           )}
         </div>
+
+        {canChonNguonThanhToan && (
+          <div className="mt-3 rounded-lg border border-slate-200 p-3">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Nguồn thanh toán</label>
+            <select
+              required
+              value={values.nguon_thanh_toan}
+              onChange={(e) => handleNguonThanhToanChange(e.target.value)}
+              className={cls}
+            >
+              <option value="">-- Chọn --</option>
+              <option value="Tiền mặt">Tiền mặt</option>
+              <option value="Tài khoản công ty">Tài khoản công ty</option>
+              <option value="Tạm ứng nhân viên">Tạm ứng nhân viên</option>
+            </select>
+
+            {values.nguon_thanh_toan === "Tạm ứng nhân viên" && (
+              <div className="mt-2 space-y-2">
+                {isKeToan && !initial && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Nhân viên (nhập hộ)</label>
+                    <SearchableSelect
+                      options={nhanVienTamUngOptions.map((n) => ({ value: n.id, label: n.ten }))}
+                      value={values.nhan_vien_tam_ung_id}
+                      onChange={(v) => {
+                        set("nhan_vien_tam_ung_id", v);
+                        set("tam_ung_id", "");
+                        if (v) taiKhoanTamUng(v);
+                        else setTamUngOptions([]);
+                      }}
+                    />
+                  </div>
+                )}
+                {isKeToan && initial && (
+                  <p className="text-xs text-slate-500">
+                    Nhân viên: {nhanVienTamUngOptions.find((n) => n.id === initial.nguoi_nhap_id)?.ten ?? "—"} (không đổi được khi sửa)
+                  </p>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Khoản tạm ứng (có thể để trống)</label>
+                  <select
+                    value={values.tam_ung_id}
+                    onChange={(e) => set("tam_ung_id", e.target.value)}
+                    className={cls}
+                    disabled={loadingTamUng}
+                  >
+                    <option value="">-- Để trống (chưa có / tự chọn sau) --</option>
+                    {tamUngOptions.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.ngay_thuc_hien} · {t.so_tien.toLocaleString("en-US")}
+                        {t.so_phieu ? ` · ${t.so_phieu}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingTamUng && <p className="mt-1 text-xs text-slate-400">Đang tải...</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {!canChonNguonThanhToan && initial?.nguon_thanh_toan && (
+          <p className="mt-3 text-xs text-slate-500">
+            Nguồn thanh toán: {initial.nguon_thanh_toan} (tự động theo tạm ứng, không sửa được)
+          </p>
+        )}
 
         <div className="mt-3 flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-1.5">
