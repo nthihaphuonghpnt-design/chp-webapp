@@ -535,7 +535,19 @@ export default function ChiPhiGopSection({
 
       {/* ---- Desktop: bang inline ---- */}
       <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full min-w-[1000px] text-sm">
+        <table className={`w-full text-sm ${canSeeSell ? "min-w-[1320px]" : "min-w-[1100px]"}`} style={{ tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: 110 }} />
+            <col style={{ width: 180 }} />
+            <col style={{ width: 190 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 110 }} />
+            {canSeeSell && <col style={{ width: 110 }} />}
+            <col style={{ width: 130 }} />
+            {canSeeSell && <col style={{ width: 110 }} />}
+            <col style={{ width: 100 }} />
+            <col style={{ width: 120 }} />
+          </colgroup>
           <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500">
             <tr>
               <th className="px-2 py-2">Loại dòng</th>
