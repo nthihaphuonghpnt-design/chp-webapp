@@ -358,50 +358,28 @@ export default function BangKeView({
     if (!window.confirm(`Xuất hóa đơn với tổng cộng ${tongCong.toLocaleString("en-US")}?`)) return;
 
     setDangXuat(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
 
-    const { data: hoaDon, error } = await supabase
-      .from("hoa_don_xuat")
-      .insert({
-        khach_hang_id: khachHangIdChon,
-        so_hoa_don: soHoaDon || null,
-        ngay_xuat: new Date().toISOString().slice(0, 10),
-        tong_tien_truoc_thue: tongTruocThue,
-        vat_percent: vatPercent ? Number(vatPercent) : null,
-        tien_vat: tienVat,
-        tien_chi_ho: tongChiHo || null,
-        nguoi_tao_id: nv?.id,
-      })
-      .select()
-      .single();
-
-    if (error || !hoaDon) {
-      window.alert(error?.message ?? "Lỗi tạo hóa đơn.");
-      setDangXuat(false);
-      return;
-    }
-
-    if (chiPhiIds.length > 0) {
-      await supabase.from("phat_sinh_chi_phi").update({ hoa_don_id: hoaDon.id }).in("id", chiPhiIds);
-    }
-    if (phuThuIds.length > 0) {
-      await supabase.from("phu_thu").update({ hoa_don_id: hoaDon.id }).in("id", phuThuIds);
-    }
-
-    const donHangIds = Array.from(
-      new Set([
-        ...chiPhiRows.filter((r) => chonChiPhi.has(r.id)).map((r) => r.don_hang_id),
-        ...phuThuRows.filter((r) => chonPhuThu.has(r.id)).map((r) => r.don_hang_id),
-      ])
-    );
-    if (donHangIds.length > 0) {
-      await supabase.from("hoa_don_don_hang").insert(donHangIds.map((donHangId) => ({ hoa_don_id: hoaDon.id, don_hang_id: donHangId })));
-    }
+    // Gop toan bo 4 buoc ghi (tao header + gan chi phi + gan phu thu + gan
+    // don hang) vao 1 RPC chay trong 1 transaction — neu buoc nao fail thi
+    // Postgres tu rollback TOAN BO, khong con de lai hoa don "rong"/thieu du
+    // lieu ma UI van bao thanh cong (xem migration 0068).
+    const { error } = await supabase.rpc("xuat_hoa_don_tu_bang_ke", {
+      p_khach_hang_id: khachHangIdChon,
+      p_so_hoa_don: soHoaDon || null,
+      p_ngay_xuat: new Date().toISOString().slice(0, 10),
+      p_tong_tien_truoc_thue: tongTruocThue,
+      p_vat_percent: vatPercent ? Number(vatPercent) : null,
+      p_tien_vat: tienVat,
+      p_tien_chi_ho: tongChiHo || 0,
+      p_chi_phi_ids: chiPhiIds,
+      p_phu_thu_ids: phuThuIds,
+    });
 
     setDangXuat(false);
+    if (error) {
+      window.alert(error.message ?? "Lỗi tạo hóa đơn — chưa có gì được lưu.");
+      return;
+    }
     router.push("/khach-hang/hoa-don");
   }
 

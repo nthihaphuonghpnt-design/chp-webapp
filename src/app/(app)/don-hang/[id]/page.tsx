@@ -12,6 +12,7 @@ import DinhKemSection from "@/components/don-hang/DinhKemSection";
 import LineItemsSection from "@/components/don-hang/LineItemsSection";
 import ChiPhiGopSection from "@/components/don-hang/ChiPhiGopSection";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
+import { tongPhanLoaiChiPhi } from "@/lib/baoCao";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -100,13 +101,21 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const tongDinhPhiThang = (dinhPhiRows ?? []).reduce((s, r) => s + (r.so_tien ?? 0), 0);
   const dinhPhiPhanBo = soLoTrongThang && soLoTrongThang > 0 ? tongDinhPhiThang / soLoTrongThang : 0;
 
-  const tongBuyNoiBo = chiPhiRowsDayDu.filter((r) => r.noi_bo).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
+  // Dung CHUNG cong thuc voi BaoCaoView.tsx (loiNhuanTheoLo/congNoTheoLo): loai
+  // "Tu choi" truoc khi tinh (chi phi chua duoc Ke toan duyet khong duoc coi la
+  // chot), va dung tongPhanLoaiChiPhi de KHONG tinh nham chi_ho vao doanh thu —
+  // truoc day trang nay tu cong het chiPhiRowsDayDu.gia_ban_sell, bao gom ca
+  // dong "Tu choi" lan dong "Chi ho" (von khong phai doanh thu), ra so khac han
+  // /bao-cao. Xem BUG-05 trong audit.
+  const chiPhiHopLe = chiPhiRowsDayDu.filter((r) => r.trang_thai !== "Từ chối");
+  const thueNgoaiHopLe = thueNgoaiRowsDayDu.filter((r) => r.trang_thai !== "Từ chối");
+  const { doanhThu: sellTuChiPhi, chiPhiThuc: tongBuyNoiBo } = tongPhanLoaiChiPhi(chiPhiHopLe);
   const tongSell =
-    chiPhiRowsDayDu.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0) +
+    sellTuChiPhi +
     (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0) +
-    thueNgoaiRowsDayDu.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
+    thueNgoaiHopLe.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongChiPhiGiaoNhan = (chiPhiGiaoNhanRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
-  const tongChiPhiThueNgoai = thueNgoaiRowsDayDu.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
+  const tongChiPhiThueNgoai = thueNgoaiHopLe.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
 
   const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - tongChiPhiThueNgoai - dinhPhiPhanBo;
   const chiPhiSale = loiNhuanTruocHoaHong * 0.4;
