@@ -111,20 +111,17 @@ export default function ChiPhiBulkForm({
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-6">
-      <form
-        onSubmit={handleSubmit}
-        className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
-      >
-        <div className="border-b border-slate-100 p-4">
-          <h2 className="text-lg font-semibold text-slate-900">Nhập nhanh nhiều chi phí</h2>
+    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40">
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <div className="border-b border-blue-100 p-4">
+          <h2 className="text-sm font-semibold text-slate-900">Nhập nhanh nhiều chi phí</h2>
           <p className="text-xs text-slate-400">
             Điền các dòng cần thiết (bỏ trống dòng không dùng), bấm Lưu tất cả — chỉ dòng có Loại
             chi phí + Giá vốn mới được lưu.
           </p>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
+        <div className="max-h-[70vh] overflow-auto p-4">
           <div className="min-w-[900px]">
             <div className="grid grid-cols-12 gap-2 border-b border-slate-200 pb-2 text-xs font-medium text-slate-500">
               <div className="col-span-3">Loại chi phí</div>

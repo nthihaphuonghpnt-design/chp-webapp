@@ -411,6 +411,18 @@ export default function ChiPhiSection({
 
       {importMsg && <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">{importMsg}</p>}
 
+      {showBulkForm && (
+        <ChiPhiBulkForm
+          loaiChiPhiList={loaiChiPhiList}
+          nhaCungCapList={nhaCungCapList}
+          doiTacThueNgoaiList={doiTacThueNgoaiList}
+          chiTietVanChuyenList={chiTietVanChuyenList}
+          canSeeSell={canSeeSell}
+          onCancel={() => setShowBulkForm(false)}
+          onSave={handleBulkSave}
+        />
+      )}
+
       <div className="flex flex-col gap-2">
         {rows.map((row) => (
           <div key={row.id} className="rounded-lg border border-slate-100 p-3 text-sm">
@@ -499,18 +511,6 @@ export default function ChiPhiSection({
           canSeeSell={canSeeSell}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
-        />
-      )}
-
-      {showBulkForm && (
-        <ChiPhiBulkForm
-          loaiChiPhiList={loaiChiPhiList}
-          nhaCungCapList={nhaCungCapList}
-          doiTacThueNgoaiList={doiTacThueNgoaiList}
-          chiTietVanChuyenList={chiTietVanChuyenList}
-          canSeeSell={canSeeSell}
-          onCancel={() => setShowBulkForm(false)}
-          onSave={handleBulkSave}
         />
       )}
     </div>
