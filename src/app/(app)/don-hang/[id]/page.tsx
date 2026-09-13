@@ -9,9 +9,8 @@ import ContainerSection from "@/components/don-hang/ContainerSection";
 import ToKhaiSection from "@/components/don-hang/ToKhaiSection";
 import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSection";
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
-import ChiPhiSection from "@/components/don-hang/ChiPhiSection";
 import LineItemsSection from "@/components/don-hang/LineItemsSection";
-import ThueNgoaiSection from "@/components/don-hang/ThueNgoaiSection";
+import ChiPhiGopSection from "@/components/don-hang/ChiPhiGopSection";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +31,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: chiPhiGiaoNhanRows },
     { data: loaiChiPhiList },
     { data: nhaCungCapList },
-    { data: bangGiaAll },
     { data: thueNgoaiRows },
     { data: doiTacList },
     { data: nhanVienList },
@@ -56,7 +54,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("chi_phi_giao_nhan").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("loai_chi_phi").select("id, ten, ma:ma_loai_chi_phi").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("nha_cung_cap").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-    supabase.from("bang_gia_khach_hang").select("*").eq("dang_hoat_dong", true),
     supabase.from("don_thue_ngoai").select(DON_THUE_NGOAI_SAFE_COLS).eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("doi_tac_thue_ngoai").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase
@@ -71,7 +68,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
 
   // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng
   // (tu kiem tra dung quyen theo phong ban), giu dung shape PhatSinhChiPhi/
-  // DonThueNgoai nhu truoc de ChiPhiSection/ThueNgoaiSection khong doi gi.
+  // DonThueNgoai nhu truoc de ChiPhiGopSection khong doi gi ve kieu du lieu.
   const [chiPhiRowsDayDu, thueNgoaiRowsDayDu] = await Promise.all([
     ghepGiaBanChiPhi(supabase, chiPhiRows ?? []),
     ghepGiaBanThueNgoai(supabase, thueNgoaiRows ?? []),
@@ -83,7 +80,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       ? await supabase.from("dinh_kem").select("*").in("to_khai_id", toKhaiIds).order("thoi_gian_upload", { ascending: false })
       : { data: [] };
 
-  const bangGiaList = (bangGiaAll ?? []).filter((b) => b.khach_hang_id === order.khach_hang_id);
 
   // Loi nhuan so bo: Sell - Buy(noi bo) - Chi phi giao nhan/chung tu - Chi phi thue ngoai
   // (Module E) - Dinh phi phan bo, sau do chia hoa hong Sale 4/10 - Cong ty 6/10.
@@ -264,41 +260,22 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="mb-4">
-        <ChiPhiSection
+        <ChiPhiGopSection
           donHangId={order.id}
-          soDonHang={order.so_don_hang}
-          initialRows={chiPhiRowsDayDu}
+          initialChiPhiRows={chiPhiRowsDayDu}
+          initialThueNgoaiRows={thueNgoaiRowsDayDu}
+          initialPhuThuRows={phuThuRows ?? []}
           loaiChiPhiList={loaiChiPhiList ?? []}
           nhaCungCapList={nhaCungCapList ?? []}
           doiTacThueNgoaiList={doiTacList ?? []}
           chiTietVanChuyenList={chiTietRows ?? []}
-          bangGiaList={bangGiaList}
-          khachHangId={order.khach_hang_id}
-          hangHoaId={order.hang_hoa_id}
           phongBan={user?.phong_ban ?? ""}
-          currentNhanVienId={user?.id ?? null}
-          nhanVienTamUngOptions={nhanVienChiPhiTamUngOptions}
+          currentUserId={user?.id}
+          nhanVienChiPhiTamUngOptions={nhanVienChiPhiTamUngOptions}
+          nhanVienThueNgoaiTamUngOptions={nhanVienThueNgoaiTamUngOptions}
           congViecMap={congViecMap}
         />
       </div>
-
-      {user?.phong_ban !== "Chứng từ" && (
-        <div className="mb-4">
-          <LineItemsSection
-            table="phu_thu"
-            donHangId={order.id}
-            soDonHang={order.so_don_hang}
-            title="Phụ thu khách hàng"
-            fields={[
-              { key: "loai_phu_thu", label: "Loại phụ thu", type: "text", required: true },
-              { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
-              { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
-            ]}
-            initialRows={phuThuRows ?? []}
-            canEdit={user?.phong_ban === "Sale" || user?.phong_ban === "Kế toán"}
-          />
-        </div>
-      )}
 
       <div className="mb-4">
         <LineItemsSection
@@ -314,19 +291,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           ]}
           initialRows={chiPhiGiaoNhanRows ?? []}
           canEdit={user?.phong_ban === "Kế toán"}
-        />
-      </div>
-
-      <div className="mb-4">
-        <ThueNgoaiSection
-          donHangId={order.id}
-          soDonHang={order.so_don_hang}
-          initialRows={thueNgoaiRowsDayDu}
-          doiTacList={doiTacList ?? []}
-          phongBan={user?.phong_ban ?? ""}
-          currentNhanVienId={user?.id ?? null}
-          nhanVienTamUngOptions={nhanVienThueNgoaiTamUngOptions}
-          congViecMap={congViecMap}
         />
       </div>
 

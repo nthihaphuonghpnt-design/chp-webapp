@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS } from "@/lib/giaBan";
 
 interface KhachHang {
   id: string;
@@ -120,15 +121,19 @@ export default function BangKeView({
     router.push(`/khach-hang/bang-ke?${params.toString()}`);
   }
 
+  // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — select() chi lay
+  // cac cot an toan, roi ghep lai gia_ban_sell tu chinh dong cu (khong doi
+  // trong 2 thao tac nay) thay vi goi RPC round-trip.
   async function toggleChiHo(row: ChiPhiRow) {
     const { data, error } = await supabase
       .from("phat_sinh_chi_phi")
       .update({ chi_ho: !row.chi_ho, noi_bo: row.chi_ho })
       .eq("id", row.id)
-      .select("*, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+      .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
       .single();
     if (!error && data) {
-      setChiPhiRows((prev) => prev.map((r) => (r.id === row.id ? (data as ChiPhiRow) : r)));
+      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as ChiPhiRow;
+      setChiPhiRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
     } else if (error) {
       window.alert(error.message);
     }
@@ -137,14 +142,16 @@ export default function BangKeView({
   async function handleCapNhatVat(chiPhiId: string, vatMoi: string) {
     const so = vatMoi.trim() === "" ? null : Number(vatMoi);
     if (so !== null && Number.isNaN(so)) return;
+    const rowCu = chiPhiRowsAll.find((r) => r.id === chiPhiId);
     const { data, error } = await supabase
       .from("phat_sinh_chi_phi")
       .update({ vat_percent: so })
       .eq("id", chiPhiId)
-      .select("*, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)")
+      .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
       .single();
     if (!error && data) {
-      setChiPhiRows((prev) => prev.map((r) => (r.id === chiPhiId ? (data as ChiPhiRow) : r)));
+      const rowDayDu = { ...data, gia_ban_sell: rowCu?.gia_ban_sell ?? null } as ChiPhiRow;
+      setChiPhiRows((prev) => prev.map((r) => (r.id === chiPhiId ? rowDayDu : r)));
     } else if (error) {
       window.alert(error.message);
     }

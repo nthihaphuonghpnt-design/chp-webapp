@@ -1,10 +1,10 @@
-// Kể từ migration 0061, gia_ban_sell KHÔNG còn đọc trực tiếp được từ
-// phat_sinh_chi_phi/don_thue_ngoai (revoke select toàn bảng + grant lại các
-// cột an toàn, không gồm gia_ban_sell) — chỉ đọc được qua 2 RPC dưới, tự
-// kiểm tra đúng quyền theo phòng ban trước khi trả về. Dùng đúng danh sách
-// cột SELECT (không có gia_ban_sell) khi truy vấn 2 bảng này, rồi ghép lại
-// gia_ban_sell theo id — cùng kiểu "polymorphic join" đã dùng cho
-// so_quy.nguon_id ở nơi khác trong dự án.
+// Ke tu migration 0061, gia_ban_sell KHONG con doc truc tiep duoc tu
+// phat_sinh_chi_phi/don_thue_ngoai (revoke select toan bang + grant lai cac
+// cot an toan, khong gom gia_ban_sell) — chi doc duoc qua 2 RPC duoi, tu
+// kiem tra dung quyen theo phong ban truoc khi tra ve. Dung dung danh sach
+// cot SELECT (khong co gia_ban_sell) khi truy van 2 bang nay, roi ghep lai
+// gia_ban_sell theo id — cung kieu "polymorphic join" da dung cho
+// so_quy.nguon_id o noi khac trong du an.
 
 export const PHAT_SINH_CHI_PHI_SAFE_COLS =
   "id, don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, chi_tiet_van_chuyen_id, to_khai_id, nguon_tu_dong, phuong_thuc_thanh_toan, nguon_thanh_toan, tam_ung_id, phieu_quyet_toan_id, so_luong, don_gia, so_tien_da_chi, vat_percent, tien_thue, tong_tien, noi_bo, chi_ho, tt_thue, ngay_phat_sinh, nguoi_nhap_id, nguoi_duyet_id, hoa_don_id, trang_thai, tinh_trang_thanh_toan, so_tien_da_thanh_toan, ghi_chu, created_at, updated_at";
