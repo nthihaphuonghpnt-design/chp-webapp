@@ -108,7 +108,7 @@ export default function SoQuyView({
             <button
               key={v}
               onClick={() => setLoaiSo(v)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${loaiSo === v ? "bg-blue-600 text-white" : "text-slate-600"}`}
+              className={`rounded-md px-4 py-2 text-sm font-medium ${loaiSo === v ? "bg-blue-600 text-white" : "text-slate-600"}`}
             >
               {v}
             </button>
@@ -116,11 +116,11 @@ export default function SoQuyView({
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Từ ngày</label>
-          <input type="date" value={tuNgay} onChange={(e) => setTuNgay(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+          <input type="date" value={tuNgay} onChange={(e) => setTuNgay(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Đến ngày</label>
-          <input type="date" value={denNgay} onChange={(e) => setDenNgay(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+          <input type="date" value={denNgay} onChange={(e) => setDenNgay(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
       </div>
 

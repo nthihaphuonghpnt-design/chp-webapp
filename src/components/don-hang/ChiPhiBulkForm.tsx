@@ -108,7 +108,10 @@ export default function ChiPhiBulkForm({
     setSaving(false);
   }
 
-  const cls = "w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+  // Cung chieu cao voi input ben trong SearchableSelect (px-3 py-2.5, cung
+  // dinh nghia cung dat — component do khong nhan className rieng cho input
+  // nen phai khop tay o day) de cac o trong 1 dong deu nhau, khong lom khom.
+  const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-6">
