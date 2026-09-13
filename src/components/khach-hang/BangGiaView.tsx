@@ -125,12 +125,14 @@ export default function BangGiaView({
       .select()
       .single();
     if (!error && data) setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
+    else if (error) window.alert(error.message);
   }
 
   async function handleDelete(row: Row) {
     if (!window.confirm("Xóa dòng giá này?")) return;
     const { error } = await supabase.from("bang_gia_khach_hang").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   async function handleExportExcel() {

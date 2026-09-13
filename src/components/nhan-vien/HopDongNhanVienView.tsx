@@ -142,6 +142,7 @@ export default function HopDongNhanVienView({
     if (!window.confirm(`Xóa hợp đồng "${row.so_hop_dong ?? ""}"?`)) return;
     const { error } = await supabase.from("hop_dong_nhan_vien").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   async function handleExportExcel() {

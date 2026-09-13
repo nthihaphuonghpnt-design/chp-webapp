@@ -198,6 +198,8 @@ export default function HoaDonView({
     if (!error) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       setLienKet((prev) => prev.filter((l) => l.hoa_don_id !== row.id));
+    } else {
+      window.alert(error.message);
     }
   }
 

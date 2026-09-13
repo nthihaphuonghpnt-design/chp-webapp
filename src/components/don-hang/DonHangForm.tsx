@@ -139,9 +139,14 @@ export default function DonHangForm({
       }
 
       if (so_to_khai_ban_dau.trim()) {
-        await supabase
+        const { error: tkErr } = await supabase
           .from("to_khai_hai_quan")
           .insert({ don_hang_id: data.id, so_to_khai: so_to_khai_ban_dau.trim() });
+        if (tkErr) {
+          window.alert(
+            `Đã tạo đơn hàng, nhưng lưu Số tờ khai ban đầu bị lỗi: ${tkErr.message}\nVào chi tiết đơn hàng để thêm tờ khai thủ công.`
+          );
+        }
       }
 
       setSaving(false);

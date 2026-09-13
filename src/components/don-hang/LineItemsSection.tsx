@@ -56,12 +56,16 @@ export default function LineItemsSection({
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
         setShowForm(false);
+      } else if (error) {
+        window.alert(error.message);
       }
     } else {
       const { data, error } = await supabase.from(table).insert(payload).select().single();
       if (!error && data) {
         setRows((prev) => [data as Row, ...prev]);
         setShowForm(false);
+      } else if (error) {
+        window.alert(error.message);
       }
     }
   }
@@ -70,6 +74,7 @@ export default function LineItemsSection({
     if (!window.confirm("Xóa dòng này?")) return;
     const { error } = await supabase.from(table).delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   async function handleExportExcel() {

@@ -281,6 +281,7 @@ export default function TamUngGiaiChiView({
     if (!window.confirm("Xóa dòng này?")) return;
     const { error } = await supabase.from("tam_ung_giai_chi").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   async function handleExportExcel() {

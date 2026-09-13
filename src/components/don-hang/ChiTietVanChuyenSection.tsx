@@ -67,6 +67,8 @@ export default function ChiTietVanChuyenSection({
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as ChiTietVanChuyen) : r)));
         setShowForm(false);
         router.refresh();
+      } else if (error) {
+        window.alert(error.message);
       }
     } else {
       const { data, error } = await supabase.from("chi_tiet_van_chuyen").insert(payload).select().single();
@@ -74,6 +76,8 @@ export default function ChiTietVanChuyenSection({
         setRows((prev) => [...prev, data as ChiTietVanChuyen]);
         setShowForm(false);
         router.refresh();
+      } else if (error) {
+        window.alert(error.message);
       }
     }
   }
@@ -84,6 +88,8 @@ export default function ChiTietVanChuyenSection({
     if (!error) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       router.refresh();
+    } else {
+      window.alert(error.message);
     }
   }
 

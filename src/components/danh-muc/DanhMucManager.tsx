@@ -186,6 +186,8 @@ export default function DanhMucManager({
       .single();
     if (!err && data) {
       setRows((prev) => prev.map((r) => (r.id === row.id ? { ...(data as unknown as Row), [statusField]: newValue } : r)));
+    } else if (err) {
+      window.alert(err.message);
     }
   }
 

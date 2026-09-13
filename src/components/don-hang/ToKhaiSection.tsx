@@ -113,6 +113,7 @@ export default function ToKhaiSection({
     if (!window.confirm("Xóa tờ khai này?")) return;
     const { error } = await supabase.from("to_khai_hai_quan").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   return (

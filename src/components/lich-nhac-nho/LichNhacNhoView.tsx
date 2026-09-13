@@ -168,12 +168,14 @@ export default function LichNhacNhoView({
       .select("*, don_hang:don_hang_id(so_don_hang), nguoi_phu_trach:nguoi_phu_trach_id(ho_ten), phong_ban:phong_ban_id(ten)")
       .single();
     if (!error && data) setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
+    else if (error) window.alert(error.message);
   }
 
   async function handleDelete(row: Row) {
     if (!window.confirm("Xóa nhắc nhở này?")) return;
     const { error } = await supabase.from("lich_nhac_nho").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   async function handleExportExcel() {

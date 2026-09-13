@@ -49,12 +49,16 @@ export default function ContainerSection({
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as DonHangContainer) : r)));
         setShowForm(false);
+      } else if (error) {
+        window.alert(error.message);
       }
     } else {
       const { data, error } = await supabase.from("don_hang_container").insert(payload).select().single();
       if (!error && data) {
         setRows((prev) => [...prev, data as DonHangContainer]);
         setShowForm(false);
+      } else if (error) {
+        window.alert(error.message);
       }
     }
   }
@@ -63,6 +67,7 @@ export default function ContainerSection({
     if (!window.confirm("Xóa container này?")) return;
     const { error } = await supabase.from("don_hang_container").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
+    else window.alert(error.message);
   }
 
   return (
