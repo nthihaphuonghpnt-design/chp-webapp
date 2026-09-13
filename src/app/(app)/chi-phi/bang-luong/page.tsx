@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BangLuongView from "@/components/chi-phi/BangLuongView";
+import { ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function BangLuongPage() {
   const supabase = await createClient();
@@ -36,9 +37,9 @@ export default async function BangLuongPage() {
     supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id"),
     supabase
       .from("phat_sinh_chi_phi")
-      .select("don_hang_id, so_tien_da_chi, gia_ban_sell, noi_bo, trang_thai"),
+      .select("id, don_hang_id, so_tien_da_chi, noi_bo, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
-    supabase.from("don_thue_ngoai").select("don_hang_id, so_tien_da_chi, gia_ban_sell"),
+    supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi"),
     supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     supabase.from("luong_da_tra").select("*"),
     supabase.from("cham_cong").select("nhan_vien_id, ngay, trang_thai"),
@@ -59,15 +60,21 @@ export default async function BangLuongPage() {
     muc_dong_bhxh: luongMap.get(nv.id)?.muc_dong_bhxh ?? null,
   }));
 
+  // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng.
+  const [chiPhiListDayDu, thueNgoaiListDayDu] = await Promise.all([
+    ghepGiaBanChiPhi(supabase, chiPhiList ?? []),
+    ghepGiaBanThueNgoai(supabase, thueNgoaiList ?? []),
+  ]);
+
   return (
     <BangLuongView
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       nhanVienList={nhanVienDayDu as any[]}
       chiPhiGiaoNhanList={chiPhiGiaoNhanList ?? []}
       donHangList={donHangList ?? []}
-      chiPhiList={chiPhiList ?? []}
+      chiPhiList={chiPhiListDayDu}
       phuThuList={phuThuList ?? []}
-      thueNgoaiList={thueNgoaiList ?? []}
+      thueNgoaiList={thueNgoaiListDayDu}
       dinhPhiList={dinhPhiList ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       luongDaTraList={(luongDaTraList ?? []) as any[]}

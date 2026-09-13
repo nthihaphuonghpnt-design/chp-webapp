@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BaoCaoView from "@/components/bao-cao/BaoCaoView";
+import { ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function BaoCaoPage() {
   const supabase = await createClient();
@@ -38,10 +39,10 @@ export default async function BaoCaoPage() {
     // chi phi cua don hang do minh phu trach, khong can chan them o day.
     supabase
       .from("phat_sinh_chi_phi")
-      .select("don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, so_tien_da_chi, gia_ban_sell, chi_ho, noi_bo, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai"),
+      .select("id, don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, so_tien_da_chi, chi_ho, noi_bo, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
     isKeToanOrGiamDoc
-      ? supabase.from("don_thue_ngoai").select("don_hang_id, doi_tac_thue_ngoai_id, so_tien_da_chi, gia_ban_sell, so_tien_da_thanh_toan, ngay_thue")
+      ? supabase.from("don_thue_ngoai").select("id, don_hang_id, doi_tac_thue_ngoai_id, so_tien_da_chi, so_tien_da_thanh_toan, ngay_thue")
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc
       ? supabase.from("hoa_don_xuat").select("id, khach_hang_id, so_hoa_don, ngay_xuat, tong_tien, tien_chi_ho, so_tien_da_thu, trang_thai_thanh_toan")
@@ -56,14 +57,20 @@ export default async function BaoCaoPage() {
     supabase.from("nhan_vien").select("id, ho_ten"),
   ]);
 
+  // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng.
+  const [chiPhiListDayDu, thueNgoaiListDayDu] = await Promise.all([
+    ghepGiaBanChiPhi(supabase, chiPhiList ?? []),
+    ghepGiaBanThueNgoai(supabase, thueNgoaiList ?? []),
+  ]);
+
   return (
     <BaoCaoView
       donHangList={donHangList ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      chiPhiList={(chiPhiList ?? []) as any[]}
+      chiPhiList={chiPhiListDayDu as any[]}
       phuThuList={phuThuList ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      thueNgoaiList={(thueNgoaiList ?? []) as any[]}
+      thueNgoaiList={thueNgoaiListDayDu as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       hoaDonList={(hoaDonList ?? []) as any[]}
       hoaDonDonHangList={hoaDonDonHangList ?? []}

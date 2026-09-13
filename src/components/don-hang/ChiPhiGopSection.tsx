@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import SearchableSelect, { type SearchableOption } from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
 import type { ChiTietVanChuyen, PhatSinhChiPhi, DonThueNgoai, PhuThu } from "@/types/database";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS } from "@/lib/giaBan";
 
 interface Option {
   id: string;
@@ -256,10 +257,13 @@ export default function ChiPhiGopSection({
           nguoi_nhap_id: nhanVienId,
           trang_thai: "Chờ duyệt",
         })
-        .select()
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
       if (error) return window.alert(error.message);
-      setChiPhiRows((prev) => [data as PhatSinhChiPhi, ...prev]);
+      // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — ghep lai tu
+      // chinh gia tri vua gui, khong can goi RPC round-trip.
+      const rowDayDu = { ...data, gia_ban_sell: row.sell ? Number(row.sell) : null } as PhatSinhChiPhi;
+      setChiPhiRows((prev) => [rowDayDu, ...prev]);
     } else if (row.loai === "thue_ngoai") {
       if (!row.loai_dich_vu_thue || !row.doi_tac_thue_ngoai_id || !row.buy) {
         window.alert("Cần chọn Loại dịch vụ, Đối tác thuê ngoài và nhập Giá vốn.");
@@ -277,10 +281,11 @@ export default function ChiPhiGopSection({
           ngay_thue: new Date().toISOString().slice(0, 10),
           nguoi_nhap_id: nhanVienId,
         })
-        .select()
+        .select(DON_THUE_NGOAI_SAFE_COLS)
         .single();
       if (error) return window.alert(error.message);
-      setThueNgoaiRows((prev) => [data as DonThueNgoai, ...prev]);
+      const rowDayDu = { ...data, gia_ban_sell: row.sell ? Number(row.sell) : null } as DonThueNgoai;
+      setThueNgoaiRows((prev) => [rowDayDu, ...prev]);
     } else {
       if (!row.loai_phu_thu || !row.sell) {
         window.alert("Cần nhập Loại phụ thu và Thành tiền.");
@@ -368,10 +373,11 @@ export default function ChiPhiGopSection({
           ghi_chu: editValues.ghi_chu || null,
         })
         .eq("id", rv.raw.id)
-        .select()
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
       if (error) return window.alert(error.message);
-      setChiPhiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? (data as PhatSinhChiPhi) : r)));
+      const rowDayDu = { ...data, gia_ban_sell: editValues.sell ? Number(editValues.sell) : null } as PhatSinhChiPhi;
+      setChiPhiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? rowDayDu : r)));
     } else if (rv.loai === "thue_ngoai") {
       const { data, error } = await supabase
         .from("don_thue_ngoai")
@@ -383,10 +389,11 @@ export default function ChiPhiGopSection({
           gia_ban_sell: editValues.sell ? Number(editValues.sell) : null,
         })
         .eq("id", rv.raw.id)
-        .select()
+        .select(DON_THUE_NGOAI_SAFE_COLS)
         .single();
       if (error) return window.alert(error.message);
-      setThueNgoaiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? (data as DonThueNgoai) : r)));
+      const rowDayDu = { ...data, gia_ban_sell: editValues.sell ? Number(editValues.sell) : null } as DonThueNgoai;
+      setThueNgoaiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? rowDayDu : r)));
     } else {
       const { data, error } = await supabase
         .from("phu_thu")
@@ -413,13 +420,21 @@ export default function ChiPhiGopSection({
 
   async function duyet(rv: RowView, trangThai: "Đã duyệt" | "Từ chối") {
     const table = rv.loai === "chi_phi" ? "phat_sinh_chi_phi" : "don_thue_ngoai";
+    // Khai bao ro : string — neu de TS tu suy literal type se ghep union 2
+    // chuoi SAFE_COLS rat dai, lam "Expression produces a union type that is
+    // too complex to represent" khi supabase-js co parse chuoi select().
+    const safeCols: string = rv.loai === "chi_phi" ? PHAT_SINH_CHI_PHI_SAFE_COLS : DON_THUE_NGOAI_SAFE_COLS;
     const nhanVienId = rv.loai === "chi_phi" ? await layNhanVienId() : undefined;
     const payload: Record<string, unknown> = { trang_thai: trangThai };
     if (nhanVienId) payload.nguoi_duyet_id = nhanVienId;
-    const { data, error } = await supabase.from(table).update(payload).eq("id", rv.raw.id).select().single();
+    const { data, error } = await supabase.from(table).update(payload).eq("id", rv.raw.id).select(safeCols).single();
     if (error) return window.alert(error.message);
-    if (rv.loai === "chi_phi") setChiPhiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? (data as PhatSinhChiPhi) : r)));
-    else setThueNgoaiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? (data as DonThueNgoai) : r)));
+    // gia_ban_sell khong doi trong thao tac duyet — giu nguyen tu rv.sell.
+    // safeCols la string chung (khong phai literal) nen data tra ve kieu
+    // khong the suy dien tinh; ep ve Record de spread duoc.
+    const dataObj = data as unknown as Record<string, unknown>;
+    if (rv.loai === "chi_phi") setChiPhiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? ({ ...dataObj, gia_ban_sell: rv.sell } as PhatSinhChiPhi) : r)));
+    else setThueNgoaiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? ({ ...dataObj, gia_ban_sell: rv.sell } as DonThueNgoai) : r)));
   }
 
   function coTheSua(rv: RowView) {
