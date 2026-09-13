@@ -529,7 +529,6 @@ export default function ChiPhiGopSection({
             {loai === "phu_thu" ? fmt(Number(values.sell) || 0) : fmt((Number(values.sell) || 0) - (Number(values.buy) || 0))}
           </td>
         )}
-        <td className="px-2 py-1.5 text-slate-400">—</td>
       </>
     );
   }
