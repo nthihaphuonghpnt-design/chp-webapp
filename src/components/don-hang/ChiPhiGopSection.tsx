@@ -443,7 +443,10 @@ export default function ChiPhiGopSection({
     return ["Sale", "Kế toán"].includes(phongBan);
   }
 
-  const cls = "w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
+  // Cung chieu cao voi input ben trong SearchableSelect (px-3 py-2.5, cung
+  // dinh nghia cung dat — component do khong nhan className rieng cho input
+  // nen phai khop tay o day) de cac o trong 1 dong deu nhau, khong lom khom.
+  const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 
   const tongBuy = rows.filter((r) => r.noiBo).reduce((s, r) => s + (r.buy ?? 0), 0);
   const tongSell = rows.reduce((s, r) => s + (r.sell ?? 0), 0);

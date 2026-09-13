@@ -64,7 +64,8 @@ export default function SearchableSelect({
         }}
         disabled={disabled}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+        title={selected ? `${selected.code ? `${selected.code} — ` : ""}${selected.label}` : undefined}
+        className="w-full truncate rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
       />
       {selected && !open && !disabled && (
         <button
@@ -77,7 +78,7 @@ export default function SearchableSelect({
         </button>
       )}
       {open && (
-        <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="absolute z-20 mt-1 max-h-60 w-max min-w-full max-w-xs overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg sm:max-w-sm">
           {filtered.length === 0 && <p className="px-3 py-2 text-sm text-slate-400">Không tìm thấy.</p>}
           {filtered.map((o) => (
             <button
