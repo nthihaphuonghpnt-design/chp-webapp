@@ -38,6 +38,7 @@ interface ThueNgoai {
   gia_ban_sell: number | null;
   so_tien_da_thanh_toan: number | null;
   ngay_thue: string;
+  trang_thai: string;
 }
 interface ChiPhiGiaoNhan {
   don_hang_id: string;
@@ -174,11 +175,12 @@ export default function BaoCaoView({
       const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
       const { doanhThu, chiPhiThuc, chiHo } = tongPhanLoaiChiPhi(cp);
       const buy = chiPhiThuc;
+      const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
       const sell =
         doanhThu +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
-        thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
-      const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === d.id).reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
+        thueNgoaiHopLe.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
+      const thueNgoaiBuy = thueNgoaiHopLe.reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
       const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
       const lnTruocHoaHong = sell - buy - thueNgoaiBuy - giaoNhan - dinhPhi;
@@ -224,12 +226,19 @@ export default function BaoCaoView({
       map.set(saleId, (map.get(saleId) ?? 0) + row.sell);
     }
     // Neu khong phai Ke toan/Giam doc (khong co loiNhuanTheoLo), tinh rieng doanh so tu sell da co
+    // — dung CHUNG dieu kien loc voi loiNhuanTheoLo o tren (loai "Tu choi", cong
+    // ca thue ngoai) de "Doanh so theo Sale" Sale tu xem khop voi so Ke toan/Giam
+    // doc thay khi xem cung 1 lo. Xem BUG (Phase 6): truoc day nhanh nay khong
+    // loai "Tu choi" nen Sale thay so cao hon that.
     if (loiNhuanTheoLo.length === 0) {
       for (const d of donHangTrongKy) {
         const saleId = d.sale_phu_trach_id ?? "chua-gan";
+        const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
+        const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
         const sell =
-          tongPhanLoaiChiPhi(chiPhiList.filter((c) => c.don_hang_id === d.id)).doanhThu +
-          phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
+          tongPhanLoaiChiPhi(cp).doanhThu +
+          phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
+          thueNgoaiHopLe.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
         map.set(saleId, (map.get(saleId) ?? 0) + sell);
       }
     }
@@ -240,10 +249,15 @@ export default function BaoCaoView({
     }));
     if (isSale) entries = entries.filter((e) => e.saleId === currentUserId);
     return entries;
-  }, [loiNhuanTheoLo, donHangTrongKy, chiPhiList, phuThuList, isSale, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loiNhuanTheoLo, donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, isSale, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 4) Bao cao chi phi theo loai ---
-  const chiPhiTrongKy = chiPhiList.filter((c) => c.ngay_phat_sinh >= tuNgay && c.ngay_phat_sinh <= denNgay);
+  // Loai "Tu choi" — dung CHUNG dieu kien voi loiNhuanTheoLo/congNoTheoLo o tren,
+  // vi chiPhiTrongKy con duoc dung lai cho congNoPhaiTra (5) ben duoi: chi phi bi
+  // tu choi khong phai no phai tra that su, khong nen tinh vao ca 2 bao cao nay.
+  const chiPhiTrongKy = chiPhiList.filter(
+    (c) => c.ngay_phat_sinh >= tuNgay && c.ngay_phat_sinh <= denNgay && c.trang_thai !== "Từ chối"
+  );
   const chiPhiTheoLoai = useMemo(() => {
     const map = new Map<string, { ten: string; buy: number; sell: number; chiHo: number }>();
     for (const c of chiPhiTrongKy) {
@@ -274,7 +288,11 @@ export default function BaoCaoView({
   }, [hoaDonTrongKy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 6) Cong no phai tra (NCC tu chi phi noi bo, + doi tac tu thue ngoai) ---
-  const thueNgoaiTrongKy = thueNgoaiList.filter((t) => t.ngay_thue >= tuNgay && t.ngay_thue <= denNgay);
+  // Loai "Tu choi" — cung ly do nhu chiPhiTrongKy o tren; con dung lai cho (7)
+  // Loi nhuan theo doi tac thue ngoai ben duoi.
+  const thueNgoaiTrongKy = thueNgoaiList.filter(
+    (t) => t.ngay_thue >= tuNgay && t.ngay_thue <= denNgay && t.trang_thai !== "Từ chối"
+  );
   const congNoPhaiTra = useMemo(() => {
     const map = new Map<string, { ten: string; tongNo: number; daTra: number }>();
     for (const c of chiPhiTrongKy) {
