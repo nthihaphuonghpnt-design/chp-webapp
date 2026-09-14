@@ -164,7 +164,7 @@ export default function ChiPhiGopSection({
     });
   }
 
-  const canSeeSell = !["Hiện trường", "Điều phối"].includes(phongBan);
+  const canSeeSell = ["Sale", "Kế toán", "Giám đốc"].includes(phongBan);
   const canApprove = phongBan === "Kế toán";
   const isKeToan = phongBan === "Kế toán";
   const isDieuPhoi = phongBan === "Điều phối";
@@ -295,7 +295,7 @@ export default function ChiPhiGopSection({
     const nhanVienId = row.nhan_vien_tam_ung_id || (await layNhanVienId());
     if (row.loai === "chi_phi") {
       if (!row.loai_chi_phi_id || !row.buy) {
-        window.alert("Cần chọn Loại chi phí và nhập Giá vốn.");
+        window.alert("Cần chọn Loại chi phí và nhập Số tiền đã chi.");
         return;
       }
       const { data, error } = await supabase
@@ -326,7 +326,7 @@ export default function ChiPhiGopSection({
       setChiPhiRows((prev) => [rowDayDu, ...prev]);
     } else if (row.loai === "thue_ngoai") {
       if (!row.loai_dich_vu_thue || !row.doi_tac_thue_ngoai_id || !row.buy) {
-        window.alert("Cần chọn Loại dịch vụ, Đối tác thuê ngoài và nhập Giá vốn.");
+        window.alert("Cần chọn Loại dịch vụ, Đối tác thuê ngoài và nhập Số tiền đã chi.");
         return;
       }
       const { data, error } = await supabase
@@ -768,7 +768,7 @@ export default function ChiPhiGopSection({
               <th className="px-2 py-2">Loại chi phí / dịch vụ</th>
               <th className="px-2 py-2">NCC / Đối tác</th>
               <th className="px-2 py-2">Chặng</th>
-              <th className="px-2 py-2">Giá vốn</th>
+              <th className="px-2 py-2">Số tiền đã chi</th>
               {canSeeSell && <th className="px-2 py-2">Giá bán</th>}
               <th className="px-2 py-2">Nội bộ / Chi hộ</th>
               <th className="px-2 py-2">Nguồn thanh toán</th>
@@ -920,8 +920,8 @@ export default function ChiPhiGopSection({
                 </span>
               </div>
               <p className="text-slate-500">
-                {rv.doiTac} · Buy: {rv.buy !== null ? fmt(rv.buy) : "—"}
-                {canSeeSell && rv.sell !== null && ` · Sell: ${fmt(rv.sell)}`}
+                {rv.doiTac} · Số tiền đã chi: {rv.buy !== null ? fmt(rv.buy) : "—"}
+                {canSeeSell && rv.sell !== null && ` · Giá bán: ${fmt(rv.sell)}`}
                 {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}`}
                 {rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : rv.chiHo ? "Chi hộ" : "—"}`}
                 {rv.nguonThanhToan && ` · Nguồn: ${rv.nguonThanhToan}`}
@@ -954,7 +954,7 @@ export default function ChiPhiGopSection({
                 <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
                   {editValues.loai === "chi_phi" && <SearchableSelect options={loaiChiPhiOptions} value={editValues.loai_chi_phi_id} onChange={(v) => setEditValues((p) => (p ? { ...p, loai_chi_phi_id: v } : p))} />}
                   <div>
-                    <label className="mb-1 block text-xs text-slate-500">Giá vốn</label>
+                    <label className="mb-1 block text-xs text-slate-500">Số tiền đã chi</label>
                     <MoneyInput value={editValues.buy} onChange={(v) => setEditValues((p) => (p ? { ...p, buy: v } : p))} className={cls} disabled={rv.loai === "phu_thu"} />
                   </div>
                   {canSeeSell && (
@@ -1039,7 +1039,7 @@ export default function ChiPhiGopSection({
             )}
             {r.loai !== "phu_thu" && (
               <div className="mb-2">
-                <label className="mb-1 block text-xs text-slate-500">Giá vốn</label>
+                <label className="mb-1 block text-xs text-slate-500">Số tiền đã chi</label>
                 <MoneyInput value={r.buy} onChange={(v) => capNhatDongMoi(r.key, { buy: v })} className={cls} />
               </div>
             )}
@@ -1081,10 +1081,10 @@ export default function ChiPhiGopSection({
 
       {rows.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-          Tổng Buy (nội bộ): <strong>{fmt(tongBuy)}</strong>
+          Tổng số tiền đã chi (nội bộ): <strong>{fmt(tongBuy)}</strong>
           {canSeeSell && (
             <>
-              {" · "}Tổng Sell: <strong>{fmt(tongSell)}</strong>
+              {" · "}Tổng giá bán: <strong>{fmt(tongSell)}</strong>
             </>
           )}
         </div>

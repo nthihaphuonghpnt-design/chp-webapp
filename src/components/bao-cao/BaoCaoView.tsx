@@ -341,7 +341,7 @@ export default function BaoCaoView({
       sheetName: "Doanh số theo Sale",
       columns: [
         { header: "Sale", key: "sale", width: 18 },
-        { header: "Doanh số (sell)", key: "sell", width: 16 },
+        { header: "Doanh số", key: "sell", width: 16 },
       ],
       rows: doanhSoTheoSale.map((r) => [r.ten, r.sell]),
     });
@@ -350,9 +350,9 @@ export default function BaoCaoView({
         sheetName: "Lợi nhuận theo lô",
         columns: [
           { header: "Số đơn", key: "soDon", width: 14 },
-          { header: "Sell", key: "sell", width: 14 },
-          { header: "Buy", key: "buy", width: 14 },
-          { header: "Buy thuê ngoài", key: "thueNgoaiBuy", width: 14 },
+          { header: "Giá bán", key: "sell", width: 14 },
+          { header: "Số tiền đã chi", key: "buy", width: 16 },
+          { header: "Số tiền đã chi thuê ngoài", key: "thueNgoaiBuy", width: 18 },
           { header: "Chi phí giao nhận", key: "giaoNhan", width: 16 },
           { header: "Định phí phân bổ", key: "dinhPhi", width: 14 },
           { header: "Chi hộ (không tính lãi/lỗ)", key: "chiHo", width: 18 },
@@ -400,8 +400,8 @@ export default function BaoCaoView({
         sheetName: "Chi phí theo loại",
         columns: [
           { header: "Loại chi phí", key: "loai", width: 20 },
-          { header: "Buy", key: "buy", width: 14 },
-          { header: "Sell", key: "sell", width: 14 },
+          { header: "Số tiền đã chi", key: "buy", width: 16 },
+          { header: "Giá bán", key: "sell", width: 14 },
           { header: "Chi hộ", key: "chiHo", width: 14 },
         ],
         rows: chiPhiTheoLoai.map((r) => [r.ten, r.buy, r.sell, r.chiHo]),
@@ -430,8 +430,8 @@ export default function BaoCaoView({
         sheetName: "LN theo đối tác thuê ngoài",
         columns: [
           { header: "Đối tác", key: "doiTac", width: 20 },
-          { header: "Buy", key: "buy", width: 14 },
-          { header: "Sell", key: "sell", width: 14 },
+          { header: "Số tiền đã chi", key: "buy", width: 16 },
+          { header: "Giá bán", key: "sell", width: 14 },
           { header: "Chênh lệch", key: "chenhLech", width: 14 },
         ],
         rows: loiNhuanTheoDoiTac.map((r) => [r.ten, r.buy, r.sell, r.chenhLech]),
@@ -470,7 +470,7 @@ export default function BaoCaoView({
         />
       </Section>
 
-      <Section title="Doanh số theo Sale (Sell)">
+      <Section title="Doanh số theo Sale">
         <SimpleTable cols={["Sale", "Doanh số"]} rows={doanhSoTheoSale.map((r) => [r.ten, fmt(r.sell)])} />
       </Section>
 
@@ -481,7 +481,7 @@ export default function BaoCaoView({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    {["Số đơn", "Sell", "Buy", "Buy thuê ngoài", "CP giao nhận", "Định phí", "Chi hộ", "LN trước hoa hồng", "Hoa hồng Sale", "LN công ty"].map((h) => (
+                    {["Số đơn", "Giá bán", "Số tiền đã chi", "Số tiền đã chi thuê ngoài", "CP giao nhận", "Định phí", "Chi hộ", "LN trước hoa hồng", "Hoa hồng Sale", "LN công ty"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium">
                         {h}
                       </th>
@@ -580,7 +580,7 @@ export default function BaoCaoView({
 
           <Section title="Báo cáo chi phí theo loại">
             <SimpleTable
-              cols={["Loại chi phí", "Buy", "Sell", "Chi hộ"]}
+              cols={["Loại chi phí", "Số tiền đã chi", "Giá bán", "Chi hộ"]}
               rows={chiPhiTheoLoai.map((r) => [r.ten, fmt(r.buy), fmt(r.sell), r.chiHo > 0 ? fmt(r.chiHo) : "—"])}
             />
           </Section>
@@ -601,7 +601,7 @@ export default function BaoCaoView({
 
           <Section title="Lợi nhuận theo đối tác thuê ngoài">
             <SimpleTable
-              cols={["Đối tác", "Buy", "Sell", "Chênh lệch"]}
+              cols={["Đối tác", "Số tiền đã chi", "Giá bán", "Chênh lệch"]}
               rows={loiNhuanTheoDoiTac.map((r) => [r.ten, fmt(r.buy), fmt(r.sell), fmt(r.chenhLech)])}
             />
           </Section>

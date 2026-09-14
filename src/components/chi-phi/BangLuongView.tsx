@@ -216,7 +216,8 @@ export default function BangLuongView({
 
   const tongLuong = bangLuong.reduce((s, r) => s + r.tongThuNhap, 0);
   const tongBhxhCt = bangLuong.reduce((s, r) => s + r.bhxhCt, 0);
-  const tongChiPhiNhanSu = tongLuong + tongBhxhCt;
+  const tongKpcd = bangLuong.reduce((s, r) => s + r.chiTietBhxh.ctKpcd, 0);
+  const tongChiPhiNhanSu = tongLuong + tongBhxhCt + tongKpcd;
 
   function daTraCuaThang(nhanVienId: string) {
     return daTraList.find((d) => d.nhan_vien_id === nhanVienId && d.thang_luong === thangLuong) ?? null;
@@ -290,6 +291,7 @@ export default function BangLuongView({
       { header: `BHYT — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHYT_PHAI_NOP_CHI_TIET})`, key: "ctBhyt", width: 26 },
       { header: `BHTN — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHTN_PHAI_NOP_CHI_TIET})`, key: "ctBhtn", width: 26 },
       { header: "Tổng BHXH/BHYT/BHTN — Cty đóng", key: "bhxhCt", width: 22 },
+      { header: `KPCĐ 2% — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.KPCD_PHAI_NOP})`, key: "kpcd", width: 26 },
       { header: "Số người phụ thuộc", key: "soNguoiPhuThuoc", width: 14 },
       { header: "Giảm trừ gia cảnh", key: "giamTru", width: 16 },
       { header: `Thuế TNCN (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.THUE_TNCN_PHAI_NOP})`, key: "thueTncn", width: 26 },
@@ -310,6 +312,7 @@ export default function BangLuongView({
       r.chiTietBhxh.ctBhyt,
       r.chiTietBhxh.ctBhtn,
       r.bhxhCt,
+      r.chiTietBhxh.ctKpcd,
       r.nv.so_nguoi_phu_thuoc ?? 0,
       r.giamTru,
       r.thueTncn,
@@ -427,7 +430,7 @@ export default function BangLuongView({
                 </td>
                 <td className="px-3 py-2">{fmt(tongLuong)}</td>
                 <td className="px-3 py-2" colSpan={2}>
-                  BHXH công ty đóng: {fmt(tongBhxhCt)}
+                  BHXH công ty đóng: {fmt(tongBhxhCt)} · KPCĐ: {fmt(tongKpcd)}
                 </td>
                 <td className="px-3 py-2" colSpan={3}></td>
               </tr>
@@ -438,7 +441,7 @@ export default function BangLuongView({
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
         <p className="mb-2 text-sm text-slate-700">
-          Tổng chi phí nhân sự tháng {thangLuong} (lương + BHXH công ty đóng): <strong>{fmt(tongChiPhiNhanSu)}</strong>
+          Tổng chi phí nhân sự tháng {thangLuong} (lương + BHXH/BHYT/BHTN công ty đóng + KPCĐ 2%): <strong>{fmt(tongChiPhiNhanSu)}</strong>
         </p>
         <button
           onClick={themVaoDinhPhi}
@@ -453,12 +456,15 @@ export default function BangLuongView({
       <p className="mt-3 text-xs text-slate-400">
         * Số liệu tham khảo: thuế TNCN tính theo biểu lũy tiến từng phần hiện hành, giảm trừ bản thân
         11.000.000đ (chưa tính người phụ thuộc). BHXH/BHYT/BHTN trên Mức đóng BHXH: nhân viên đóng 8% + 1,5% + 1% = 10,5%,
-        công ty đóng 17,5% + 3% + 1% = 21,5%. Kiểm tra lại trước khi trả lương chính thức.
+        công ty đóng 17,5% + 3% + 1% = 21,5%. KPCĐ (kinh phí công đoàn) 2% trên Mức đóng BHXH, công ty đóng 100% — bắt buộc với
+        mọi doanh nghiệp có lao động đóng BHXH bắt buộc kể từ 16/5/2026 theo Nghị định 105/2026/NĐ-CP, kể cả khi công ty
+        chưa có tổ chức công đoàn cơ sở (nộp cho Liên đoàn Lao động). Kiểm tra lại trước khi trả lương chính thức.
       </p>
       <p className="mt-1 text-xs text-slate-400">
         * Định khoản gợi ý (xem chi tiết từng khoản trong file Xuất Excel): Tổng thu nhập → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.PHAI_TRA_NGUOI_LAO_DONG};
         BHXH/BHYT/BHTN NV đóng (khấu trừ lương) → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.BHXH_PHAI_NOP_CHI_TIET}/{TK.BHYT_PHAI_NOP_CHI_TIET}/{TK.BHTN_PHAI_NOP_CHI_TIET};
         BHXH/BHYT/BHTN Cty đóng → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.BHXH_PHAI_NOP_CHI_TIET}/{TK.BHYT_PHAI_NOP_CHI_TIET}/{TK.BHTN_PHAI_NOP_CHI_TIET};
+        KPCĐ 2% Cty đóng → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.KPCD_PHAI_NOP};
         Thuế TNCN khấu trừ → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.THUE_TNCN_PHAI_NOP}; khi trả lương thực tế → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có 111,112
         (đã có sẵn ở Sổ quỹ khi đánh dấu &quot;Đã trả&quot;).
       </p>

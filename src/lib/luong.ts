@@ -22,7 +22,15 @@ export const TY_LE_BHXH_NV = TY_LE_BHXH_NV_BHXH + TY_LE_BHXH_NV_BHYT + TY_LE_BHX
 export const TY_LE_BHXH_CT = TY_LE_BHXH_CT_BHXH + TY_LE_BHXH_CT_BHYT + TY_LE_BHXH_CT_BHTN;
 export const HOA_HONG_SALE = 0.4;
 
-/** Tach 1 "Muc dong BHXH" thanh chi tiet tung khoan BHXH/BHYT/BHTN (NV + Cty dong). */
+// Kinh phi cong doan (KPCD): 2% tren quy luong lam can cu dong BHXH bat buoc,
+// CONG TY DONG 100% (khong tru vao luong NV), theo Luat Cong doan 2024 + Nghi
+// dinh 105/2026/ND-CP (hieu luc 16/5/2026) — BAT BUOC VOI MOI DOANH NGHIEP CO
+// NGUOI LAO DONG THUOC DIEN DONG BHXH BAT BUOC, khong phu thuoc da co to chuc
+// cong doan co so hay chua (doanh nghiep chua co cong doan van phai nop cho
+// Lien doan Lao dong cap tinh/thanh pho).
+export const TY_LE_KPCD = 0.02;
+
+/** Tach 1 "Muc dong BHXH" thanh chi tiet tung khoan BHXH/BHYT/BHTN/KPCD (NV + Cty dong). */
 export function tinhBhxhChiTiet(mucDongBhxh: number) {
   const nvBhxh = mucDongBhxh * TY_LE_BHXH_NV_BHXH;
   const nvBhyt = mucDongBhxh * TY_LE_BHXH_NV_BHYT;
@@ -30,6 +38,7 @@ export function tinhBhxhChiTiet(mucDongBhxh: number) {
   const ctBhxh = mucDongBhxh * TY_LE_BHXH_CT_BHXH;
   const ctBhyt = mucDongBhxh * TY_LE_BHXH_CT_BHYT;
   const ctBhtn = mucDongBhxh * TY_LE_BHXH_CT_BHTN;
+  const ctKpcd = mucDongBhxh * TY_LE_KPCD;
   return {
     nvBhxh,
     nvBhyt,
@@ -38,6 +47,7 @@ export function tinhBhxhChiTiet(mucDongBhxh: number) {
     ctBhxh,
     ctBhyt,
     ctBhtn,
+    ctKpcd,
     ctTong: ctBhxh + ctBhyt + ctBhtn,
   };
 }

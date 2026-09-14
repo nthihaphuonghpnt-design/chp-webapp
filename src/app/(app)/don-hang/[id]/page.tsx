@@ -337,8 +337,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Lợi nhuận sơ bộ</h2>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Info label="Tổng Sell (+ phụ thu)" value={tongSell.toLocaleString("en-US")} />
-            <Info label="Tổng Buy (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
+            <Info label="Tổng giá bán (+ phụ thu)" value={tongSell.toLocaleString("en-US")} />
+            <Info label="Tổng số tiền đã chi (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
             <Info label="Chi phí giao nhận/chuyến" value={tongChiPhiGiaoNhan.toLocaleString("en-US")} />
             <Info label="Chi phí thuê ngoài (Module E)" value={tongChiPhiThueNgoai.toLocaleString("en-US")} />
             <Info label="Lợi nhuận trước định phí" value={loiNhuanTruocDinhPhi.toLocaleString("en-US")} />
