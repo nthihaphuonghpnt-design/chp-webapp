@@ -18,7 +18,7 @@ export default async function HoaDonDauVaoPage() {
 
   const [{ data: rows }, { data: nhaCungCapList }] = await Promise.all([
     supabase.from("hoa_don_dau_vao").select("*").order("ngay_hoa_don", { ascending: false }),
-    supabase.from("nha_cung_cap").select("id, ten").order("ten"),
+    supabase.from("nha_cung_cap").select("id, ten, ma_so_thue, dia_chi").order("ten"),
   ]);
 
   return (

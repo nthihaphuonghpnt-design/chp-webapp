@@ -5,7 +5,13 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import MoneyInput from "@/components/common/MoneyInput";
-import QuickAddNhaCungCap, { type NhaCungCapOption } from "@/components/common/QuickAddNhaCungCap";
+
+export interface NhaCungCapOption {
+  id: string;
+  ten?: string;
+  ma_so_thue?: string | null;
+  dia_chi?: string | null;
+}
 
 export interface HoaDonDauVao {
   id: string;
@@ -17,6 +23,10 @@ export interface HoaDonDauVao {
   khoan_muc: string;
   loai_chi_phi: "Định phí cố định" | "Phát sinh";
   thang_phan_bo: string;
+  don_vi_tinh: string | null;
+  so_luong: number | null;
+  don_gia: number | null;
+  tai_khoan_no: string | null;
   tong_tien_hang: number;
   tien_thue_gtgt: number;
   tong_tien_thanh_toan: number;
@@ -31,10 +41,14 @@ type EditValues = {
   so_hoa_don: string;
   ngay_hoa_don: string;
   ngay_ky_hoa_don: string;
-  nha_cung_cap_id: string;
+  nha_cung_cap_ten: string;
   khoan_muc: string;
   loai_chi_phi: string;
   thang_phan_bo: string;
+  don_vi_tinh: string;
+  so_luong: string;
+  don_gia: string;
+  tai_khoan_no: string;
   tong_tien_hang: string;
   tien_thue_gtgt: string;
   tinh_trang_thanh_toan: string;
@@ -53,10 +67,14 @@ function dongTrong(): EditValues {
     so_hoa_don: "",
     ngay_hoa_don: new Date().toISOString().slice(0, 10),
     ngay_ky_hoa_don: "",
-    nha_cung_cap_id: "",
+    nha_cung_cap_ten: "",
     khoan_muc: "",
     loai_chi_phi: "Phát sinh",
     thang_phan_bo: thangHienTai(),
+    don_vi_tinh: "",
+    so_luong: "",
+    don_gia: "",
+    tai_khoan_no: "",
     tong_tien_hang: "",
     tien_thue_gtgt: "",
     tinh_trang_thanh_toan: "Chưa thanh toán",
@@ -66,16 +84,20 @@ function dongTrong(): EditValues {
   };
 }
 
-function toEditValues(r: HoaDonDauVao): EditValues {
+function toEditValues(r: HoaDonDauVao, tenNcc: string): EditValues {
   return {
     mau_so_hoa_don: r.mau_so_hoa_don ?? "",
     so_hoa_don: r.so_hoa_don ?? "",
     ngay_hoa_don: r.ngay_hoa_don,
     ngay_ky_hoa_don: r.ngay_ky_hoa_don ?? "",
-    nha_cung_cap_id: r.nha_cung_cap_id ?? "",
+    nha_cung_cap_ten: tenNcc,
     khoan_muc: r.khoan_muc,
     loai_chi_phi: r.loai_chi_phi,
     thang_phan_bo: r.thang_phan_bo,
+    don_vi_tinh: r.don_vi_tinh ?? "",
+    so_luong: String(r.so_luong ?? ""),
+    don_gia: String(r.don_gia ?? ""),
+    tai_khoan_no: r.tai_khoan_no ?? "",
     tong_tien_hang: String(r.tong_tien_hang ?? ""),
     tien_thue_gtgt: String(r.tien_thue_gtgt ?? ""),
     tinh_trang_thanh_toan: r.tinh_trang_thanh_toan,
@@ -96,6 +118,10 @@ const IMPORT_COLUMNS = [
   "Khoản mục",
   "Loại (Định phí cố định / Phát sinh)",
   "Tháng phân bổ (yyyy-mm)",
+  "ĐVT",
+  "Số lượng",
+  "Đơn giá",
+  "TK Nợ (chi phí/kho)",
   "Tổng tiền hàng",
   "Tiền thuế GTGT",
   "Ghi chú",
@@ -125,6 +151,7 @@ export default function HoaDonDauVaoView({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ncMap = new Map(ncList.map((n) => [n.id, n.ten ?? ""]));
+  const ncInfoMap = new Map(ncList.map((n) => [n.id, n]));
 
   const filteredRows = rows.filter((r) => {
     if (thangLoc && r.thang_phan_bo !== thangLoc) return false;
@@ -144,6 +171,20 @@ export default function HoaDonDauVaoView({
     setEditValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  // SL x Don gia -> tu dien Tien hang (chi khi Tien hang dang trong, tranh
+  // ghi de gia tri nguoi dung da tu sua tay).
+  function setSoLuongDonGia(key: "so_luong" | "don_gia", value: string) {
+    setEditValues((prev) => {
+      const next = { ...prev, [key]: value };
+      const sl = Number(next.so_luong || 0);
+      const dg = Number(next.don_gia || 0);
+      if (sl > 0 && dg > 0 && !prev.tong_tien_hang) {
+        next.tong_tien_hang = String(sl * dg);
+      }
+      return next;
+    });
+  }
+
   function batDauThem() {
     const tam: HoaDonDauVao = {
       id: `new-${Date.now()}`,
@@ -155,6 +196,10 @@ export default function HoaDonDauVaoView({
       khoan_muc: "",
       loai_chi_phi: "Phát sinh",
       thang_phan_bo: thangLoc || thangHienTai(),
+      don_vi_tinh: null,
+      so_luong: null,
+      don_gia: null,
+      tai_khoan_no: null,
       tong_tien_hang: 0,
       tien_thue_gtgt: 0,
       tong_tien_thanh_toan: 0,
@@ -171,7 +216,7 @@ export default function HoaDonDauVaoView({
 
   function batDauSua(row: HoaDonDauVao) {
     setEditingId(row.id);
-    setEditValues(toEditValues(row));
+    setEditValues(toEditValues(row, ncMap.get(row.nha_cung_cap_id ?? "") ?? ""));
     setError(null);
   }
 
@@ -196,15 +241,39 @@ export default function HoaDonDauVaoView({
     } = await supabase.auth.getUser();
     const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
 
+    // Go ten NCC truc tiep tren dong (khong qua hop thoai): khop ten co san
+    // (khong phan biet hoa/thuong) hoac tu tao moi nha_cung_cap ngay tai day.
+    const tenNccGo = editValues.nha_cung_cap_ten.trim();
+    let nhaCungCapId: string | null = null;
+    if (tenNccGo) {
+      const match = ncList.find((n) => (n.ten ?? "").trim().toLowerCase() === tenNccGo.toLowerCase());
+      if (match) {
+        nhaCungCapId = match.id;
+      } else {
+        const { data: ncMoi, error: ncErr } = await supabase.from("nha_cung_cap").insert({ ten: tenNccGo }).select("id, ten").single();
+        if (ncErr) {
+          setSaving(false);
+          setError(`Không tạo được nhà cung cấp mới: ${ncErr.message}`);
+          return;
+        }
+        nhaCungCapId = ncMoi.id;
+        setNcList((prev) => [...prev, ncMoi as NhaCungCapOption]);
+      }
+    }
+
     const payload = {
       mau_so_hoa_don: editValues.mau_so_hoa_don || null,
       so_hoa_don: editValues.so_hoa_don || null,
       ngay_hoa_don: editValues.ngay_hoa_don,
       ngay_ky_hoa_don: editValues.ngay_ky_hoa_don || null,
-      nha_cung_cap_id: editValues.nha_cung_cap_id || null,
+      nha_cung_cap_id: nhaCungCapId,
       khoan_muc: editValues.khoan_muc.trim(),
       loai_chi_phi: editValues.loai_chi_phi,
       thang_phan_bo: editValues.thang_phan_bo,
+      don_vi_tinh: editValues.don_vi_tinh || null,
+      so_luong: editValues.so_luong ? Number(editValues.so_luong) : null,
+      don_gia: editValues.don_gia ? Number(editValues.don_gia) : null,
+      tai_khoan_no: editValues.tai_khoan_no || null,
       tong_tien_hang: editValues.tong_tien_hang ? Number(editValues.tong_tien_hang) : 0,
       tien_thue_gtgt: editValues.tien_thue_gtgt ? Number(editValues.tien_thue_gtgt) : 0,
       tinh_trang_thanh_toan: editValues.tinh_trang_thanh_toan,
@@ -258,46 +327,80 @@ export default function HoaDonDauVaoView({
     XLSX.writeFile(wb, "mau-nhap-hoa-don-dau-vao.xlsx");
   }
 
+  // TK Co goi y: da tra du -> tien mat/ngan hang (111/112) theo phuong thuc;
+  // con no mot phan/chua tra -> 331 (phai tra nguoi ban) cho phan con no.
+  // Chi la GOI Y de doi chieu voi phan mem ke toan, khong phai but toan
+  // chinh thuc — Ke toan van can kiem tra lai truoc khi nhap.
+  function tkCoGoiY(r: HoaDonDauVao): string {
+    if (r.tinh_trang_thanh_toan === "Đã đủ") {
+      return r.phuong_thuc_thanh_toan === "Tiền mặt" ? "111" : r.phuong_thuc_thanh_toan === "Tài khoản công ty" ? "112" : "331";
+    }
+    return "331";
+  }
+
   async function handleExportExcel() {
     const columns: ExcelColumn[] = [
-      { header: "Mẫu số", key: "mauSo", width: 12 },
-      { header: "Ngày hóa đơn", key: "ngayHd", width: 14 },
-      { header: "Ngày ký HĐ", key: "ngayKy", width: 14 },
-      { header: "Số hóa đơn", key: "soHd", width: 14 },
-      { header: "Nhà cung cấp", key: "ncc", width: 26 },
+      { header: "Mẫu số", key: "mauSo", width: 10 },
+      { header: "Ngày hạch toán", key: "ngayHd", width: 14 },
+      { header: "Ngày chứng từ", key: "ngayKy", width: 14 },
+      { header: "Số chứng từ", key: "soHd", width: 14 },
+      { header: "Nhà cung cấp", key: "ncc", width: 28 },
       { header: "Mã số thuế", key: "mst", width: 14 },
-      { header: "Khoản mục", key: "khoanMuc", width: 22 },
+      { header: "Địa chỉ NCC", key: "diaChi", width: 28 },
+      { header: "Diễn giải", key: "khoanMuc", width: 24 },
       { header: "Loại", key: "loai", width: 16 },
       { header: "Tháng phân bổ", key: "thang", width: 12 },
+      { header: "ĐVT", key: "dvt", width: 8 },
+      { header: "Số lượng", key: "sl", width: 10, numFmt: "#,##0.##" },
+      { header: "Đơn giá", key: "donGia", width: 14, numFmt: "#,##0" },
+      { header: "TK Nợ (chi phí/kho)", key: "tkNo", width: 14 },
+      { header: "TK Có (gợi ý)", key: "tkCo", width: 12 },
       { header: "Tổng tiền hàng", key: "tienHang", width: 16, numFmt: "#,##0" },
+      { header: "Thuế suất GTGT %", key: "thueSuat", width: 14 },
       { header: "Tiền thuế GTGT", key: "thueGtgt", width: 16, numFmt: "#,##0" },
       { header: "Tổng tiền thanh toán", key: "tongTt", width: 18, numFmt: "#,##0" },
       { header: "Tình trạng TT", key: "tinhTrang", width: 14 },
       { header: "Đã trả", key: "daTra", width: 14, numFmt: "#,##0" },
       { header: "Ghi chú", key: "ghiChu", width: 20 },
     ];
-    const exportRows = filteredRows.map((r) => [
-      r.mau_so_hoa_don ?? "",
-      r.ngay_hoa_don,
-      r.ngay_ky_hoa_don ?? "",
-      r.so_hoa_don ?? "",
-      ncMap.get(r.nha_cung_cap_id ?? "") ?? "",
-      "",
-      r.khoan_muc,
-      r.loai_chi_phi,
-      r.thang_phan_bo,
-      r.tong_tien_hang,
-      r.tien_thue_gtgt,
-      r.tong_tien_thanh_toan,
-      r.tinh_trang_thanh_toan,
-      r.so_tien_da_thanh_toan ?? 0,
-      r.ghi_chu ?? "",
-    ]);
+    const exportRows = filteredRows.map((r) => {
+      const nc = ncInfoMap.get(r.nha_cung_cap_id ?? "");
+      const thueSuat = r.tong_tien_hang > 0 ? Math.round((r.tien_thue_gtgt / r.tong_tien_hang) * 1000) / 10 : 0;
+      return [
+        r.mau_so_hoa_don ?? "",
+        r.ngay_hoa_don,
+        r.ngay_ky_hoa_don ?? "",
+        r.so_hoa_don ?? "",
+        nc?.ten ?? "",
+        nc?.ma_so_thue ?? "",
+        nc?.dia_chi ?? "",
+        r.khoan_muc,
+        r.loai_chi_phi,
+        r.thang_phan_bo,
+        r.don_vi_tinh ?? "",
+        r.so_luong ?? "",
+        r.don_gia ?? "",
+        r.tai_khoan_no ?? "",
+        tkCoGoiY(r),
+        r.tong_tien_hang,
+        thueSuat,
+        r.tien_thue_gtgt,
+        r.tong_tien_thanh_toan,
+        r.tinh_trang_thanh_toan,
+        r.so_tien_da_thanh_toan ?? 0,
+        r.ghi_chu ?? "",
+      ];
+    });
     const logo = await taiLogoCongTy();
     await xuatExcelKeO(`hoa-don-dau-vao-${new Date().toISOString().slice(0, 10)}.xlsx`, {
       sheetName: "Hóa đơn đầu vào",
       logo: logo ?? undefined,
-      headerLines: [...CONG_TY_HEADER_LINES, "", { text: "HÓA ĐƠN ĐẦU VÀO", bold: true, size: 12 }],
+      headerLines: [
+        ...CONG_TY_HEADER_LINES,
+        "",
+        { text: "HÓA ĐƠN ĐẦU VÀO", bold: true, size: 12 },
+        { text: "Cột TK Nợ/TK Có là gợi ý để đối chiếu khi nhập lại vào phần mềm kế toán — không phải bút toán chính thức.", italic: true, size: 9 },
+      ],
       columns,
       rows: exportRows,
     });
@@ -359,6 +462,10 @@ export default function HoaDonDauVaoView({
         khoan_muc: khoanMuc,
         loai_chi_phi: loai === "Định phí cố định" ? "Định phí cố định" : "Phát sinh",
         thang_phan_bo: thang,
+        don_vi_tinh: String(n["đvt"] ?? "").trim() || null,
+        so_luong: n["số lượng"] ? Number(n["số lượng"]) : null,
+        don_gia: n["đơn giá"] ? Number(n["đơn giá"]) : null,
+        tai_khoan_no: String(n["tk nợ (chi phí/kho)"] ?? "").trim() || null,
         tong_tien_hang: Number(n["tổng tiền hàng"] || 0),
         tien_thue_gtgt: Number(n["tiền thuế gtgt"] || 0),
         ghi_chu: String(n["ghi chú"] ?? "").trim() || null,
@@ -469,8 +576,14 @@ export default function HoaDonDauVaoView({
         />
       </div>
 
+      <datalist id="ds-nha-cung-cap">
+        {ncList.map((n) => (
+          <option key={n.id} value={n.ten ?? ""} />
+        ))}
+      </datalist>
+
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1200px] text-sm">
+        <table className="w-full min-w-[1600px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-3 py-2 font-medium">Mẫu số</th>
@@ -481,6 +594,10 @@ export default function HoaDonDauVaoView({
               <th className="px-3 py-2 font-medium">Khoản mục</th>
               <th className="px-3 py-2 font-medium">Loại</th>
               <th className="px-3 py-2 font-medium">Tháng PB</th>
+              <th className="px-3 py-2 font-medium">ĐVT</th>
+              <th className="px-3 py-2 text-right font-medium">SL</th>
+              <th className="px-3 py-2 text-right font-medium">Đơn giá</th>
+              <th className="px-3 py-2 font-medium">TK Nợ</th>
               <th className="px-3 py-2 text-right font-medium">Tiền hàng</th>
               <th className="px-3 py-2 text-right font-medium">Thuế GTGT</th>
               <th className="px-3 py-2 text-right font-medium">Tổng TT</th>
@@ -508,11 +625,12 @@ export default function HoaDonDauVaoView({
                     <input value={editValues.so_hoa_don} onChange={(e) => set("so_hoa_don", e.target.value)} className="w-24 rounded border border-slate-300 px-2 py-1.5 text-sm" />
                   </td>
                   <td className="min-w-[180px] px-2 py-1.5">
-                    <QuickAddNhaCungCap
-                      options={ncList}
-                      value={editValues.nha_cung_cap_id}
-                      onChange={(v) => set("nha_cung_cap_id", v)}
-                      onAdded={(n) => setNcList((prev) => [...prev, n])}
+                    <input
+                      list="ds-nha-cung-cap"
+                      value={editValues.nha_cung_cap_ten}
+                      onChange={(e) => set("nha_cung_cap_ten", e.target.value)}
+                      placeholder="Gõ tên NCC (tự tạo mới nếu chưa có)"
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                     />
                   </td>
                   <td className="min-w-[160px] px-2 py-1.5">
@@ -526,6 +644,18 @@ export default function HoaDonDauVaoView({
                   </td>
                   <td className="px-2 py-1.5">
                     <input value={editValues.thang_phan_bo} onChange={(e) => set("thang_phan_bo", e.target.value)} placeholder="YYYY-MM" className="w-24 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input value={editValues.don_vi_tinh} onChange={(e) => set("don_vi_tinh", e.target.value)} placeholder="Tháng, cái..." className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <MoneyInput value={editValues.so_luong} onChange={(v) => setSoLuongDonGia("so_luong", v)} className="w-16 rounded border border-slate-300 px-2 py-1.5 text-right text-sm" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <MoneyInput value={editValues.don_gia} onChange={(v) => setSoLuongDonGia("don_gia", v)} className="w-24 rounded border border-slate-300 px-2 py-1.5 text-right text-sm" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input value={editValues.tai_khoan_no} onChange={(e) => set("tai_khoan_no", e.target.value)} placeholder="642..." className="w-16 rounded border border-slate-300 px-2 py-1.5 text-sm" />
                   </td>
                   <td className="px-2 py-1.5">
                     <MoneyInput value={editValues.tong_tien_hang} onChange={(v) => set("tong_tien_hang", v)} className="w-28 rounded border border-slate-300 px-2 py-1.5 text-right text-sm" />
@@ -579,6 +709,10 @@ export default function HoaDonDauVaoView({
                     </span>
                   </td>
                   <td className="px-3 py-2 text-slate-700">{row.thang_phan_bo}</td>
+                  <td className="px-3 py-2 text-slate-700">{row.don_vi_tinh ?? "—"}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{row.so_luong ?? "—"}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{row.don_gia ? fmt(row.don_gia) : "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{row.tai_khoan_no ?? "—"}</td>
                   <td className="px-3 py-2 text-right text-slate-700">{fmt(row.tong_tien_hang)}</td>
                   <td className="px-3 py-2 text-right text-slate-700">{fmt(row.tien_thue_gtgt)}</td>
                   <td className="px-3 py-2 text-right font-medium text-slate-900">{fmt(row.tong_tien_thanh_toan)}</td>
@@ -611,7 +745,7 @@ export default function HoaDonDauVaoView({
             )}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={16} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={20} className="px-4 py-8 text-center text-slate-400">
                   Chưa có hóa đơn nào trong tháng này.
                 </td>
               </tr>
