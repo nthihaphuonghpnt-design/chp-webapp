@@ -190,9 +190,9 @@ export default function BangLuongView({
         const donCuaSaleThangTruoc = donHangList.filter(
           (d) => d.sale_phu_trach_id === nv.id && d.ngay_len_don.slice(0, 7) === thangHoatDong
         );
-        luongTheoLo = donCuaSaleThangTruoc.reduce(
-          (s, d) => s + loiNhuanTruocHoaHongCuaDon(d.id, thangHoatDong) * HOA_HONG_SALE,
-          0
+        luongTheoLo = Math.max(
+          0,
+          donCuaSaleThangTruoc.reduce((s, d) => s + loiNhuanTruocHoaHongCuaDon(d.id, thangHoatDong) * HOA_HONG_SALE, 0)
         );
       } else {
         luongTheoLo = chiPhiGiaoNhanList
