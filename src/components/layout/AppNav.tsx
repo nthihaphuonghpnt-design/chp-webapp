@@ -42,6 +42,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Tài chính",
     items: [
       { href: "/tam-ung-giai-chi", label: "Tạm ứng & Giải chi" },
+      { href: "/tam-ung-giai-chi/quyet-toan", label: "Phiếu quyết toán tạm ứng" },
       { href: "/thu-chi/so-quy", label: "Sổ quỹ", roles: ["Kế toán", "Giám đốc"] },
       { href: "/chi-phi/dinh-phi-thang", label: "Định phí tháng", roles: ["Kế toán", "Giám đốc"] },
       { href: "/bao-cao", label: "Báo cáo", roles: ["Sale", "Kế toán", "Giám đốc"] },
