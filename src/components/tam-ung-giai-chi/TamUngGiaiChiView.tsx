@@ -54,6 +54,7 @@ interface Row {
   nguoi_de_nghi_id: string | null;
   don_hang_id: string | null;
   tam_ung_goc_id: string | null;
+  updated_at: string;
   nhan_vien: { ho_ten: string } | { ho_ten: string }[] | null;
   nguoi_de_nghi: { ho_ten: string } | { ho_ten: string }[] | null;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
@@ -233,17 +234,24 @@ export default function TamUngGiaiChiView({
     };
 
     if (editing) {
+      // Khoa lac quan: tranh am tham ghi de neu dong nay vua bi nguoi khac
+      // (vd Ke toan duyet) sua trong luc form dang mo.
       const { data, error } = await supabase
         .from("tam_ung_giai_chi")
         .update(payload)
         .eq("id", editing.id)
+        .eq("updated_at", editing.updated_at)
         .select(TAM_UNG_SELECT_COLS)
         .single();
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
         setShowForm(false);
       } else if (error) {
-        window.alert(error.message);
+        window.alert(
+          error.code === "PGRST116"
+            ? "Dữ liệu dòng này vừa bị người khác sửa. Tải lại trang để lấy bản mới nhất rồi sửa lại."
+            : error.message
+        );
       }
     } else {
       const {

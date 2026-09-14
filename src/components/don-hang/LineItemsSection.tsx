@@ -52,12 +52,21 @@ export default function LineItemsSection({
     }
 
     if (editing) {
-      const { data, error } = await supabase.from(table).update(payload).eq("id", editing.id).select().single();
+      // Khoa lac quan: neu bang co updated_at (chi_phi_giao_nhan, phu_thu deu
+      // co), chi cho luu neu dong chua bi ai khac sua kem trong luc form nay
+      // mo — tranh am tham ghi de thay doi cua nguoi khac.
+      let query = supabase.from(table).update(payload).eq("id", editing.id);
+      if (editing.updated_at) query = query.eq("updated_at", editing.updated_at as string);
+      const { data, error } = await query.select().single();
       if (!error && data) {
         setRows((prev) => prev.map((r) => (r.id === editing.id ? (data as Row) : r)));
         setShowForm(false);
       } else if (error) {
-        window.alert(error.message);
+        window.alert(
+          error.code === "PGRST116"
+            ? "Dữ liệu dòng này vừa bị người khác sửa. Tải lại trang để lấy bản mới nhất rồi sửa lại."
+            : error.message
+        );
       }
     } else {
       const { data, error } = await supabase.from(table).insert(payload).select().single();

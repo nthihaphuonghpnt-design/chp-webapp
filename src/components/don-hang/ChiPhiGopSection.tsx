@@ -432,6 +432,17 @@ export default function ChiPhiGopSection({
     }
   }
 
+  // Khoa lac quan (optimistic locking): moi UPDATE o day them dieu kien
+  // eq("updated_at", ...) theo dung gia tri da doc luc mo form sua. Neu giua
+  // luc dang sua co nguoi khac (vd Ke toan) da luu truoc, dieu kien nay
+  // khong khop dong nao (updated_at da doi), UPDATE tra ve 0 dong va
+  // .single() bao loi PGRST116 — bat rieng de bao ro thay vi am tham ghi de
+  // len thay doi cua nguoi kia.
+  function laLoiXungDotSua(error: { code?: string } | null): boolean {
+    return error?.code === "PGRST116";
+  }
+  const CANH_BAO_XUNG_DOT = "Dữ liệu dòng này vừa bị người khác sửa trong lúc bạn đang sửa. Tải lại trang để lấy bản mới nhất rồi sửa lại — thay đổi vừa nhập chưa được lưu.";
+
   async function luuSua(rv: RowView) {
     if (!editValues) return;
     if (rv.loai === "chi_phi") {
@@ -452,9 +463,10 @@ export default function ChiPhiGopSection({
             : {}),
         })
         .eq("id", rv.raw.id)
+        .eq("updated_at", rv.raw.updated_at)
         .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
-      if (error) return window.alert(error.message);
+      if (error) return window.alert(laLoiXungDotSua(error) ? CANH_BAO_XUNG_DOT : error.message);
       const rowDayDu = { ...data, gia_ban_sell: editValues.sell ? Number(editValues.sell) : null } as PhatSinhChiPhi;
       setChiPhiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? rowDayDu : r)));
     } else if (rv.loai === "thue_ngoai") {
@@ -471,9 +483,10 @@ export default function ChiPhiGopSection({
             : {}),
         })
         .eq("id", rv.raw.id)
+        .eq("updated_at", rv.raw.updated_at)
         .select(DON_THUE_NGOAI_SAFE_COLS)
         .single();
-      if (error) return window.alert(error.message);
+      if (error) return window.alert(laLoiXungDotSua(error) ? CANH_BAO_XUNG_DOT : error.message);
       const rowDayDu = { ...data, gia_ban_sell: editValues.sell ? Number(editValues.sell) : null } as DonThueNgoai;
       setThueNgoaiRows((prev) => prev.map((r) => (r.id === rv.raw.id ? rowDayDu : r)));
     } else {
@@ -481,9 +494,10 @@ export default function ChiPhiGopSection({
         .from("phu_thu")
         .update({ loai_phu_thu: editValues.loai_phu_thu || null, thanh_tien: editValues.sell ? Number(editValues.sell) : null, ghi_chu: editValues.ghi_chu || null })
         .eq("id", rv.raw.id)
+        .eq("updated_at", rv.raw.updated_at)
         .select()
         .single();
-      if (error) return window.alert(error.message);
+      if (error) return window.alert(laLoiXungDotSua(error) ? CANH_BAO_XUNG_DOT : error.message);
       setPhuThuRows((prev) => prev.map((r) => (r.id === rv.raw.id ? (data as PhuThu) : r)));
     }
     setEditingKey(null);
