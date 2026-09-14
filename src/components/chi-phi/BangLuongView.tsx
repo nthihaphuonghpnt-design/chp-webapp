@@ -4,11 +4,10 @@ import { useMemo, useState } from "react";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { TK, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import {
-  TY_LE_BHXH_NV,
-  TY_LE_BHXH_CT,
   HOA_HONG_SALE,
   giamTruGiaCanh,
   tinhThueTNCN,
+  tinhBhxhChiTiet,
   dungLuatThueMoi,
   apDungTruLuongTheoChamCong,
   tinhLuongCoBanTheoChamCong,
@@ -203,14 +202,15 @@ export default function BangLuongView({
 
       const tongThuNhap = luongCoDinh + luongTheoLo;
       const mucDongBhxh = nv.muc_dong_bhxh ?? luongCoDinh;
-      const bhxhNv = mucDongBhxh * TY_LE_BHXH_NV;
-      const bhxhCt = mucDongBhxh * TY_LE_BHXH_CT;
+      const chiTietBhxh = tinhBhxhChiTiet(mucDongBhxh);
+      const bhxhNv = chiTietBhxh.nvTong;
+      const bhxhCt = chiTietBhxh.ctTong;
       const giamTru = giamTruGiaCanh(thangLuong, nv.so_nguoi_phu_thuoc ?? 0);
       const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - giamTru);
       const thueTncn = tinhThueTNCN(thuNhapChiuThue, thangLuong);
       const thucLanh = tongThuNhap - bhxhNv - thueTncn;
 
-      return { nv, phongBan: pb, luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh };
+      return { nv, phongBan: pb, luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, chiTietBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh };
     });
   }, [nhanVienList, chiPhiGiaoNhanList, donHangList, thangHoatDong, thangLuong, chamCongList, ngayLeSet, apDungChamCong]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -282,8 +282,14 @@ export default function BangLuongView({
       { header: "Lương theo lô (tháng trước)", key: "luongTheoLo", width: 18 },
       { header: `Tổng thu nhập (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.PHAI_TRA_NGUOI_LAO_DONG})`, key: "tongThuNhap", width: 26 },
       { header: "Mức đóng BHXH", key: "mucDongBhxh", width: 14 },
-      { header: `BHXH/BHYT/BHTN — NV đóng (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.BHXH_PHAI_NOP})`, key: "bhxhNv", width: 32 },
-      { header: `BHXH/BHYT/BHTN — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHXH_PHAI_NOP})`, key: "bhxhCt", width: 32 },
+      { header: `BHXH — NV đóng (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.BHXH_PHAI_NOP_CHI_TIET})`, key: "nvBhxh", width: 26 },
+      { header: `BHYT — NV đóng (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.BHYT_PHAI_NOP_CHI_TIET})`, key: "nvBhyt", width: 26 },
+      { header: `BHTN — NV đóng (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.BHTN_PHAI_NOP_CHI_TIET})`, key: "nvBhtn", width: 26 },
+      { header: "Tổng BHXH/BHYT/BHTN — NV đóng", key: "bhxhNv", width: 22 },
+      { header: `BHXH — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHXH_PHAI_NOP_CHI_TIET})`, key: "ctBhxh", width: 26 },
+      { header: `BHYT — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHYT_PHAI_NOP_CHI_TIET})`, key: "ctBhyt", width: 26 },
+      { header: `BHTN — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHTN_PHAI_NOP_CHI_TIET})`, key: "ctBhtn", width: 26 },
+      { header: "Tổng BHXH/BHYT/BHTN — Cty đóng", key: "bhxhCt", width: 22 },
       { header: "Số người phụ thuộc", key: "soNguoiPhuThuoc", width: 14 },
       { header: "Giảm trừ gia cảnh", key: "giamTru", width: 16 },
       { header: `Thuế TNCN (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.THUE_TNCN_PHAI_NOP})`, key: "thueTncn", width: 26 },
@@ -296,7 +302,13 @@ export default function BangLuongView({
       r.luongTheoLo,
       r.tongThuNhap,
       r.mucDongBhxh,
+      r.chiTietBhxh.nvBhxh,
+      r.chiTietBhxh.nvBhyt,
+      r.chiTietBhxh.nvBhtn,
       r.bhxhNv,
+      r.chiTietBhxh.ctBhxh,
+      r.chiTietBhxh.ctBhyt,
+      r.chiTietBhxh.ctBhtn,
       r.bhxhCt,
       r.nv.so_nguoi_phu_thuoc ?? 0,
       r.giamTru,
@@ -440,14 +452,15 @@ export default function BangLuongView({
 
       <p className="mt-3 text-xs text-slate-400">
         * Số liệu tham khảo: thuế TNCN tính theo biểu lũy tiến từng phần hiện hành, giảm trừ bản thân
-        11.000.000đ (chưa tính người phụ thuộc). BHXH: nhân viên 10,5%, công ty 21,5% trên Mức đóng
-        BHXH. Kiểm tra lại trước khi trả lương chính thức.
+        11.000.000đ (chưa tính người phụ thuộc). BHXH/BHYT/BHTN trên Mức đóng BHXH: nhân viên đóng 8% + 1,5% + 1% = 10,5%,
+        công ty đóng 17,5% + 3% + 1% = 21,5%. Kiểm tra lại trước khi trả lương chính thức.
       </p>
       <p className="mt-1 text-xs text-slate-400">
-        * Định khoản gợi ý (xem đầy đủ trong file Xuất Excel): Tổng thu nhập → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.PHAI_TRA_NGUOI_LAO_DONG};
-        BHXH/BHYT/BHTN NV đóng (khấu trừ lương) → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.BHXH_PHAI_NOP}; BHXH/BHYT/BHTN Cty đóng → Nợ{" "}
-        {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.BHXH_PHAI_NOP}; Thuế TNCN khấu trừ → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.THUE_TNCN_PHAI_NOP}; khi trả lương thực
-        tế → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có 111,112 (đã có sẵn ở Sổ quỹ khi đánh dấu &quot;Đã trả&quot;).
+        * Định khoản gợi ý (xem chi tiết từng khoản trong file Xuất Excel): Tổng thu nhập → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.PHAI_TRA_NGUOI_LAO_DONG};
+        BHXH/BHYT/BHTN NV đóng (khấu trừ lương) → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.BHXH_PHAI_NOP_CHI_TIET}/{TK.BHYT_PHAI_NOP_CHI_TIET}/{TK.BHTN_PHAI_NOP_CHI_TIET};
+        BHXH/BHYT/BHTN Cty đóng → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.BHXH_PHAI_NOP_CHI_TIET}/{TK.BHYT_PHAI_NOP_CHI_TIET}/{TK.BHTN_PHAI_NOP_CHI_TIET};
+        Thuế TNCN khấu trừ → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.THUE_TNCN_PHAI_NOP}; khi trả lương thực tế → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có 111,112
+        (đã có sẵn ở Sổ quỹ khi đánh dấu &quot;Đã trả&quot;).
       </p>
 
       {traForm && (

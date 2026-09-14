@@ -19,12 +19,13 @@
 // CHP dang dung TT99 (khong phai TT133), can sua lai file nay cho khop —
 // hoi ke toan/don vi lam so sach de xac nhan dang dung che do nao truoc khi
 // tin theo cac ma duoi day.
-// BHXH_PHAI_NOP (338) dung CHUNG cho ca BHXH+BHYT+BHTN vi luong.ts hien tinh
-// gop chung 1 "Muc dong BHXH" nhan ty le tong (NV 10.5%, Cty 21.5%) — chua
-// tach rieng tung khoan BHXH 8%/17%, BHYT 1.5%/3%, BHTN 1%/1%. Neu can xuat
-// chi tiet tung tieu khoan (3383/3384/3386 theo quy uoc TT200 con duoc dung
-// pho bien du TT133 khong bat buoc), phai sua lai cong thuc trong luong.ts
-// truoc, khong tu suy dien ty le tach rieng o day.
+// BHXH_PHAI_NOP (338) van giu la ma "cha" dung cho cac cho khac trong app
+// chi can dinh khoan gop (vd Tam ung/Giai chi neu sau nay dung toi). Rieng
+// Bang luong (luong.ts co ham tinhBhxhChiTiet) tach ro tung tieu khoan theo
+// quy uoc tu Thong tu 200/2014/TT-BTC (3382 KPCD, 3383 BHXH, 3384 BHYT, 3386
+// BHTN) — quy uoc nay van duoc dung pho bien trong thuc te du TT133 khong
+// bat buoc phai chia nho 338. KPCD (2% cong ty dong, neu co) chua duoc app
+// tinh — chi co BHXH/BHYT/BHTN.
 export const TK = {
   TIEN_MAT: "111",
   NGAN_HANG: "112",
@@ -34,6 +35,9 @@ export const TK = {
   PHAI_TRA_NGUOI_BAN: "331",
   PHAI_TRA_NGUOI_LAO_DONG: "334",
   BHXH_PHAI_NOP: "338",
+  BHXH_PHAI_NOP_CHI_TIET: "3383",
+  BHYT_PHAI_NOP_CHI_TIET: "3384",
+  BHTN_PHAI_NOP_CHI_TIET: "3386",
   THUE_GTGT_DAU_RA: "3331",
   THUE_TNCN_PHAI_NOP: "3335",
   DOANH_THU: "511",
@@ -50,6 +54,9 @@ export const TK_LABEL: Record<string, string> = {
   [TK.PHAI_TRA_NGUOI_BAN]: "Phải trả cho người bán",
   [TK.PHAI_TRA_NGUOI_LAO_DONG]: "Phải trả người lao động",
   [TK.BHXH_PHAI_NOP]: "Phải trả, phải nộp khác (BHXH/BHYT/BHTN/KPCĐ)",
+  [TK.BHXH_PHAI_NOP_CHI_TIET]: "Bảo hiểm xã hội phải nộp",
+  [TK.BHYT_PHAI_NOP_CHI_TIET]: "Bảo hiểm y tế phải nộp",
+  [TK.BHTN_PHAI_NOP_CHI_TIET]: "Bảo hiểm thất nghiệp phải nộp",
   [TK.THUE_GTGT_DAU_RA]: "Thuế GTGT đầu ra",
   [TK.THUE_TNCN_PHAI_NOP]: "Thuế TNCN phải nộp (khấu trừ hộ người lao động)",
   [TK.DOANH_THU]: "Doanh thu bán hàng và cung cấp dịch vụ",

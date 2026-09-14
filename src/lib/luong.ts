@@ -6,9 +6,41 @@
 
 import { danhSachNgay, laNgayCanChamCong, ngayCuoiThang } from "@/lib/chamCong";
 
-export const TY_LE_BHXH_NV = 0.105;
-export const TY_LE_BHXH_CT = 0.215;
+// Ty le dong BHXH/BHYT/BHTN tach rieng tung khoan, theo quy dinh hien hanh
+// (Luat BHXH, Luat BHYT, Luat Viec lam): NV dong BHXH 8% + BHYT 1.5% + BHTN
+// 1% = 10.5%; Cty dong BHXH 17.5% (17% huu tri-tu tuat + 0.5% TNLD-BNN) +
+// BHYT 3% + BHTN 1% = 21.5%. TY_LE_BHXH_NV/TY_LE_BHXH_CT (tong) tinh TU cac
+// so nay de khong bao gio lech nhau giua tong va chi tiet.
+export const TY_LE_BHXH_NV_BHXH = 0.08;
+export const TY_LE_BHXH_NV_BHYT = 0.015;
+export const TY_LE_BHXH_NV_BHTN = 0.01;
+export const TY_LE_BHXH_CT_BHXH = 0.175;
+export const TY_LE_BHXH_CT_BHYT = 0.03;
+export const TY_LE_BHXH_CT_BHTN = 0.01;
+
+export const TY_LE_BHXH_NV = TY_LE_BHXH_NV_BHXH + TY_LE_BHXH_NV_BHYT + TY_LE_BHXH_NV_BHTN;
+export const TY_LE_BHXH_CT = TY_LE_BHXH_CT_BHXH + TY_LE_BHXH_CT_BHYT + TY_LE_BHXH_CT_BHTN;
 export const HOA_HONG_SALE = 0.4;
+
+/** Tach 1 "Muc dong BHXH" thanh chi tiet tung khoan BHXH/BHYT/BHTN (NV + Cty dong). */
+export function tinhBhxhChiTiet(mucDongBhxh: number) {
+  const nvBhxh = mucDongBhxh * TY_LE_BHXH_NV_BHXH;
+  const nvBhyt = mucDongBhxh * TY_LE_BHXH_NV_BHYT;
+  const nvBhtn = mucDongBhxh * TY_LE_BHXH_NV_BHTN;
+  const ctBhxh = mucDongBhxh * TY_LE_BHXH_CT_BHXH;
+  const ctBhyt = mucDongBhxh * TY_LE_BHXH_CT_BHYT;
+  const ctBhtn = mucDongBhxh * TY_LE_BHXH_CT_BHTN;
+  return {
+    nvBhxh,
+    nvBhyt,
+    nvBhtn,
+    nvTong: nvBhxh + nvBhyt + nvBhtn,
+    ctBhxh,
+    ctBhyt,
+    ctBhtn,
+    ctTong: ctBhxh + ctBhyt + ctBhtn,
+  };
+}
 
 /**
  * Luat Thue TNCN so 109/2025/QH15 (Quoc hoi thong qua 12/10/2025), hieu luc
