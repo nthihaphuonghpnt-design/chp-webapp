@@ -19,6 +19,12 @@
 // CHP dang dung TT99 (khong phai TT133), can sua lai file nay cho khop —
 // hoi ke toan/don vi lam so sach de xac nhan dang dung che do nao truoc khi
 // tin theo cac ma duoi day.
+// BHXH_PHAI_NOP (338) dung CHUNG cho ca BHXH+BHYT+BHTN vi luong.ts hien tinh
+// gop chung 1 "Muc dong BHXH" nhan ty le tong (NV 10.5%, Cty 21.5%) — chua
+// tach rieng tung khoan BHXH 8%/17%, BHYT 1.5%/3%, BHTN 1%/1%. Neu can xuat
+// chi tiet tung tieu khoan (3383/3384/3386 theo quy uoc TT200 con duoc dung
+// pho bien du TT133 khong bat buoc), phai sua lai cong thuc trong luong.ts
+// truoc, khong tu suy dien ty le tach rieng o day.
 export const TK = {
   TIEN_MAT: "111",
   NGAN_HANG: "112",
@@ -29,6 +35,7 @@ export const TK = {
   PHAI_TRA_NGUOI_LAO_DONG: "334",
   BHXH_PHAI_NOP: "338",
   THUE_GTGT_DAU_RA: "3331",
+  THUE_TNCN_PHAI_NOP: "3335",
   DOANH_THU: "511",
   GIA_VON_HANG_BAN: "632",
   CHI_PHI_QUAN_LY_KINH_DOANH: "642",
@@ -44,6 +51,7 @@ export const TK_LABEL: Record<string, string> = {
   [TK.PHAI_TRA_NGUOI_LAO_DONG]: "Phải trả người lao động",
   [TK.BHXH_PHAI_NOP]: "Phải trả, phải nộp khác (BHXH/BHYT/BHTN/KPCĐ)",
   [TK.THUE_GTGT_DAU_RA]: "Thuế GTGT đầu ra",
+  [TK.THUE_TNCN_PHAI_NOP]: "Thuế TNCN phải nộp (khấu trừ hộ người lao động)",
   [TK.DOANH_THU]: "Doanh thu bán hàng và cung cấp dịch vụ",
   [TK.GIA_VON_HANG_BAN]: "Giá vốn hàng bán",
   [TK.CHI_PHI_QUAN_LY_KINH_DOANH]: "Chi phí quản lý kinh doanh",

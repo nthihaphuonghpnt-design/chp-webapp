@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
+import { TK, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import {
   TY_LE_BHXH_NV,
   TY_LE_BHXH_CT,
@@ -279,14 +280,14 @@ export default function BangLuongView({
       { header: "Phòng ban", key: "phongBan", width: 14 },
       { header: "Lương cố định", key: "luongCoDinh", width: 14 },
       { header: "Lương theo lô (tháng trước)", key: "luongTheoLo", width: 18 },
-      { header: "Tổng thu nhập", key: "tongThuNhap", width: 14 },
+      { header: `Tổng thu nhập (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.PHAI_TRA_NGUOI_LAO_DONG})`, key: "tongThuNhap", width: 26 },
       { header: "Mức đóng BHXH", key: "mucDongBhxh", width: 14 },
-      { header: "BHXH nhân viên đóng", key: "bhxhNv", width: 16 },
-      { header: "BHXH công ty đóng", key: "bhxhCt", width: 16 },
+      { header: `BHXH/BHYT/BHTN — NV đóng (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.BHXH_PHAI_NOP})`, key: "bhxhNv", width: 32 },
+      { header: `BHXH/BHYT/BHTN — Cty đóng (Nợ ${TK.CHI_PHI_QUAN_LY_KINH_DOANH} / Có ${TK.BHXH_PHAI_NOP})`, key: "bhxhCt", width: 32 },
       { header: "Số người phụ thuộc", key: "soNguoiPhuThuoc", width: 14 },
       { header: "Giảm trừ gia cảnh", key: "giamTru", width: 16 },
-      { header: "Thuế TNCN", key: "thueTncn", width: 12 },
-      { header: "Thực lãnh", key: "thucLanh", width: 14 },
+      { header: `Thuế TNCN (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.THUE_TNCN_PHAI_NOP})`, key: "thueTncn", width: 26 },
+      { header: `Thực lãnh (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có 111,112 — xem TK đối ứng thật ở Sổ quỹ)`, key: "thucLanh", width: 34 },
     ];
     const rows = bangLuong.map((r) => [
       r.nv.ho_ten,
@@ -304,7 +305,7 @@ export default function BangLuongView({
     ]);
     await xuatExcelKeO(`bang-luong-${thangLuong}.xlsx`, {
       sheetName: "Bảng lương",
-      headerLines: [`BẢNG LƯƠNG — Tháng ${thangLuong}`],
+      headerLines: [`BẢNG LƯƠNG — Tháng ${thangLuong}`, { text: GHI_CHU_DINH_KHOAN_GOI_Y, italic: true, size: 9 }],
       columns,
       rows,
     });
@@ -441,6 +442,12 @@ export default function BangLuongView({
         * Số liệu tham khảo: thuế TNCN tính theo biểu lũy tiến từng phần hiện hành, giảm trừ bản thân
         11.000.000đ (chưa tính người phụ thuộc). BHXH: nhân viên 10,5%, công ty 21,5% trên Mức đóng
         BHXH. Kiểm tra lại trước khi trả lương chính thức.
+      </p>
+      <p className="mt-1 text-xs text-slate-400">
+        * Định khoản gợi ý (xem đầy đủ trong file Xuất Excel): Tổng thu nhập → Nợ {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.PHAI_TRA_NGUOI_LAO_DONG};
+        BHXH/BHYT/BHTN NV đóng (khấu trừ lương) → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.BHXH_PHAI_NOP}; BHXH/BHYT/BHTN Cty đóng → Nợ{" "}
+        {TK.CHI_PHI_QUAN_LY_KINH_DOANH}/Có {TK.BHXH_PHAI_NOP}; Thuế TNCN khấu trừ → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có {TK.THUE_TNCN_PHAI_NOP}; khi trả lương thực
+        tế → Nợ {TK.PHAI_TRA_NGUOI_LAO_DONG}/Có 111,112 (đã có sẵn ở Sổ quỹ khi đánh dấu &quot;Đã trả&quot;).
       </p>
 
       {traForm && (
