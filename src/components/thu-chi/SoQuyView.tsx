@@ -27,7 +27,8 @@ function tkDoiUngGoiY(nguonBang: string, loaiSoHienTai: "Tiền mặt" | "Tài k
   if (nguonBang === "hoa_don_xuat") return TK.PHAI_THU_KHACH_HANG; // Thu: Co 131
   if (nguonBang === "tam_ung_giai_chi") return TK.TAM_UNG; // Chi: No 141
   if (nguonBang === "luong_da_tra") return TK.PHAI_TRA_NGUOI_LAO_DONG; // Chi: No 334
-  if (nguonBang === "dieu_chuyen_quy") return loaiSoHienTai === "Tiền mặt" ? TK.NGAN_HANG : TK.TIEN_MAT;
+  if (nguonBang === "dieu_chuyen_quy_no" || nguonBang === "dieu_chuyen_quy_co")
+    return loaiSoHienTai === "Tiền mặt" ? TK.NGAN_HANG : TK.TIEN_MAT;
   if (nguonBang === "hoa_don_dau_vao" && tkNoRieng) return tkNoRieng; // Chi: No theo TK da nhap
   if (nguonBang === "phat_sinh_chi_phi" || nguonBang === "don_thue_ngoai" || nguonBang === "hoa_don_dau_vao") return TK.PHAI_TRA_NGUOI_BAN; // Chi: No 331
   return "—";
@@ -51,7 +52,8 @@ const NGUON_LABEL: Record<string, string> = {
   tam_ung_giai_chi: "Tạm ứng/Giải chi",
   hoa_don_dau_vao: "Hóa đơn đầu vào",
   luong_da_tra: "Trả lương",
-  dieu_chuyen_quy: "Chuyển quỹ nội bộ",
+  dieu_chuyen_quy_no: "Chuyển quỹ nội bộ",
+  dieu_chuyen_quy_co: "Chuyển quỹ nội bộ",
 };
 
 export default function SoQuyView({
