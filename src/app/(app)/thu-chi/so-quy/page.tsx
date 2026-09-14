@@ -45,8 +45,9 @@ export default async function SoQuyPage() {
   const pscIds = (rows ?? []).filter((r) => r.nguon_bang === "phat_sinh_chi_phi").map((r) => r.nguon_id);
   const dtnIds = (rows ?? []).filter((r) => r.nguon_bang === "don_thue_ngoai").map((r) => r.nguon_id);
   const hddvIds = (rows ?? []).filter((r) => r.nguon_bang === "hoa_don_dau_vao").map((r) => r.nguon_id);
+  const pqtIds = (rows ?? []).filter((r) => r.nguon_bang === "phieu_quyet_toan_tam_ung").map((r) => r.nguon_id);
 
-  const [{ data: pscRows }, { data: dtnRows }, { data: hddvRows }] = await Promise.all([
+  const [{ data: pscRows }, { data: dtnRows }, { data: hddvRows }, { data: pqtChiTietRows }] = await Promise.all([
     pscIds.length > 0
       ? supabase.from("phat_sinh_chi_phi").select("id, don_hang_id, don_hang:don_hang_id(so_don_hang)").in("id", pscIds)
       : Promise.resolve({ data: [] }),
@@ -55,6 +56,11 @@ export default async function SoQuyPage() {
       : Promise.resolve({ data: [] }),
     hddvIds.length > 0
       ? supabase.from("hoa_don_dau_vao").select("id, don_hang_id, tai_khoan_no, don_hang:don_hang_id(so_don_hang)").in("id", hddvIds)
+      : Promise.resolve({ data: [] }),
+    // 1 phieu quyet toan co the gom nhieu don hang (phieu_quyet_toan_chi_tiet) —
+    // khac voi cac nguon con lai (chi 1 don_hang_id/dong), nen truy van rieng.
+    pqtIds.length > 0
+      ? supabase.from("phieu_quyet_toan_chi_tiet").select("phieu_id, don_hang:don_hang_id(id, so_don_hang)").in("phieu_id", pqtIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -65,6 +71,18 @@ export default async function SoQuyPage() {
     const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
     if (r.don_hang_id && dh) donHangMap[r.id] = { id: r.don_hang_id, so_don_hang: dh.so_don_hang };
     if (r.tai_khoan_no) tkNoMap[r.id] = r.tai_khoan_no;
+  }
+  type PhieuChiTiet = { phieu_id: string; don_hang: { id: string; so_don_hang: string } | { id: string; so_don_hang: string }[] | null };
+  const pqtDonHangList: Record<string, { id: string; so_don_hang: string }[]> = {};
+  for (const r of (pqtChiTietRows ?? []) as PhieuChiTiet[]) {
+    const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+    if (!dh) continue;
+    (pqtDonHangList[r.phieu_id] ??= []).push(dh);
+  }
+  for (const [phieuId, list] of Object.entries(pqtDonHangList)) {
+    if (list.length === 0) continue;
+    const nhan = list.length > 1 ? `${list[0].so_don_hang} (+${list.length - 1} đơn khác)` : list[0].so_don_hang;
+    donHangMap[phieuId] = { id: list[0].id, so_don_hang: nhan };
   }
 
   return (

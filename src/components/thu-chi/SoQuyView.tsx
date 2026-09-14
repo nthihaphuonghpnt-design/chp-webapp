@@ -17,6 +17,7 @@ const NGUON_HREF: Record<string, string> = {
   hoa_don_xuat: "/khach-hang/hoa-don",
   hoa_don_dau_vao: "/chi-phi/hoa-don-dau-vao",
   luong_da_tra: "/chi-phi/bang-luong",
+  phieu_quyet_toan_tam_ung: "/tam-ung-giai-chi/quyet-toan",
 };
 
 // TK doi ung goi y theo nguon phat sinh — CHI la goi y de doi chieu voi
@@ -26,6 +27,7 @@ const NGUON_HREF: Record<string, string> = {
 function tkDoiUngGoiY(nguonBang: string, loaiSoHienTai: "Tiền mặt" | "Tài khoản công ty", tkNoRieng?: string): string {
   if (nguonBang === "hoa_don_xuat") return TK.PHAI_THU_KHACH_HANG; // Thu: Co 131
   if (nguonBang === "tam_ung_giai_chi") return TK.TAM_UNG; // Chi: No 141
+  if (nguonBang === "phieu_quyet_toan_tam_ung") return TK.TAM_UNG; // Tat toan so du TK 141 cua dot tam ung
   if (nguonBang === "luong_da_tra") return TK.PHAI_TRA_NGUOI_LAO_DONG; // Chi: No 334
   if (nguonBang === "dieu_chuyen_quy_no" || nguonBang === "dieu_chuyen_quy_co")
     return loaiSoHienTai === "Tiền mặt" ? TK.NGAN_HANG : TK.TIEN_MAT;
@@ -54,6 +56,7 @@ const NGUON_LABEL: Record<string, string> = {
   luong_da_tra: "Trả lương",
   dieu_chuyen_quy_no: "Chuyển quỹ nội bộ",
   dieu_chuyen_quy_co: "Chuyển quỹ nội bộ",
+  phieu_quyet_toan_tam_ung: "Quyết toán tạm ứng",
 };
 
 export default function SoQuyView({
