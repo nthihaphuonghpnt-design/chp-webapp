@@ -158,11 +158,10 @@ export default function PhieuQuyetToanView({
 
   async function handleThanhToan(phieu: PhieuRow, phuongThuc: string) {
     setBusy(phieu.id);
-    const { error } = await supabase
-      .from("phieu_quyet_toan_tam_ung")
-      .update({ trang_thai: "Đã thanh toán", phuong_thuc: phuongThuc })
-      .eq("id", phieu.id)
-      .eq("trang_thai", "Đã duyệt");
+    const { error } = await supabase.rpc("thanh_toan_phieu_quyet_toan_tam_ung", {
+      p_phieu_id: phieu.id,
+      p_phuong_thuc: phuongThuc,
+    });
     setBusy(null);
     if (error) {
       window.alert(error.message);
