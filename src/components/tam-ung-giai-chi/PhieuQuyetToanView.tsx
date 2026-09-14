@@ -444,7 +444,7 @@ function PayDialog({
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
         <h2 className="mb-3 text-lg font-semibold text-slate-900">Đánh dấu đã thanh toán</h2>
         <p className="mb-3 text-sm text-slate-600">
-          {phieu.chenh_lech_rong >= 0 ? "Chi tiền mặt/chuyển khoản hoàn lại cho nhân viên" : "Thu thêm từ nhân viên"}:{" "}
+          {phieu.chenh_lech_rong >= 0 ? "Thu lại từ nhân viên (họ tạm ứng dư)" : "Chi thêm cho nhân viên (công ty còn nợ)"}:{" "}
           <strong>{fmt(Math.abs(phieu.chenh_lech_rong))}</strong>. Số này sẽ tự tạo 1 dòng trong Sổ quỹ.
         </p>
         <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức</label>
