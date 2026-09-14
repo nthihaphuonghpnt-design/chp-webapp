@@ -11,6 +11,7 @@ import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSecti
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
 import LineItemsSection from "@/components/don-hang/LineItemsSection";
 import ChiPhiGopSection from "@/components/don-hang/ChiPhiGopSection";
+import CongViecHoanThanhSection, { type CongViecEntry } from "@/components/don-hang/CongViecHoanThanhSection";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 import { tongPhanLoaiChiPhi } from "@/lib/baoCao";
 
@@ -173,6 +174,24 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     : order.hien_truong_phu_trach;
   const chungTuPhuTrach = Array.isArray(order.chung_tu_phu_trach) ? order.chung_tu_phu_trach[0] : order.chung_tu_phu_trach;
 
+  const congViecEntries: CongViecEntry[] = [];
+  if (order.hien_truong_phu_trach_id && hienTruongPhuTrach?.ho_ten) {
+    congViecEntries.push({
+      nhanVienId: order.hien_truong_phu_trach_id,
+      hoTen: hienTruongPhuTrach.ho_ten,
+      vaiTro: "Hiện trường",
+      trangThai: (congViecMap[order.hien_truong_phu_trach_id] ?? "Chưa hoàn thành") as CongViecEntry["trangThai"],
+    });
+  }
+  if (order.chung_tu_phu_trach_id && chungTuPhuTrach?.ho_ten) {
+    congViecEntries.push({
+      nhanVienId: order.chung_tu_phu_trach_id,
+      hoTen: chungTuPhuTrach.ho_ten,
+      vaiTro: "Chứng từ",
+      trangThai: (congViecMap[order.chung_tu_phu_trach_id] ?? "Chưa hoàn thành") as CongViecEntry["trangThai"],
+    });
+  }
+
   const canEditVanChuyen = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán"].includes(user?.phong_ban ?? "");
   const canEditToKhai = user?.phong_ban === "Chứng từ";
   const canEditContainer = canManageDonHang(user?.phong_ban);
@@ -206,6 +225,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           phongBan={user?.phong_ban ?? ""}
         />
       </div>
+
+      <CongViecHoanThanhSection
+        donHangId={order.id}
+        initialEntries={congViecEntries}
+        currentUserId={user?.id}
+        currentPhongBan={user?.phong_ban ?? ""}
+      />
 
       <div className="mb-4 grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
         <Info label="Sale phụ trách" value={salePhuTrach?.ho_ten} />
