@@ -23,7 +23,6 @@ export default async function BangLuongPage() {
     { data: chiPhiList },
     { data: phuThuList },
     { data: thueNgoaiList },
-    { data: dinhPhiList },
     { data: luongDaTraList },
     { data: chamCongList },
     { data: ngayLeList },
@@ -40,7 +39,6 @@ export default async function BangLuongPage() {
       .select("id, don_hang_id, so_tien_da_chi, noi_bo, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
     supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi"),
-    supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     supabase.from("luong_da_tra").select("*"),
     supabase.from("cham_cong").select("nhan_vien_id, ngay, trang_thai"),
     supabase.from("lich_nghi_le").select("ngay").eq("dang_hoat_dong", true),
@@ -50,6 +48,10 @@ export default async function BangLuongPage() {
   // duoc nua (xem migration 0039) — lay qua RPC rieng, chi Ke toan/Giam doc
   // hoac chinh chu moi goi duoc.
   const { data: luongList } = await supabase.rpc("luong_cua_nhan_vien");
+  // dinh_phi_thang da duoc thay the boi hoa_don_dau_vao (migration 0082) —
+  // bang moi nhay cam hon (ten NCC, so hoa don) nen khong SELECT thang duoc,
+  // chi lay tong theo thang qua RPC.
+  const { data: dinhPhiList } = await supabase.rpc("tong_dinh_phi_theo_thang");
   const luongMap = new Map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((luongList ?? []) as any[]).map((l) => [l.id as string, l as { luong_co_dinh: number | null; muc_dong_bhxh: number | null }])

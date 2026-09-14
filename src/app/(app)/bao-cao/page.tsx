@@ -25,7 +25,6 @@ export default async function BaoCaoPage() {
     { data: thueNgoaiList },
     { data: hoaDonList },
     { data: hoaDonDonHangList },
-    { data: dinhPhiList },
     { data: chiPhiGiaoNhanList },
     { data: nhaCungCapList },
     { data: doiTacList },
@@ -48,7 +47,6 @@ export default async function BaoCaoPage() {
       ? supabase.from("hoa_don_xuat").select("id, khach_hang_id, so_hoa_don, ngay_xuat, tong_tien, tien_chi_ho, so_tien_da_thu, trang_thai_thanh_toan")
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc ? supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id") : Promise.resolve({ data: [] }),
-    supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     isKeToanOrGiamDoc ? supabase.from("chi_phi_giao_nhan").select("don_hang_id, thanh_tien") : Promise.resolve({ data: [] }),
     supabase.from("nha_cung_cap").select("id, ten"),
     supabase.from("doi_tac_thue_ngoai").select("id, ten"),
@@ -62,6 +60,11 @@ export default async function BaoCaoPage() {
     ghepGiaBanChiPhi(supabase, chiPhiList ?? []),
     ghepGiaBanThueNgoai(supabase, thueNgoaiList ?? []),
   ]);
+
+  // dinh_phi_thang da duoc thay the boi hoa_don_dau_vao (migration 0082) —
+  // bang moi nhay cam hon nen khong SELECT thang duoc (kha ca Sale xem trang
+  // nay), chi lay tong theo thang qua RPC.
+  const { data: dinhPhiList } = await supabase.rpc("tong_dinh_phi_theo_thang");
 
   return (
     <BaoCaoView

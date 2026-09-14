@@ -19,7 +19,6 @@ export default async function LuongCuaToiPage() {
     { data: nvCoBan },
     { data: chiPhiGiaoNhanList },
     { data: donHangCuaToi },
-    { data: dinhPhiList },
     { data: soLoRaw },
     { data: luongDaTraList },
     { data: chamCongList },
@@ -32,7 +31,6 @@ export default async function LuongCuaToiPage() {
       .single(),
     supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at").eq("nhan_vien_id", user.id),
     supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id").eq("sale_phu_trach_id", user.id),
-    supabase.from("dinh_phi_thang").select("thang_nam, so_tien"),
     supabase.from("don_hang").select("ngay_len_don"),
     supabase.from("luong_da_tra").select("*").eq("nhan_vien_id", user.id).order("thang_luong", { ascending: false }),
     supabase.from("cham_cong").select("ngay, trang_thai").eq("nhan_vien_id", user.id),
@@ -44,6 +42,11 @@ export default async function LuongCuaToiPage() {
   const { data: luongRieng } = await supabase.rpc("luong_cua_nhan_vien", { p_nhan_vien_id: user.id });
   const luongCuaToi = (luongRieng as { luong_co_dinh: number | null; muc_dong_bhxh: number | null }[] | null)?.[0];
   const nv = nvCoBan ? { ...nvCoBan, luong_co_dinh: luongCuaToi?.luong_co_dinh ?? null, muc_dong_bhxh: luongCuaToi?.muc_dong_bhxh ?? null } : null;
+
+  // dinh_phi_thang da duoc thay the boi hoa_don_dau_vao (migration 0082) —
+  // bang moi nhay cam hon nen khong SELECT thang duoc, chi lay tong qua RPC
+  // (an toan cho moi nhan vien tu xem luong cua minh, khong lo chi tiet NCC).
+  const { data: dinhPhiList } = await supabase.rpc("tong_dinh_phi_theo_thang");
 
   const donHangIds = (donHangCuaToi ?? []).map((d) => d.id);
   const [{ data: chiPhiList }, { data: phuThuList }, { data: thueNgoaiList }] =

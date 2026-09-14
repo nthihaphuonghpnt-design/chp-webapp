@@ -90,8 +90,10 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const monthStart = `${monthKey}-01`;
   const nextMonthStart = new Date(Date.UTC(monthYear, monthNum, 1)).toISOString().slice(0, 10);
 
+  // dinh_phi_thang da duoc thay the boi hoa_don_dau_vao (migration 0082) —
+  // bang moi nhay cam hon nen khong SELECT thang duoc, chi lay tong qua RPC.
   const [{ data: dinhPhiRows }, { count: soLoTrongThang }] = await Promise.all([
-    supabase.from("dinh_phi_thang").select("so_tien").eq("thang_nam", monthKey),
+    supabase.rpc("tong_dinh_phi_theo_thang"),
     supabase
       .from("don_hang")
       .select("id", { count: "exact", head: true })
@@ -99,7 +101,9 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       .lt("ngay_len_don", nextMonthStart),
   ]);
 
-  const tongDinhPhiThang = (dinhPhiRows ?? []).reduce((s, r) => s + (r.so_tien ?? 0), 0);
+  const tongDinhPhiThang = ((dinhPhiRows ?? []) as { thang_nam: string; so_tien: number }[])
+    .filter((r) => r.thang_nam === monthKey)
+    .reduce((s, r) => s + (r.so_tien ?? 0), 0);
   const dinhPhiPhanBo = soLoTrongThang && soLoTrongThang > 0 ? tongDinhPhiThang / soLoTrongThang : 0;
 
   // Dung CHUNG cong thuc voi BaoCaoView.tsx (loiNhuanTheoLo/congNoTheoLo): loai

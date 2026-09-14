@@ -262,13 +262,15 @@ export default function BangLuongView({
   async function themVaoDinhPhi() {
     setSaving(true);
     setSavedMsg(null);
-    const { error } = await supabase.from("dinh_phi_thang").insert({
-      thang_nam: thangLuong,
+    const { error } = await supabase.from("hoa_don_dau_vao").insert({
+      thang_phan_bo: thangLuong,
       khoan_muc: `Lương + BHXH công ty tháng ${thangLuong}`,
-      so_tien: Math.round(tongChiPhiNhanSu),
+      loai_chi_phi: "Định phí cố định",
+      ngay_hoa_don: new Date().toISOString().slice(0, 10),
+      tong_tien_hang: Math.round(tongChiPhiNhanSu),
     });
     setSaving(false);
-    setSavedMsg(error ? `Lỗi: ${error.message}` : "Đã thêm vào Định phí tháng.");
+    setSavedMsg(error ? `Lỗi: ${error.message}` : "Đã thêm vào Hóa đơn đầu vào (định phí cố định).");
   }
 
   async function handleExportExcel() {
@@ -430,7 +432,7 @@ export default function BangLuongView({
           disabled={saving}
           className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
         >
-          {saving ? "Đang thêm..." : `Thêm vào Định phí tháng ${thangLuong}`}
+          {saving ? "Đang thêm..." : `Thêm vào Hóa đơn đầu vào (${thangLuong})`}
         </button>
         {savedMsg && <p className="mt-2 text-xs text-slate-500">{savedMsg}</p>}
       </div>
