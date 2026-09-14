@@ -19,11 +19,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data } = await supabase
     .from("nhan_vien")
-    .select("id, ho_ten, email_tai_khoan, phong_ban:phong_ban_id(ten)")
+    .select("id, ho_ten, email_tai_khoan, dang_lam_viec, phong_ban:phong_ban_id(ten)")
     .eq("auth_user_id", user.id)
     .single();
 
-  if (!data) return null;
+  if (!data || data.dang_lam_viec === false) return null;
 
   const phongBan = Array.isArray(data.phong_ban)
     ? data.phong_ban[0]
