@@ -19,12 +19,7 @@ export default async function SoQuanLyLaoDongPage() {
   const dauNam = `${namHienTai}-01-01`;
   const cuoiNam = `${namHienTai}-12-31`;
 
-  const [
-    { data: nhanVienList, error: loi1 },
-    { data: hopDongList, error: loi2 },
-    { data: luongList, error: loi3 },
-    { data: chamCongList, error: loi4 },
-  ] = await Promise.all([
+  const [{ data: nhanVienList }, { data: hopDongList }, { data: luongList }, { data: chamCongList }] = await Promise.all([
     supabase
       .from("nhan_vien")
       .select(
@@ -35,18 +30,6 @@ export default async function SoQuanLyLaoDongPage() {
     supabase.rpc("luong_cua_nhan_vien"),
     supabase.from("cham_cong").select("nhan_vien_id, trang_thai").gte("ngay", dauNam).lte("ngay", cuoiNam).in("trang_thai", ["Nghỉ phép", "Nghỉ không phép", "Nghỉ khác"]),
   ]);
-
-  if (loi1 || loi2 || loi3 || loi4) {
-    return (
-      <pre className="mx-auto max-w-3xl overflow-x-auto whitespace-pre-wrap px-4 py-10 text-xs text-red-600">
-        DEBUG LOI TRUY VAN:{"\n"}
-        loi1 (nhan_vien): {JSON.stringify(loi1, null, 2)}
-        {"\n"}loi2 (hop_dong_nhan_vien): {JSON.stringify(loi2, null, 2)}
-        {"\n"}loi3 (rpc luong_cua_nhan_vien): {JSON.stringify(loi3, null, 2)}
-        {"\n"}loi4 (cham_cong): {JSON.stringify(loi4, null, 2)}
-      </pre>
-    );
-  }
 
   const hopDongMoiNhatMap = new Map<string, string | null>();
   for (const h of hopDongList ?? []) {
