@@ -38,5 +38,34 @@ export default async function SoQuyPage() {
     tamUngDetailMap[r.id] = `${r.loai} · ${ten ?? "—"}`;
   }
 
-  return <SoQuyView initialRows={rows ?? []} tamUngDetailMap={tamUngDetailMap} />;
+  // Don hang lien quan: chi phat_sinh_chi_phi/don_thue_ngoai/hoa_don_dau_vao
+  // co cot don_hang_id — lay them de hien "Chi cho don hang nao" tren So quy
+  // (kieu polymorphic join, giong tam_ung_giai_chi o tren, vi nguon_bang/
+  // nguon_id khong phai FK that trong Postgres).
+  const pscIds = (rows ?? []).filter((r) => r.nguon_bang === "phat_sinh_chi_phi").map((r) => r.nguon_id);
+  const dtnIds = (rows ?? []).filter((r) => r.nguon_bang === "don_thue_ngoai").map((r) => r.nguon_id);
+  const hddvIds = (rows ?? []).filter((r) => r.nguon_bang === "hoa_don_dau_vao").map((r) => r.nguon_id);
+
+  const [{ data: pscRows }, { data: dtnRows }, { data: hddvRows }] = await Promise.all([
+    pscIds.length > 0
+      ? supabase.from("phat_sinh_chi_phi").select("id, don_hang_id, don_hang:don_hang_id(so_don_hang)").in("id", pscIds)
+      : Promise.resolve({ data: [] }),
+    dtnIds.length > 0
+      ? supabase.from("don_thue_ngoai").select("id, don_hang_id, don_hang:don_hang_id(so_don_hang)").in("id", dtnIds)
+      : Promise.resolve({ data: [] }),
+    hddvIds.length > 0
+      ? supabase.from("hoa_don_dau_vao").select("id, don_hang_id, tai_khoan_no, don_hang:don_hang_id(so_don_hang)").in("id", hddvIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const donHangMap: Record<string, { id: string; so_don_hang: string }> = {};
+  const tkNoMap: Record<string, string> = {};
+  type LienKetDonHang = { id: string; don_hang_id: string | null; don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null; tai_khoan_no?: string | null };
+  for (const r of [...(pscRows ?? []), ...(dtnRows ?? []), ...(hddvRows ?? [])] as LienKetDonHang[]) {
+    const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+    if (r.don_hang_id && dh) donHangMap[r.id] = { id: r.don_hang_id, so_don_hang: dh.so_don_hang };
+    if (r.tai_khoan_no) tkNoMap[r.id] = r.tai_khoan_no;
+  }
+
+  return <SoQuyView initialRows={rows ?? []} tamUngDetailMap={tamUngDetailMap} donHangMap={donHangMap} tkNoMap={tkNoMap} />;
 }

@@ -16,9 +16,10 @@ export default async function HoaDonDauVaoPage() {
     );
   }
 
-  const [{ data: rows }, { data: nhaCungCapList }] = await Promise.all([
+  const [{ data: rows }, { data: nhaCungCapList }, { data: donHangList }] = await Promise.all([
     supabase.from("hoa_don_dau_vao").select("*").order("ngay_hoa_don", { ascending: false }),
     supabase.from("nha_cung_cap").select("id, ten, ma_so_thue, dia_chi").order("ten"),
+    supabase.from("don_hang").select("id, so_don_hang").order("so_don_hang", { ascending: false }),
   ]);
 
   return (
@@ -31,6 +32,7 @@ export default async function HoaDonDauVaoPage() {
       <HoaDonDauVaoView
         initialRows={(rows ?? []) as HoaDonDauVao[]}
         nhaCungCapList={nhaCungCapList ?? []}
+        donHangList={donHangList ?? []}
         canEdit={user.phong_ban === "Kế toán"}
       />
     </div>

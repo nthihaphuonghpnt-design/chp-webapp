@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
+import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import type { SoQuy } from "@/types/database";
 
 const NGUON_HREF: Record<string, string> = {
@@ -10,7 +11,20 @@ const NGUON_HREF: Record<string, string> = {
   phat_sinh_chi_phi: "/don-hang",
   don_thue_ngoai: "/don-hang",
   hoa_don_xuat: "/khach-hang/hoa-don",
+  hoa_don_dau_vao: "/chi-phi/hoa-don-dau-vao",
+  luong_da_tra: "/chi-phi/bang-luong",
 };
+
+// TK doi ung goi y theo nguon phat sinh — CHI la goi y de doi chieu voi
+// phan mem ke toan, khong phai but toan chinh thuc (xem GHI_CHU_DINH_KHOAN_GOI_Y).
+function tkDoiUngGoiY(nguonBang: string, tkNoRieng?: string): string {
+  if (nguonBang === "hoa_don_xuat") return TK.PHAI_THU_KHACH_HANG; // Thu: Co 131
+  if (nguonBang === "tam_ung_giai_chi") return TK.TAM_UNG; // Chi: No 141
+  if (nguonBang === "luong_da_tra") return TK.PHAI_TRA_NGUOI_LAO_DONG; // Chi: No 334
+  if (nguonBang === "hoa_don_dau_vao" && tkNoRieng) return tkNoRieng; // Chi: No theo TK da nhap
+  if (nguonBang === "phat_sinh_chi_phi" || nguonBang === "don_thue_ngoai" || nguonBang === "hoa_don_dau_vao") return TK.PHAI_TRA_NGUOI_BAN; // Chi: No 331
+  return "—";
+}
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString("en-US");
@@ -28,14 +42,20 @@ const NGUON_LABEL: Record<string, string> = {
   don_thue_ngoai: "Thanh toán thuê ngoài",
   hoa_don_xuat: "Thu tiền hóa đơn",
   tam_ung_giai_chi: "Tạm ứng/Giải chi",
+  hoa_don_dau_vao: "Hóa đơn đầu vào",
+  luong_da_tra: "Trả lương",
 };
 
 export default function SoQuyView({
   initialRows,
   tamUngDetailMap = {},
+  donHangMap = {},
+  tkNoMap = {},
 }: {
   initialRows: SoQuy[];
   tamUngDetailMap?: Record<string, string>;
+  donHangMap?: Record<string, { id: string; so_don_hang: string }>;
+  tkNoMap?: Record<string, string>;
 }) {
   const defaultRange = monthRange();
   const [loaiSo, setLoaiSo] = useState<"Tiền mặt" | "Tài khoản công ty">("Tiền mặt");
@@ -64,29 +84,40 @@ export default function SoQuyView({
   }, []);
 
   async function handleExportExcel() {
+    const tkTien = tkTheoPhuongThuc(loaiSo);
     const columns: ExcelColumn[] = [
       { header: "Ngày", key: "ngay", width: 12 },
       { header: "Loại", key: "loai", width: 18 },
       { header: "Nội dung", key: "noiDung", width: 30 },
+      { header: "Đơn hàng", key: "donHang", width: 14 },
       { header: "Thu", key: "thu", width: 14 },
       { header: "Chi", key: "chi", width: 14 },
+      { header: "TK Nợ", key: "tkNo", width: 10 },
+      { header: "TK Có", key: "tkCo", width: 10 },
       { header: "Tồn", key: "ton", width: 14 },
     ];
     const rows = [
-      ["", "", `TỒN ĐẦU KỲ (${tuNgay})`, "", "", tonDauKy],
-      ...rowsWithRunning.map((r) => [
-        r.ngay,
-        NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang,
-        r.noi_dung ?? "",
-        r.loai_giao_dich === "Thu" ? r.so_tien : "",
-        r.loai_giao_dich === "Chi" ? r.so_tien : "",
-        r.tonSauGiaoDich,
-      ]),
+      ["", "", `TỒN ĐẦU KỲ (${tuNgay})`, "", "", "", "", "", tonDauKy],
+      ...rowsWithRunning.map((r) => {
+        const tkDoiUng = tkDoiUngGoiY(r.nguon_bang, tkNoMap[r.nguon_id]);
+        const [tkNo, tkCo] = r.loai_giao_dich === "Thu" ? [tkTien, tkDoiUng] : [tkDoiUng, tkTien];
+        return [
+          r.ngay,
+          NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang,
+          r.noi_dung ?? "",
+          donHangMap[r.nguon_id]?.so_don_hang ?? "",
+          r.loai_giao_dich === "Thu" ? r.so_tien : "",
+          r.loai_giao_dich === "Chi" ? r.so_tien : "",
+          tkNo,
+          tkCo,
+          r.tonSauGiaoDich,
+        ];
+      }),
     ];
-    const totalRow = ["", "", `TỒN CUỐI KỲ (${denNgay})`, tongThu, tongChi, tonCuoiKy];
+    const totalRow = ["", "", `TỒN CUỐI KỲ (${denNgay})`, "", tongThu, tongChi, "", "", tonCuoiKy];
     await xuatExcelKeO(`so-quy-${loaiSo}-${tuNgay}_${denNgay}.xlsx`, {
       sheetName: "Sổ quỹ",
-      headerLines: [`SỔ QUỸ — ${loaiSo}`, `Từ ${tuNgay} đến ${denNgay}`],
+      headerLines: [`SỔ QUỸ — ${loaiSo}`, `Từ ${tuNgay} đến ${denNgay}`, GHI_CHU_DINH_KHOAN_GOI_Y],
       columns,
       rows,
       totalRow,
@@ -147,7 +178,7 @@ export default function SoQuyView({
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
-              {["Ngày", "Nguồn", "Nội dung", "Thu", "Chi", "Tồn"].map((h) => (
+              {["Ngày", "Nguồn", "Nội dung", "Đơn hàng", "Thu", "Chi", "Tồn"].map((h) => (
                 <th key={h} className="px-3 py-2 font-medium">
                   {h}
                 </th>
@@ -171,6 +202,15 @@ export default function SoQuyView({
                   )}
                 </td>
                 <td className="px-3 py-2">{r.noi_dung ?? "—"}</td>
+                <td className="px-3 py-2">
+                  {donHangMap[r.nguon_id] ? (
+                    <Link href={`/don-hang/${donHangMap[r.nguon_id].id}`} className="text-blue-600 hover:underline">
+                      {donHangMap[r.nguon_id].so_don_hang}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-3 py-2 text-green-600">{r.loai_giao_dich === "Thu" ? fmt(r.so_tien) : ""}</td>
                 <td className="px-3 py-2 text-red-600">{r.loai_giao_dich === "Chi" ? fmt(r.so_tien) : ""}</td>
                 <td className="px-3 py-2 font-medium">{fmt(r.tonSauGiaoDich)}</td>
@@ -178,7 +218,7 @@ export default function SoQuyView({
             ))}
             {rowsWithRunning.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                   Không có giao dịch trong khoảng thời gian này.
                 </td>
               </tr>
