@@ -15,26 +15,50 @@ export default async function DonHangMoiPage() {
     );
   }
 
-  const { data: phongBanSale } = await supabase.from("phong_ban").select("id").eq("ten", "Sale").single();
+  const [{ data: phongBanSale }, { data: phongBanHienTruong }, { data: phongBanChungTu }] = await Promise.all([
+    supabase.from("phong_ban").select("id").eq("ten", "Sale").single(),
+    supabase.from("phong_ban").select("id").eq("ten", "Hiện trường").single(),
+    supabase.from("phong_ban").select("id").eq("ten", "Chứng từ").single(),
+  ]);
 
-  const [{ data: khachHang }, { data: nhomKhachHang }, { data: loaiContainer }, { data: hangHoa }, { data: diaDiem }, { data: saleList }] =
-    await Promise.all([
-      supabase
-        .from("khach_hang")
-        .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
-        .eq("dang_hoat_dong", true)
-        .order("ten_day_du"),
-      supabase.from("nhom_khach_hang").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-      supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-      supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
-      supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
-      supabase
-        .from("nhan_vien")
-        .select("id, ten:ho_ten")
-        .eq("phong_ban_id", phongBanSale?.id ?? "")
-        .eq("dang_lam_viec", true)
-        .order("ho_ten"),
-    ]);
+  const [
+    { data: khachHang },
+    { data: nhomKhachHang },
+    { data: loaiContainer },
+    { data: hangHoa },
+    { data: diaDiem },
+    { data: saleList },
+    { data: hienTruongList },
+    { data: chungTuList },
+  ] = await Promise.all([
+    supabase
+      .from("khach_hang")
+      .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
+      .eq("dang_hoat_dong", true)
+      .order("ten_day_du"),
+    supabase.from("nhom_khach_hang").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
+    supabase
+      .from("nhan_vien")
+      .select("id, ten:ho_ten")
+      .eq("phong_ban_id", phongBanSale?.id ?? "")
+      .eq("dang_lam_viec", true)
+      .order("ho_ten"),
+    supabase
+      .from("nhan_vien")
+      .select("id, ten:ho_ten")
+      .eq("phong_ban_id", phongBanHienTruong?.id ?? "")
+      .eq("dang_lam_viec", true)
+      .order("ho_ten"),
+    supabase
+      .from("nhan_vien")
+      .select("id, ten:ho_ten")
+      .eq("phong_ban_id", phongBanChungTu?.id ?? "")
+      .eq("dang_lam_viec", true)
+      .order("ho_ten"),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -50,6 +74,8 @@ export default async function DonHangMoiPage() {
           hangHoa: hangHoa ?? [],
           diaDiem: diaDiem ?? [],
           saleList: saleList ?? [],
+          hienTruongList: hienTruongList ?? [],
+          chungTuList: chungTuList ?? [],
         }}
         currentUserId={user?.id}
         currentPhongBan={user?.phong_ban}

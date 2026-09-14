@@ -15,6 +15,9 @@ interface MasterData {
   loaiContainer: Option[];
   hangHoa: Option[];
   diaDiem: Option[];
+  saleList: Option[];
+  hienTruongList: Option[];
+  chungTuList: Option[];
 }
 
 const LOAI_DON_HANG = ["Xuất", "Nhập", "Khác"];
@@ -24,6 +27,9 @@ const DVT = ["Cont", "Chuyến", "Kiện", "Khối", "Tấn", "Kg", "2x20"];
 // Cac cot co the nhap/xuat, theo dung thu tu B1
 const IMPORT_COLUMNS = [
   { header: "Khách hàng *", key: "khach_hang_id", kind: "khachHang", required: true },
+  { header: "Sale phụ trách", key: "sale_phu_trach_id", kind: "nhanVien", listKey: "saleList" },
+  { header: "Hiện trường phụ trách", key: "hien_truong_phu_trach_id", kind: "nhanVien", listKey: "hienTruongList" },
+  { header: "Chứng từ phụ trách", key: "chung_tu_phu_trach_id", kind: "nhanVien", listKey: "chungTuList" },
   { header: "Loại đơn hàng", key: "loai_don_hang", kind: "fixed", options: LOAI_DON_HANG },
   { header: "Loại kích cỡ", key: "loai_kich_co", kind: "fixed", options: LOAI_KICH_CO },
   { header: "Đơn vị tính", key: "dvt", kind: "fixed", options: DVT },
@@ -74,6 +80,9 @@ export default function DonHangExcelTools({
 
     const guideRows: (string | undefined)[][] = [["Cột", "Giá trị hợp lệ"]];
     guideRows.push(["Khách hàng", masterData.khachHang.map((k) => k.ten_viet_tat || k.ten_day_du).join(", ")]);
+    guideRows.push(["Sale phụ trách", masterData.saleList.map((s) => s.ten).join(", ")]);
+    guideRows.push(["Hiện trường phụ trách", masterData.hienTruongList.map((s) => s.ten).join(", ")]);
+    guideRows.push(["Chứng từ phụ trách", masterData.chungTuList.map((s) => s.ten).join(", ")]);
     guideRows.push(["Loại đơn hàng", LOAI_DON_HANG.join(", ")]);
     guideRows.push(["Loại kích cỡ", LOAI_KICH_CO.join(", ")]);
     guideRows.push(["Đơn vị tính", DVT.join(", ")]);
@@ -165,6 +174,12 @@ export default function DonHangExcelTools({
         } else if (col.kind === "hangHoa" || col.kind === "diaDiem") {
           if (!value) continue;
           const list = col.kind === "hangHoa" ? masterData.hangHoa : masterData.diaDiem;
+          const match = findByName(list, String(value));
+          if (!match) { errors.push(`Dòng ${rowNum}: không tìm thấy "${value}" ở cột "${col.header}".`); hasError = true; continue; }
+          record[col.key] = match.id;
+        } else if (col.kind === "nhanVien") {
+          if (!value) continue;
+          const list = masterData[col.listKey as "saleList" | "hienTruongList" | "chungTuList"];
           const match = findByName(list, String(value));
           if (!match) { errors.push(`Dòng ${rowNum}: không tìm thấy "${value}" ở cột "${col.header}".`); hasError = true; continue; }
           record[col.key] = match.id;

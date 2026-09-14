@@ -29,6 +29,8 @@ interface MasterData {
   hangHoa: Option[];
   diaDiem: DiaDiemOption[];
   saleList: Option[];
+  hienTruongList: Option[];
+  chungTuList: Option[];
 }
 
 const LOAI_DON_HANG = ["Xuất", "Nhập", "Khác"];
@@ -75,6 +77,8 @@ export default function DonHangForm({
     ghi_chu_van_chuyen: initial?.ghi_chu_van_chuyen ?? "",
     gia: initial?.gia?.toString() ?? "",
     sale_phu_trach_id: initial?.sale_phu_trach_id ?? (currentPhongBan === "Sale" ? currentUserId ?? "" : ""),
+    hien_truong_phu_trach_id: initial?.hien_truong_phu_trach_id ?? "",
+    chung_tu_phu_trach_id: initial?.chung_tu_phu_trach_id ?? "",
     so_to_khai_ban_dau: "",
   });
 
@@ -177,6 +181,34 @@ export default function DonHangForm({
           >
             <option value="">-- Chọn --</option>
             {masterData.saleList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.ten}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Hiện trường phụ trách" hint="Bỏ trống nếu đơn này chưa cần Hiện trường xử lý">
+          <select
+            value={values.hien_truong_phu_trach_id}
+            onChange={(e) => set("hien_truong_phu_trach_id", e.target.value)}
+            className={inputClass}
+          >
+            <option value="">-- Chọn --</option>
+            {masterData.hienTruongList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.ten}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Chứng từ phụ trách" hint="Bỏ trống nếu đơn này chưa cần Chứng từ xử lý">
+          <select
+            value={values.chung_tu_phu_trach_id}
+            onChange={(e) => set("chung_tu_phu_trach_id", e.target.value)}
+            className={inputClass}
+          >
+            <option value="">-- Chọn --</option>
+            {masterData.chungTuList.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.ten}
               </option>
