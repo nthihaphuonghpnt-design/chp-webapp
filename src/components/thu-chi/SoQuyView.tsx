@@ -7,6 +7,7 @@ import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
+import DoiChieuSaoKeView from "@/components/thu-chi/DoiChieuSaoKeView";
 import type { SoQuy } from "@/types/database";
 
 const NGUON_HREF: Record<string, string> = {
@@ -73,6 +74,7 @@ export default function SoQuyView({
   const [tuNgay, setTuNgay] = useState(defaultRange.start);
   const [denNgay, setDenNgay] = useState(defaultRange.end);
   const [showChuyenQuy, setShowChuyenQuy] = useState(false);
+  const [showDoiChieu, setShowDoiChieu] = useState(false);
   const [chieuChuyen, setChieuChuyen] = useState<"Ngân hàng → Tiền mặt" | "Tiền mặt → Ngân hàng">("Ngân hàng → Tiền mặt");
   const [soTienChuyen, setSoTienChuyen] = useState("");
   const [ghiChuChuyen, setGhiChuChuyen] = useState("");
@@ -185,8 +187,18 @@ export default function SoQuyView({
               + Chuyển quỹ nội bộ
             </button>
           )}
+          {canEdit && (
+            <button
+              onClick={() => setShowDoiChieu((v) => !v)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700"
+            >
+              Đối chiếu sao kê
+            </button>
+          )}
         </div>
       </div>
+
+      {showDoiChieu && <DoiChieuSaoKeView loaiSo={loaiSo} onXong={() => setShowDoiChieu(false)} />}
 
       {showChuyenQuy && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
