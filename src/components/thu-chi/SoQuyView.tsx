@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
+import { createClient } from "@/lib/supabase/client";
+import MoneyInput from "@/components/common/MoneyInput";
 import type { SoQuy } from "@/types/database";
 
 const NGUON_HREF: Record<string, string> = {
@@ -17,10 +20,13 @@ const NGUON_HREF: Record<string, string> = {
 
 // TK doi ung goi y theo nguon phat sinh — CHI la goi y de doi chieu voi
 // phan mem ke toan, khong phai but toan chinh thuc (xem GHI_CHU_DINH_KHOAN_GOI_Y).
-function tkDoiUngGoiY(nguonBang: string, tkNoRieng?: string): string {
+// loaiSoHienTai: can rieng cho dieu_chuyen_quy vi ca 2 ben deu la TK tien
+// (111/112) — TK doi ung la TK tien CON LAI, khong phai 1 loai co dinh.
+function tkDoiUngGoiY(nguonBang: string, loaiSoHienTai: "Tiền mặt" | "Tài khoản công ty", tkNoRieng?: string): string {
   if (nguonBang === "hoa_don_xuat") return TK.PHAI_THU_KHACH_HANG; // Thu: Co 131
   if (nguonBang === "tam_ung_giai_chi") return TK.TAM_UNG; // Chi: No 141
   if (nguonBang === "luong_da_tra") return TK.PHAI_TRA_NGUOI_LAO_DONG; // Chi: No 334
+  if (nguonBang === "dieu_chuyen_quy") return loaiSoHienTai === "Tiền mặt" ? TK.NGAN_HANG : TK.TIEN_MAT;
   if (nguonBang === "hoa_don_dau_vao" && tkNoRieng) return tkNoRieng; // Chi: No theo TK da nhap
   if (nguonBang === "phat_sinh_chi_phi" || nguonBang === "don_thue_ngoai" || nguonBang === "hoa_don_dau_vao") return TK.PHAI_TRA_NGUOI_BAN; // Chi: No 331
   return "—";
@@ -44,6 +50,7 @@ const NGUON_LABEL: Record<string, string> = {
   tam_ung_giai_chi: "Tạm ứng/Giải chi",
   hoa_don_dau_vao: "Hóa đơn đầu vào",
   luong_da_tra: "Trả lương",
+  dieu_chuyen_quy: "Chuyển quỹ nội bộ",
 };
 
 export default function SoQuyView({
@@ -51,16 +58,54 @@ export default function SoQuyView({
   tamUngDetailMap = {},
   donHangMap = {},
   tkNoMap = {},
+  canEdit = false,
 }: {
   initialRows: SoQuy[];
   tamUngDetailMap?: Record<string, string>;
   donHangMap?: Record<string, { id: string; so_don_hang: string }>;
   tkNoMap?: Record<string, string>;
+  canEdit?: boolean;
 }) {
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
   const defaultRange = monthRange();
   const [loaiSo, setLoaiSo] = useState<"Tiền mặt" | "Tài khoản công ty">("Tiền mặt");
   const [tuNgay, setTuNgay] = useState(defaultRange.start);
   const [denNgay, setDenNgay] = useState(defaultRange.end);
+  const [showChuyenQuy, setShowChuyenQuy] = useState(false);
+  const [chieuChuyen, setChieuChuyen] = useState<"Ngân hàng → Tiền mặt" | "Tiền mặt → Ngân hàng">("Ngân hàng → Tiền mặt");
+  const [soTienChuyen, setSoTienChuyen] = useState("");
+  const [ghiChuChuyen, setGhiChuChuyen] = useState("");
+  const [savingChuyen, setSavingChuyen] = useState(false);
+  const [loiChuyen, setLoiChuyen] = useState<string | null>(null);
+
+  async function handleChuyenQuy() {
+    if (!soTienChuyen || Number(soTienChuyen) <= 0) {
+      setLoiChuyen("Nhập số tiền hợp lệ.");
+      return;
+    }
+    setSavingChuyen(true);
+    setLoiChuyen(null);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+    const { error } = await supabase.from("dieu_chuyen_quy").insert({
+      chieu: chieuChuyen,
+      so_tien: Number(soTienChuyen),
+      ghi_chu: ghiChuChuyen || null,
+      nguoi_thuc_hien_id: nv?.id,
+    });
+    setSavingChuyen(false);
+    if (error) {
+      setLoiChuyen(error.message);
+      return;
+    }
+    setShowChuyenQuy(false);
+    setSoTienChuyen("");
+    setGhiChuChuyen("");
+    router.refresh();
+  }
 
   const rowsCuaSo = initialRows.filter((r) => r.loai_so === loaiSo);
 
@@ -99,7 +144,7 @@ export default function SoQuyView({
     const rows = [
       ["", "", `TỒN ĐẦU KỲ (${tuNgay})`, "", "", "", "", "", tonDauKy],
       ...rowsWithRunning.map((r) => {
-        const tkDoiUng = tkDoiUngGoiY(r.nguon_bang, tkNoMap[r.nguon_id]);
+        const tkDoiUng = tkDoiUngGoiY(r.nguon_bang, loaiSo, tkNoMap[r.nguon_id]);
         const [tkNo, tkCo] = r.loai_giao_dich === "Thu" ? [tkTien, tkDoiUng] : [tkDoiUng, tkTien];
         return [
           r.ngay,
@@ -128,10 +173,62 @@ export default function SoQuyView({
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold text-slate-900">Sổ quỹ</h1>
-        <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm">
-          Xuất Excel
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm">
+            Xuất Excel
+          </button>
+          {canEdit && (
+            <button
+              onClick={() => setShowChuyenQuy((v) => !v)}
+              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white"
+            >
+              + Chuyển quỹ nội bộ
+            </button>
+          )}
+        </div>
       </div>
+
+      {showChuyenQuy && (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+          <p className="mb-3 text-sm font-medium text-slate-700">Chuyển tiền giữa Tiền mặt và Tài khoản công ty</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Chiều chuyển</label>
+              <select
+                value={chieuChuyen}
+                onChange={(e) => setChieuChuyen(e.target.value as typeof chieuChuyen)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="Ngân hàng → Tiền mặt">Ngân hàng → Tiền mặt (rút tiền)</option>
+                <option value="Tiền mặt → Ngân hàng">Tiền mặt → Ngân hàng (nộp tiền)</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Số tiền</label>
+              <MoneyInput value={soTienChuyen} onChange={setSoTienChuyen} className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div className="min-w-[180px] flex-1">
+              <label className="mb-1 block text-xs text-slate-500">Ghi chú (tùy chọn)</label>
+              <input
+                value={ghiChuChuyen}
+                onChange={(e) => setGhiChuChuyen(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <button
+              onClick={handleChuyenQuy}
+              disabled={savingChuyen}
+              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {savingChuyen ? "Đang lưu..." : "Lưu"}
+            </button>
+            <button onClick={() => setShowChuyenQuy(false)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm">
+              Hủy
+            </button>
+          </div>
+          {loiChuyen && <p className="mt-2 text-sm text-red-600">{loiChuyen}</p>}
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <div className="flex rounded-lg border border-slate-300 bg-white p-1">

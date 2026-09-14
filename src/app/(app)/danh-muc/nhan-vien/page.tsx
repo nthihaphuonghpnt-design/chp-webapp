@@ -21,7 +21,7 @@ export default async function NhanVienPage() {
   // "authenticated", vi Supabase dung chung 1 role cho moi phong ban). Lay
   // rieng qua RPC (chi Ke toan/Giam doc goi duoc het) roi gop vao.
   const NHAN_VIEN_COLUMNS =
-    "id, ho_ten, phong_ban_id, email_tai_khoan, so_dien_thoai, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, dang_lam_viec";
+    "id, ho_ten, phong_ban_id, email_tai_khoan, so_dien_thoai, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, dang_lam_viec, gioi_tinh, ngay_sinh, quoc_tich, so_cccd, noi_cu_tru, trinh_do_chuyen_mon, ngay_nghi_viec, ly_do_nghi_viec";
   const [{ data: rowsCoBan }, { data: phongBanList }, { data: luongList }] = await Promise.all([
     supabase.from("nhan_vien").select(NHAN_VIEN_COLUMNS).order("ho_ten"),
     supabase.from("phong_ban").select("id, ten").order("ten"),
@@ -60,6 +60,23 @@ export default async function NhanVienPage() {
       hint: "Quyết định chính sách chấm công/lương áp dụng (ngày phép, ngày lễ...)",
     },
     { key: "ngay_vao_lam", label: "Ngày vào làm", type: "text", hint: "yyyy-mm-dd — dùng tính ngày phép theo thâm niên" },
+    {
+      key: "gioi_tinh",
+      label: "Giới tính",
+      type: "select",
+      options: [
+        { value: "Nam", label: "Nam" },
+        { value: "Nữ", label: "Nữ" },
+        { value: "Khác", label: "Khác" },
+      ],
+    },
+    { key: "ngay_sinh", label: "Ngày sinh", type: "text", hint: "yyyy-mm-dd — phục vụ Sổ quản lý lao động" },
+    { key: "quoc_tich", label: "Quốc tịch", type: "text" },
+    { key: "so_cccd", label: "Số CCCD/hộ chiếu", type: "text" },
+    { key: "noi_cu_tru", label: "Nơi cư trú", type: "text" },
+    { key: "trinh_do_chuyen_mon", label: "Trình độ chuyên môn kỹ thuật", type: "text" },
+    { key: "ngay_nghi_viec", label: "Ngày nghỉ việc", type: "text", hint: "yyyy-mm-dd — để trống nếu còn đang làm" },
+    { key: "ly_do_nghi_viec", label: "Lý do nghỉ việc", type: "textarea" },
     { key: "luong_co_dinh", label: "Lương cố định", type: "number", hint: "Dùng để tính Bảng lương hàng tháng" },
     {
       key: "muc_dong_bhxh",

@@ -67,5 +67,13 @@ export default async function SoQuyPage() {
     if (r.tai_khoan_no) tkNoMap[r.id] = r.tai_khoan_no;
   }
 
-  return <SoQuyView initialRows={rows ?? []} tamUngDetailMap={tamUngDetailMap} donHangMap={donHangMap} tkNoMap={tkNoMap} />;
+  return (
+    <SoQuyView
+      initialRows={rows ?? []}
+      tamUngDetailMap={tamUngDetailMap}
+      donHangMap={donHangMap}
+      tkNoMap={tkNoMap}
+      canEdit={user.phong_ban === "Kế toán"}
+    />
+  );
 }
