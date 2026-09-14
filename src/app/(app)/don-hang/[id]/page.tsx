@@ -358,7 +358,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      <DinhKemSection donHangId={order.id} initialRows={dinhKemRows ?? []} currentUserId={user?.id} />
+      <DinhKemSection donHangId={order.id} initialRows={dinhKemRows ?? []} currentUserId={user?.id} canUpload={canEditVanChuyen} />
     </div>
   );
 }

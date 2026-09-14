@@ -27,10 +27,12 @@ export default function DinhKemSection({
   donHangId,
   initialRows,
   currentUserId,
+  canUpload,
 }: {
   donHangId: string;
   initialRows: DinhKem[];
   currentUserId?: string;
+  canUpload: boolean;
 }) {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,41 +91,43 @@ export default function DinhKemSection({
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <h2 className="mb-3 text-sm font-semibold text-slate-900">Đính kèm ảnh / chứng từ</h2>
 
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <select value={lienKetToi} onChange={(e) => setLienKetToi(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs">
-          {LIEN_KET_TOI.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-        <select value={loaiDinhKem} onChange={(e) => setLoaiDinhKem(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs">
-          {LOAI_DINH_KEM.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
-        >
-          {uploading ? "Đang tải lên..." : "📎 Chụp ảnh / Đính kèm"}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,.pdf"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleUpload(file);
-            e.target.value = "";
-          }}
-        />
-      </div>
+      {canUpload && (
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+          <select value={lienKetToi} onChange={(e) => setLienKetToi(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs">
+            {LIEN_KET_TOI.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <select value={loaiDinhKem} onChange={(e) => setLoaiDinhKem(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs">
+            {LOAI_DINH_KEM.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+          >
+            {uploading ? "Đang tải lên..." : "📎 Chụp ảnh / Đính kèm"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUpload(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {rows.map((r) => (
