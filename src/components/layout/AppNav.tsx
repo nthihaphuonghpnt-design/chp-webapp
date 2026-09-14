@@ -26,6 +26,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/", label: "Trang chủ" },
       { href: "/cham-cong", label: "Chấm công" },
       { href: "/lich-nhac-nho", label: "Lịch nhắc nhở" },
+      { href: "/noi-quy", label: "Nội quy công ty" },
     ],
   },
   {

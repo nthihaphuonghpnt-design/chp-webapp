@@ -238,6 +238,14 @@ export default async function HomePage() {
       </h1>
       <p className="mt-1 text-sm text-slate-500">Phòng ban: {user?.phong_ban}</p>
 
+      <Link
+        href="/noi-quy"
+        className="mt-4 block rounded-2xl border border-indigo-200 bg-indigo-50 p-4 hover:bg-indigo-100"
+      >
+        <p className="text-sm font-semibold text-indigo-800">📋 Nội quy công ty & Định mức chi tiêu nội bộ</p>
+        <p className="mt-0.5 text-xs text-indigo-600">Bấm để xem đầy đủ nội quy lao động và định mức công tác phí, tạm ứng...</p>
+      </Link>
+
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
         <p className="text-sm font-medium text-slate-700">Thông tin công ty</p>
         <dl className="mt-2 space-y-1 text-sm text-slate-600">
