@@ -529,4 +529,18 @@ grant execute on function hoan_tien_ncc(uuid, numeric, text, text) to authentica
 -- ghi_chu/ky_ke_khai (khong lien quan tien) van sua truc tiep duoc.
 -- ============================================================================
 revoke update (so_tien_da_thu, trang_thai_thanh_toan, phuong_thuc_thu) on hoa_don_xuat from authenticated;
-revoke update (so_tien_da_thanh_toan, tinh_trang_thanh_toan, phuong_thuc_thanh_toan) on hoa_don_dau_vao from authenticated;
+
+-- hoa_don_dau_vao KHONG co GRANT UPDATE rieng theo cot (khac hoa_don_xuat da
+-- bi khoa tu migration 0095) — RLS policy hddv_update dang dua tren GRANT
+-- UPDATE toan bang mac dinh. REVOKE UPDATE (cot) mot minh KHONG co tac dung
+-- khi con GRANT UPDATE toan bang — phai revoke ca bang roi grant lai dung
+-- danh sach cot duoc phep (giong het pattern 0095), neu khong cot tien van
+-- sua truc tiep duoc binh thuong (da phat hien qua kiem tra
+-- has_column_privilege() ngay sau khi ap dung — xem migration 0100 vá lại).
+revoke update on hoa_don_dau_vao from authenticated;
+grant update (
+  mau_so_hoa_don, so_hoa_don, ngay_hoa_don, ngay_ky_hoa_don, nha_cung_cap_id,
+  khoan_muc, loai_chi_phi, thang_phan_bo, tong_tien_hang, tien_thue_gtgt,
+  tong_tien_thanh_toan, dang_hoat_dong, ghi_chu, don_vi_tinh, so_luong, don_gia,
+  tai_khoan_no, don_hang_id, ky_ke_khai, dieu_kien_khau_tru, chi_ho
+) on hoa_don_dau_vao to authenticated;
