@@ -42,6 +42,9 @@ export interface HoaDonDauVao {
   so_tien_da_thanh_toan: number | null;
   phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;
   ghi_chu: string | null;
+  ky_ke_khai: string | null;
+  dieu_kien_khau_tru: "Đủ điều kiện" | "Không đủ điều kiện" | "Chưa xác định";
+  chi_ho: boolean;
 }
 
 type EditValues = {
@@ -64,6 +67,9 @@ type EditValues = {
   so_tien_da_thanh_toan: string;
   phuong_thuc_thanh_toan: string;
   ghi_chu: string;
+  ky_ke_khai: string;
+  dieu_kien_khau_tru: string;
+  chi_ho: string;
 };
 
 function thangHienTai() {
@@ -91,6 +97,9 @@ function dongTrong(): EditValues {
     so_tien_da_thanh_toan: "",
     phuong_thuc_thanh_toan: "",
     ghi_chu: "",
+    ky_ke_khai: "",
+    dieu_kien_khau_tru: "Đủ điều kiện",
+    chi_ho: "false",
   };
 }
 
@@ -115,6 +124,9 @@ function toEditValues(r: HoaDonDauVao, tenNcc: string, tenDonHang: string): Edit
     so_tien_da_thanh_toan: String(r.so_tien_da_thanh_toan ?? ""),
     phuong_thuc_thanh_toan: r.phuong_thuc_thanh_toan ?? "",
     ghi_chu: r.ghi_chu ?? "",
+    ky_ke_khai: r.ky_ke_khai ?? "",
+    dieu_kien_khau_tru: r.dieu_kien_khau_tru,
+    chi_ho: String(r.chi_ho),
   };
 }
 
@@ -137,6 +149,9 @@ const IMPORT_COLUMNS = [
   "Tổng tiền hàng",
   "Tiền thuế GTGT",
   "Ghi chú",
+  "Kỳ kê khai VAT (yyyy-mm)",
+  "Điều kiện khấu trừ (Đủ điều kiện/Không đủ điều kiện/Chưa xác định)",
+  "Chi hộ (x nếu có)",
 ];
 
 export default function HoaDonDauVaoView({
@@ -223,6 +238,9 @@ export default function HoaDonDauVaoView({
       so_tien_da_thanh_toan: null,
       phuong_thuc_thanh_toan: null,
       ghi_chu: null,
+      ky_ke_khai: null,
+      dieu_kien_khau_tru: "Đủ điều kiện",
+      chi_ho: false,
     };
     setRows((prev) => [tam, ...prev]);
     setEditValues({ ...dongTrong(), thang_phan_bo: thangLoc || thangHienTai() });
@@ -303,6 +321,9 @@ export default function HoaDonDauVaoView({
       so_tien_da_thanh_toan: editValues.so_tien_da_thanh_toan ? Number(editValues.so_tien_da_thanh_toan) : 0,
       phuong_thuc_thanh_toan: editValues.phuong_thuc_thanh_toan || null,
       ghi_chu: editValues.ghi_chu || null,
+      ky_ke_khai: editValues.ky_ke_khai || editValues.ngay_hoa_don.slice(0, 7),
+      dieu_kien_khau_tru: editValues.dieu_kien_khau_tru,
+      chi_ho: editValues.chi_ho === "true",
     };
 
     if (row.id.startsWith("new-")) {
@@ -386,6 +407,9 @@ export default function HoaDonDauVaoView({
       { header: "Tình trạng TT", key: "tinhTrang", width: 14 },
       { header: "Đã trả", key: "daTra", width: 14, numFmt: "#,##0" },
       { header: "Ghi chú", key: "ghiChu", width: 20 },
+      { header: "Kỳ kê khai VAT", key: "kyKeKhai", width: 14 },
+      { header: "Điều kiện khấu trừ", key: "dieuKienKhauTru", width: 16 },
+      { header: "Chi hộ", key: "chiHo", width: 10 },
     ];
     const exportRows = filteredRows.map((r) => {
       const nc = ncInfoMap.get(r.nha_cung_cap_id ?? "");
@@ -414,6 +438,9 @@ export default function HoaDonDauVaoView({
         r.tinh_trang_thanh_toan,
         r.so_tien_da_thanh_toan ?? 0,
         r.ghi_chu ?? "",
+        r.ky_ke_khai ?? r.ngay_hoa_don.slice(0, 7),
+        r.dieu_kien_khau_tru,
+        r.chi_ho ? "Có" : "",
       ];
     });
     const logo = await taiLogoCongTy();
@@ -488,10 +515,12 @@ export default function HoaDonDauVaoView({
       }
 
       const loai = String(n["loại (định phí cố định / phát sinh)"] ?? "Phát sinh").trim();
+      const ngayHoaDon = excelDate(n["ngày hóa đơn (yyyy-mm-dd)"]) || new Date().toISOString().slice(0, 10);
+      const dieuKienKhauTruGo = String(n["điều kiện khấu trừ (đủ điều kiện/không đủ điều kiện/chưa xác định)"] ?? "").trim();
 
       records.push({
         mau_so_hoa_don: String(n["mẫu số hóa đơn"] ?? "").trim() || null,
-        ngay_hoa_don: excelDate(n["ngày hóa đơn (yyyy-mm-dd)"]) || new Date().toISOString().slice(0, 10),
+        ngay_hoa_don: ngayHoaDon,
         ngay_ky_hoa_don: excelDate(n["ngày ký hóa đơn (yyyy-mm-dd)"]) || null,
         so_hoa_don: String(n["số hóa đơn"] ?? "").trim() || null,
         nha_cung_cap_id: nhaCungCapId,
@@ -506,6 +535,9 @@ export default function HoaDonDauVaoView({
         tong_tien_hang: Number(n["tổng tiền hàng"] || 0),
         tien_thue_gtgt: Number(n["tiền thuế gtgt"] || 0),
         ghi_chu: String(n["ghi chú"] ?? "").trim() || null,
+        ky_ke_khai: String(n["kỳ kê khai vat (yyyy-mm)"] ?? "").trim() || ngayHoaDon.slice(0, 7),
+        dieu_kien_khau_tru: ["Đủ điều kiện", "Không đủ điều kiện", "Chưa xác định"].includes(dieuKienKhauTruGo) ? dieuKienKhauTruGo : "Đủ điều kiện",
+        chi_ho: !!String(n["chi hộ (x nếu có)"] ?? "").trim(),
         nguoi_nhap_id: nv?.id,
       });
     });
@@ -625,7 +657,7 @@ export default function HoaDonDauVaoView({
       </datalist>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1750px] text-sm">
+        <table className="w-full min-w-[2050px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-3 py-2 font-medium">Mẫu số</th>
@@ -648,6 +680,9 @@ export default function HoaDonDauVaoView({
               <th className="px-3 py-2 text-right font-medium">Đã trả</th>
               <th className="px-3 py-2 font-medium">PT thanh toán</th>
               <th className="px-3 py-2 font-medium">Ghi chú</th>
+              <th className="px-3 py-2 font-medium">Kỳ kê khai VAT</th>
+              <th className="px-3 py-2 font-medium">Điều kiện khấu trừ</th>
+              <th className="px-3 py-2 font-medium">Chi hộ</th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
@@ -738,6 +773,24 @@ export default function HoaDonDauVaoView({
                   <td className="px-2 py-1.5">
                     <input value={editValues.ghi_chu} onChange={(e) => set("ghi_chu", e.target.value)} className="w-28 rounded border border-slate-300 px-2 py-1.5 text-sm" />
                   </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      value={editValues.ky_ke_khai}
+                      onChange={(e) => set("ky_ke_khai", e.target.value)}
+                      placeholder={editValues.ngay_hoa_don.slice(0, 7)}
+                      className="w-24 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <select value={editValues.dieu_kien_khau_tru} onChange={(e) => set("dieu_kien_khau_tru", e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm">
+                      <option>Đủ điều kiện</option>
+                      <option>Không đủ điều kiện</option>
+                      <option>Chưa xác định</option>
+                    </select>
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <input type="checkbox" checked={editValues.chi_ho === "true"} onChange={(e) => set("chi_ho", String(e.target.checked))} />
+                  </td>
                   <td className="whitespace-nowrap px-2 py-1.5 text-right">
                     <button onClick={() => luu(row)} disabled={saving} className="mr-2 text-sm font-medium text-blue-600 disabled:opacity-60">
                       {saving ? "..." : "Lưu"}
@@ -791,6 +844,21 @@ export default function HoaDonDauVaoView({
                   <td className="max-w-[140px] truncate px-3 py-2 text-slate-500" title={row.ghi_chu ?? ""}>
                     {row.ghi_chu ?? "—"}
                   </td>
+                  <td className="px-3 py-2 text-slate-700">{row.ky_ke_khai ?? row.ngay_hoa_don.slice(0, 7)}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        row.dieu_kien_khau_tru === "Đủ điều kiện"
+                          ? "bg-green-100 text-green-700"
+                          : row.dieu_kien_khau_tru === "Không đủ điều kiện"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {row.dieu_kien_khau_tru}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">{row.chi_ho ? "Có" : "—"}</td>
                   {canEdit && (
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <button onClick={() => batDauSua(row)} disabled={editingId !== null} className="mr-3 text-sm font-medium text-blue-600 hover:underline disabled:opacity-40">
@@ -806,7 +874,7 @@ export default function HoaDonDauVaoView({
             )}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={21} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={24} className="px-4 py-8 text-center text-slate-400">
                   Chưa có hóa đơn nào trong tháng này.
                 </td>
               </tr>

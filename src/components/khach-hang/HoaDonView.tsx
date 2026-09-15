@@ -43,6 +43,9 @@ interface PhuThuDoiChieu {
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
 
+type TrangThaiHoaDon = "Đã phát hành" | "Đã điều chỉnh" | "Đã thay thế" | "Đã hủy";
+type LoaiHoaDon = "Gốc" | "Điều chỉnh" | "Thay thế";
+
 interface Row {
   id: string;
   khach_hang_id: string;
@@ -58,6 +61,11 @@ interface Row {
   phuong_thuc_thu: string | null;
   ghi_chu: string | null;
   khach_hang: KhachHang | KhachHang[] | null;
+  trang_thai: TrangThaiHoaDon;
+  loai_hoa_don: LoaiHoaDon;
+  hoa_don_goc_id: string | null;
+  hoa_don_thay_the_id: string | null;
+  ky_ke_khai: string | null;
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -78,6 +86,12 @@ const TT_COLOR: Record<string, string> = {
   "Thu một phần": "bg-amber-100 text-amber-700",
   "Đã thu đủ": "bg-green-100 text-green-700",
 };
+const TRANG_THAI_COLOR: Record<TrangThaiHoaDon, string> = {
+  "Đã phát hành": "bg-slate-100 text-slate-700",
+  "Đã điều chỉnh": "bg-amber-100 text-amber-700",
+  "Đã thay thế": "bg-orange-100 text-orange-700",
+  "Đã hủy": "bg-red-100 text-red-700 line-through",
+};
 
 export default function HoaDonView({
   initialRows,
@@ -88,7 +102,7 @@ export default function HoaDonView({
   chiPhiRows,
   phuThuRows,
   canEdit,
-  canDelete,
+  canHuy,
   currentUserId,
 }: {
   initialRows: Row[];
@@ -99,7 +113,7 @@ export default function HoaDonView({
   chiPhiRows: ChiPhiDoiChieu[];
   phuThuRows: PhuThuDoiChieu[];
   canEdit: boolean;
-  canDelete: boolean;
+  canHuy: boolean;
   currentUserId?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -110,6 +124,29 @@ export default function HoaDonView({
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [doiChieuMoRong, setDoiChieuMoRong] = useState<string | null>(null);
+  const [dctForm, setDctForm] = useState<{ mode: "dieu_chinh" | "thay_the"; row: Row } | null>(null);
+  const [lichSuMoRong, setLichSuMoRong] = useState<string | null>(null);
+
+  /** Chuoi goc <-> dieu chinh/thay the cua 1 hoa don, di theo con tro
+   * hoa_don_goc_id/hoa_don_thay_the_id tren mang rows da co san — khong can
+   * RPC/CTE de quy rieng. */
+  function chuoiHoaDon(row: Row): Row[] {
+    let dauChuoi = row;
+    while (dauChuoi.hoa_don_goc_id) {
+      const goc = rows.find((r) => r.id === dauChuoi.hoa_don_goc_id);
+      if (!goc) break;
+      dauChuoi = goc;
+    }
+    const chuoi: Row[] = [dauChuoi];
+    let hienTai = dauChuoi;
+    while (hienTai.hoa_don_thay_the_id) {
+      const tiepTheo = rows.find((r) => r.id === hienTai.hoa_don_thay_the_id);
+      if (!tiepTheo) break;
+      chuoi.push(tiepTheo);
+      hienTai = tiepTheo;
+    }
+    return chuoi;
+  }
 
   function chiTietCuaHoaDon(hoaDonId: string) {
     const cp = chiPhiRows.filter((r) => r.hoa_don_id === hoaDonId);
@@ -126,31 +163,51 @@ export default function HoaDonView({
     .filter((r) => !khFilter || r.khach_hang_id === khFilter)
     .filter((r) => !ttFilter || r.trang_thai_thanh_toan === ttFilter);
 
+  // Chi 5 truong duoi day (trong truongLuonGhiDuoc ben duoi) con duoc ghi TRUC
+  // TIEP tu client sau migration 0095 (hoa_don_xuat bi khoa update o tang
+  // GRANT, chi mo lai dung cac cot nay). Moi truong tai chinh cot loi khac
+  // phai di qua RPC sua_hoa_don_xuat_moi_tao.
+  function coTheSuaTruongTaiChinh(row: Row | null) {
+    return !row || (row.trang_thai === "Đã phát hành" && row.loai_hoa_don === "Gốc" && !row.so_tien_da_thu);
+  }
+
   async function handleSave(values: Record<string, string>, selectedDonHang: string[]) {
     const tongTruocThue = values.tong_tien_truoc_thue ? Number(values.tong_tien_truoc_thue) : 0;
     const vatPercent = values.vat_percent ? Number(values.vat_percent) : 0;
-    const payload: Record<string, unknown> = {
-      khach_hang_id: values.khach_hang_id,
-      so_hoa_don: values.so_hoa_don || null,
-      ngay_xuat: values.ngay_xuat,
-      tong_tien_truoc_thue: values.tong_tien_truoc_thue ? tongTruocThue : null,
-      vat_percent: values.vat_percent ? vatPercent : null,
-      // tien_vat khong con tu tinh o DB nua (xem migration 0038) — tu tinh o day
-      // cho truong hop tao/sua hoa don thu cong (khong di tu Bang ke).
-      tien_vat: Math.round((tongTruocThue * vatPercent) / 100),
-      tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
+    const tienVat = Math.round((tongTruocThue * vatPercent) / 100);
+    const kyKeKhai = values.ky_ke_khai || values.ngay_xuat.slice(0, 7);
+
+    const truongLuonGhiDuoc: Record<string, unknown> = {
       trang_thai_thanh_toan: values.trang_thai_thanh_toan || "Chưa thu",
       so_tien_da_thu: values.so_tien_da_thu ? Number(values.so_tien_da_thu) : null,
       phuong_thuc_thu: values.phuong_thuc_thu || null,
       ghi_chu: values.ghi_chu || null,
+      ky_ke_khai: kyKeKhai,
     };
 
     let hoaDonId = editing?.id;
 
     if (editing) {
+      if (coTheSuaTruongTaiChinh(editing)) {
+        const { error: rpcError } = await supabase.rpc("sua_hoa_don_xuat_moi_tao", {
+          p_hoa_don_id: editing.id,
+          p_khach_hang_id: values.khach_hang_id,
+          p_so_hoa_don: values.so_hoa_don || null,
+          p_ngay_xuat: values.ngay_xuat,
+          p_tong_tien_truoc_thue: values.tong_tien_truoc_thue ? tongTruocThue : null,
+          p_vat_percent: values.vat_percent ? vatPercent : null,
+          p_tien_vat: tienVat,
+          p_tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
+          p_ky_ke_khai: kyKeKhai,
+        });
+        if (rpcError) {
+          window.alert(rpcError.message);
+          return;
+        }
+      }
       const { data, error } = await supabase
         .from("hoa_don_xuat")
-        .update(payload)
+        .update(truongLuonGhiDuoc)
         .eq("id", editing.id)
         .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
         .single();
@@ -167,7 +224,17 @@ export default function HoaDonView({
 
       const { data, error } = await supabase
         .from("hoa_don_xuat")
-        .insert({ ...payload, nguoi_tao_id: nv?.id })
+        .insert({
+          khach_hang_id: values.khach_hang_id,
+          so_hoa_don: values.so_hoa_don || null,
+          ngay_xuat: values.ngay_xuat,
+          tong_tien_truoc_thue: values.tong_tien_truoc_thue ? tongTruocThue : null,
+          vat_percent: values.vat_percent ? vatPercent : null,
+          tien_vat: tienVat,
+          tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
+          ...truongLuonGhiDuoc,
+          nguoi_tao_id: nv?.id,
+        })
         .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
         .single();
       if (error) {
@@ -192,15 +259,77 @@ export default function HoaDonView({
     setShowForm(false);
   }
 
-  async function handleDelete(row: Row) {
-    if (!window.confirm(`Xóa hóa đơn "${row.so_hoa_don ?? ""}"?`)) return;
-    const { error } = await supabase.from("hoa_don_xuat").delete().eq("id", row.id);
-    if (!error) {
-      setRows((prev) => prev.filter((r) => r.id !== row.id));
-      setLienKet((prev) => prev.filter((l) => l.hoa_don_id !== row.id));
-    } else {
-      window.alert(error.message);
+  async function refetchRow(id: string) {
+    const { data } = await supabase
+      .from("hoa_don_xuat")
+      .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
+      .eq("id", id)
+      .single();
+    return data as Row | null;
+  }
+
+  async function handleHuy(row: Row) {
+    const lyDo = window.prompt(`Lý do hủy hóa đơn "${row.so_hoa_don ?? ""}"?`);
+    if (lyDo === null) return;
+    if (!lyDo.trim()) {
+      window.alert("Phải nhập lý do khi hủy.");
+      return;
     }
+    const { error } = await supabase.rpc("huy_hoa_don_xuat", { p_hoa_don_id: row.id, p_ly_do: lyDo });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    const updated = await refetchRow(row.id);
+    if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+  }
+
+  async function handleDieuChinhThayThe(mode: "dieu_chinh" | "thay_the", row: Row, values: Record<string, string>, lyDo: string) {
+    const tongTruocThue = values.tong_tien_truoc_thue ? Number(values.tong_tien_truoc_thue) : 0;
+    const vatPercent = values.vat_percent ? Number(values.vat_percent) : 0;
+    const tienVat = Math.round((tongTruocThue * vatPercent) / 100);
+    const tienChiHo = values.tien_chi_ho ? Number(values.tien_chi_ho) : 0;
+    const kyKeKhai = values.ky_ke_khai || values.ngay_xuat.slice(0, 7);
+
+    const rpcName = mode === "dieu_chinh" ? "dieu_chinh_hoa_don_xuat" : "thay_the_hoa_don_xuat";
+    const params: Record<string, unknown> =
+      mode === "dieu_chinh"
+        ? {
+            p_hoa_don_goc_id: row.id,
+            p_so_hoa_don: values.so_hoa_don || null,
+            p_ngay_xuat: values.ngay_xuat,
+            p_tong_tien_truoc_thue_delta: tongTruocThue,
+            p_vat_percent: vatPercent,
+            p_tien_vat_delta: tienVat,
+            p_tien_chi_ho_delta: tienChiHo,
+            p_ky_ke_khai: kyKeKhai,
+            p_ly_do: lyDo,
+          }
+        : {
+            p_hoa_don_goc_id: row.id,
+            p_khach_hang_id: values.khach_hang_id || row.khach_hang_id,
+            p_so_hoa_don: values.so_hoa_don || null,
+            p_ngay_xuat: values.ngay_xuat,
+            p_tong_tien_truoc_thue: tongTruocThue,
+            p_vat_percent: vatPercent,
+            p_tien_vat: tienVat,
+            p_tien_chi_ho: tienChiHo,
+            p_ky_ke_khai: kyKeKhai,
+            p_ly_do: lyDo,
+          };
+
+    const { error } = await supabase.rpc(rpcName, params);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    // Hoa don goc va hoa don moi deu doi/xuat hien — refetch toan bo danh sach cho don gian va chac chan dung.
+    const { data } = await supabase
+      .from("hoa_don_xuat")
+      .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
+      .order("ngay_xuat", { ascending: false });
+    if (data) setRows(data as Row[]);
+    setDctForm(null);
   }
 
   async function handleExportExcel() {
@@ -242,8 +371,11 @@ export default function HoaDonView({
     });
   }
 
-  const tongTien = filtered.reduce((s, r) => s + r.tong_tien, 0);
-  const tongDaThu = filtered.reduce((s, r) => s + (r.so_tien_da_thu ?? 0), 0);
+  // Hoa don Da huy/Da thay the khong con la nghia vu cong no thuc su (xem quy
+  // tac trong 0092) — loai khoi tong hop dau trang de khop voi Bao cao.
+  const congNoRows = filtered.filter((r) => r.trang_thai !== "Đã hủy" && r.trang_thai !== "Đã thay thế");
+  const tongTien = congNoRows.reduce((s, r) => s + r.tong_tien, 0);
+  const tongDaThu = congNoRows.reduce((s, r) => s + (r.so_tien_da_thu ?? 0), 0);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -298,13 +430,17 @@ export default function HoaDonView({
               <span className="font-medium text-slate-900">
                 {row.so_hoa_don || "(chưa có số)"} · {khName(one(row.khach_hang))}
               </span>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TT_COLOR[row.trang_thai_thanh_toan]}`}>{row.trang_thai_thanh_toan}</span>
+              <span className="flex gap-1">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TRANG_THAI_COLOR[row.trang_thai]}`}>{row.trang_thai}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TT_COLOR[row.trang_thai_thanh_toan]}`}>{row.trang_thai_thanh_toan}</span>
+              </span>
             </div>
             <p className="text-slate-500">
               {row.ngay_xuat} · Tổng: {row.tong_tien.toLocaleString("en-US")}
               {row.tien_vat ? ` (gồm VAT ${row.tien_vat.toLocaleString("en-US")}${row.vat_percent ? ` · ${row.vat_percent}%` : ""})` : ""}
               {row.tien_chi_ho ? ` (gồm chi hộ ${row.tien_chi_ho.toLocaleString("en-US")})` : ""}
               {row.so_tien_da_thu ? ` · Đã thu: ${row.so_tien_da_thu.toLocaleString("en-US")}` : ""}
+              {row.loai_hoa_don !== "Gốc" ? ` · ${row.loai_hoa_don} cho hóa đơn khác` : ""}
             </p>
             {donHangCuaHoaDon(row.id).length > 0 && (
               <p className="text-slate-500">Đơn hàng: {donHangCuaHoaDon(row.id).map((d) => d.so_don_hang).join(", ")}</p>
@@ -319,14 +455,22 @@ export default function HoaDonView({
               canUpload={canEdit}
               currentUserId={currentUserId}
             />
-            <div className="mt-2 flex gap-3">
+            <div className="mt-2 flex flex-wrap gap-3">
               <button
                 onClick={() => setDoiChieuMoRong((prev) => (prev === row.id ? null : row.id))}
                 className="text-xs font-medium text-slate-600"
               >
                 {doiChieuMoRong === row.id ? "Ẩn đối chiếu" : "Đối chiếu với Bảng kê"}
               </button>
-              {canEdit && (
+              {chuoiHoaDon(row).length > 1 && (
+                <button
+                  onClick={() => setLichSuMoRong((prev) => (prev === row.id ? null : row.id))}
+                  className="text-xs font-medium text-slate-600"
+                >
+                  {lichSuMoRong === row.id ? "Ẩn lịch sử" : "Xem lịch sử"}
+                </button>
+              )}
+              {canEdit && coTheSuaTruongTaiChinh(row) && (
                 <button
                   onClick={() => {
                     setEditing(row);
@@ -337,12 +481,33 @@ export default function HoaDonView({
                   Sửa
                 </button>
               )}
-              {canDelete && (
-                <button onClick={() => handleDelete(row)} className="text-xs font-medium text-red-600">
-                  Xóa
+              {canEdit && row.trang_thai === "Đã phát hành" && (
+                <>
+                  <button onClick={() => setDctForm({ mode: "dieu_chinh", row })} className="text-xs font-medium text-amber-600">
+                    Điều chỉnh
+                  </button>
+                  <button onClick={() => setDctForm({ mode: "thay_the", row })} className="text-xs font-medium text-orange-600">
+                    Thay thế
+                  </button>
+                </>
+              )}
+              {canHuy && row.trang_thai === "Đã phát hành" && (
+                <button onClick={() => handleHuy(row)} className="text-xs font-medium text-red-600">
+                  Hủy hóa đơn
                 </button>
               )}
             </div>
+            {lichSuMoRong === row.id && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
+                {chuoiHoaDon(row).map((h, i) => (
+                  <p key={h.id}>
+                    {i > 0 && "→ "}
+                    {h.loai_hoa_don} · {h.so_hoa_don || "(chưa có số)"} · {h.ngay_xuat} · {h.tong_tien.toLocaleString("en-US")} ·{" "}
+                    <span className={`rounded-full px-1.5 py-0.5 font-medium ${TRANG_THAI_COLOR[h.trang_thai]}`}>{h.trang_thai}</span>
+                  </p>
+                ))}
+              </div>
+            )}
             {doiChieuMoRong === row.id && <DoiChieuBangKe {...chiTietCuaHoaDon(row.id)} row={row} />}
           </div>
         ))}
@@ -357,6 +522,16 @@ export default function HoaDonView({
           initialDonHangIds={editing ? donHangCuaHoaDon(editing.id).map((d) => d.id) : []}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {dctForm && (
+        <DieuChinhThayTheForm
+          mode={dctForm.mode}
+          row={dctForm.row}
+          khachHangList={khachHangList}
+          onCancel={() => setDctForm(null)}
+          onSave={(values, lyDo) => handleDieuChinhThayThe(dctForm.mode, dctForm.row, values, lyDo)}
         />
       )}
     </div>
@@ -446,6 +621,14 @@ function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiCh
           </p>
         </>
       )}
+      {row.ky_ke_khai && (
+        <p className="mt-2 text-xs text-slate-500">
+          Kỳ kê khai: {row.ky_ke_khai} ·{" "}
+          <a href={`/bao-cao/vat?ky=${row.ky_ke_khai}`} className="font-medium text-blue-600">
+            Xem trong Báo cáo VAT →
+          </a>
+        </p>
+      )}
     </div>
   );
 }
@@ -476,10 +659,16 @@ function HoaDonForm({
     so_tien_da_thu: initial?.so_tien_da_thu?.toString() ?? "",
     phuong_thuc_thu: initial?.phuong_thuc_thu ?? "",
     ghi_chu: initial?.ghi_chu ?? "",
+    ky_ke_khai: initial?.ky_ke_khai ?? "",
   });
   const [selectedDonHang, setSelectedDonHang] = useState<string[]>(initialDonHangIds);
   const [goiYTong, setGoiYTong] = useState<number | null>(null);
   const supabase = useMemo(() => createClient(), []);
+  // Sau khi hoa don da co tien thu, da dieu chinh/thay the/huy, hoac ban than
+  // no la dong Dieu chinh/Thay the — khong duoc sua truc tiep cac truong tai
+  // chinh cot loi nua (xem sua_hoa_don_xuat_moi_tao, migration 0094/0095) —
+  // dung Dieu chinh/Thay the tu danh sach thay vi form nay.
+  const khoaTruongTaiChinh = !!initial && !(initial.trang_thai === "Đã phát hành" && initial.loai_hoa_don === "Gốc" && !initial.so_tien_da_thu);
 
   function set(key: keyof typeof values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -520,22 +709,40 @@ function HoaDonForm({
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
         <h2 className="mb-4 text-lg font-semibold text-slate-900">{initial ? "Sửa hóa đơn" : "Thêm hóa đơn"}</h2>
+        {khoaTruongTaiChinh && (
+          <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
+            Hóa đơn đã có tiền thu hoặc đã qua điều chỉnh/thay thế/hủy — không sửa trực tiếp được số tiền/khách hàng/số hóa đơn/ngày xuất nữa. Dùng nút
+            &quot;Điều chỉnh&quot;/&quot;Thay thế&quot; ở danh sách nếu cần thay đổi.
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
-            <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} />
+            <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} disabled={khoaTruongTaiChinh} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số hóa đơn</label>
-            <input value={values.so_hoa_don} onChange={(e) => set("so_hoa_don", e.target.value)} className={cls} />
+            <input
+              value={values.so_hoa_don}
+              onChange={(e) => set("so_hoa_don", e.target.value)}
+              className={cls}
+              disabled={khoaTruongTaiChinh}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Ngày xuất</label>
-            <input required type="date" value={values.ngay_xuat} onChange={(e) => set("ngay_xuat", e.target.value)} className={cls} />
+            <input
+              required
+              type="date"
+              value={values.ngay_xuat}
+              onChange={(e) => set("ngay_xuat", e.target.value)}
+              className={cls}
+              disabled={khoaTruongTaiChinh}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Tổng tiền trước thuế</label>
-            <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} />
+            <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} disabled={khoaTruongTaiChinh} />
             {goiYTong !== null && (
               <p className="mt-1 text-xs text-blue-600">
                 Gợi ý (đã bán cho khách, không gồm chi hộ): {goiYTong.toLocaleString("en-US")}
@@ -549,12 +756,28 @@ function HoaDonForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">VAT %</label>
-            <input type="number" step="any" value={values.vat_percent} onChange={(e) => set("vat_percent", e.target.value)} className={cls} />
+            <input
+              type="number"
+              step="any"
+              value={values.vat_percent}
+              onChange={(e) => set("vat_percent", e.target.value)}
+              className={cls}
+              disabled={khoaTruongTaiChinh}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Tiền chi hộ</label>
-            <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} />
+            <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} disabled={khoaTruongTaiChinh} />
             <p className="mt-1 text-xs text-slate-400">Khoản thu hộ đúng số tiền, không tính VAT</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Kỳ kê khai VAT</label>
+            <input
+              value={values.ky_ke_khai}
+              onChange={(e) => set("ky_ke_khai", e.target.value)}
+              placeholder={values.ngay_xuat.slice(0, 7)}
+              className={cls}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái thanh toán</label>
@@ -596,6 +819,127 @@ function HoaDonForm({
         <div className="mt-3">
           <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú</label>
           <textarea rows={2} value={values.ghi_chu} onChange={(e) => set("ghi_chu", e.target.value)} className={cls} />
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
+            Hủy
+          </button>
+          <button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white">
+            Lưu
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/** Form tao hoa don Dieu chinh (chenh lech, co the am) hoac Thay the (tong day
+ * du) cho 1 hoa don goc — goi RPC dieu_chinh_hoa_don_xuat/thay_the_hoa_don_xuat. */
+function DieuChinhThayTheForm({
+  mode,
+  row,
+  khachHangList,
+  onCancel,
+  onSave,
+}: {
+  mode: "dieu_chinh" | "thay_the";
+  row: Row;
+  khachHangList: KhachHang[];
+  onCancel: () => void;
+  onSave: (values: Record<string, string>, lyDo: string) => void;
+}) {
+  const [values, setValues] = useState({
+    khach_hang_id: row.khach_hang_id,
+    so_hoa_don: "",
+    ngay_xuat: new Date().toISOString().slice(0, 10),
+    tong_tien_truoc_thue: "",
+    vat_percent: row.vat_percent?.toString() ?? "",
+    tien_chi_ho: "",
+    ky_ke_khai: "",
+  });
+  const [lyDo, setLyDo] = useState("");
+  const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
+  const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
+
+  function set(key: keyof typeof values, value: string) {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!lyDo.trim()) {
+            window.alert("Phải nhập lý do.");
+            return;
+          }
+          onSave(values, lyDo);
+        }}
+        className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
+      >
+        <h2 className="mb-1 text-lg font-semibold text-slate-900">
+          {mode === "dieu_chinh" ? "Điều chỉnh hóa đơn" : "Thay thế hóa đơn"}
+        </h2>
+        <p className="mb-4 text-xs text-slate-500">
+          Hóa đơn gốc: {row.so_hoa_don || "(chưa có số)"} · Tổng {row.tong_tien.toLocaleString("en-US")}
+          {mode === "dieu_chinh"
+            ? " — nhập số CHÊNH LỆCH so với hóa đơn gốc (có thể âm nếu điều chỉnh giảm)."
+            : " — nhập TỔNG ĐẦY ĐỦ của hóa đơn thay thế (không phải chênh lệch)."}
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {mode === "thay_the" && (
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
+              <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} />
+            </div>
+          )}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Số hóa đơn mới</label>
+            <input required value={values.so_hoa_don} onChange={(e) => set("so_hoa_don", e.target.value)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Ngày xuất</label>
+            <input required type="date" value={values.ngay_xuat} onChange={(e) => set("ngay_xuat", e.target.value)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              {mode === "dieu_chinh" ? "Chênh lệch trước thuế" : "Tổng tiền trước thuế"}
+            </label>
+            <input
+              required
+              type="number"
+              step="any"
+              value={values.tong_tien_truoc_thue}
+              onChange={(e) => set("tong_tien_truoc_thue", e.target.value)}
+              className={cls}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">VAT %</label>
+            <input type="number" step="any" value={values.vat_percent} onChange={(e) => set("vat_percent", e.target.value)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">{mode === "dieu_chinh" ? "Chênh lệch chi hộ" : "Tiền chi hộ"}</label>
+            <input type="number" step="any" value={values.tien_chi_ho} onChange={(e) => set("tien_chi_ho", e.target.value)} className={cls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Kỳ kê khai VAT</label>
+            <input
+              value={values.ky_ke_khai}
+              onChange={(e) => set("ky_ke_khai", e.target.value)}
+              placeholder={values.ngay_xuat.slice(0, 7)}
+              className={cls}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Lý do {mode === "dieu_chinh" ? "điều chỉnh" : "thay thế"} <span className="text-red-600">*</span>
+          </label>
+          <textarea required rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} className={cls} />
         </div>
 
         <div className="mt-6 flex gap-3">

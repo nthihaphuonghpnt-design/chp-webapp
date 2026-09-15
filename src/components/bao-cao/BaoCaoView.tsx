@@ -53,6 +53,7 @@ interface HoaDon {
   tien_chi_ho: number | null;
   so_tien_da_thu: number | null;
   trang_thai_thanh_toan: string;
+  trang_thai: "Đã phát hành" | "Đã điều chỉnh" | "Đã thay thế" | "Đã hủy";
 }
 interface HoaDonDonHang {
   hoa_don_id: string;
@@ -198,7 +199,9 @@ export default function BaoCaoView({
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
       const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
-      const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id));
+      // Hoa don Da huy/Da thay the khong con la nghia vu cong no thuc su cua
+      // dong nay nua (xem quy tac o migration 0092) — loai ra khoi cong no.
+      const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id) && h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế");
       // tong_tien la cot generated = truoc_thue + VAT + tien_chi_ho (xem
       // migration 0031/0038) — DA GOM san chi ho, khong duoc cong them lan nua
       // (tung nham la khong gom, cong du 1 lan tien_chi_ho gay tinh THUA cong
@@ -278,7 +281,10 @@ export default function BaoCaoView({
   }, [chiPhiTrongKy, loaiChiPhiList]);
 
   // --- 5) Cong no phai thu (theo khach hang, tu hoa don) ---
-  const hoaDonTrongKy = hoaDonList.filter((h) => h.ngay_xuat >= tuNgay && h.ngay_xuat <= denNgay);
+  // Loai hoa don Da huy/Da thay the — cung ly do voi congNoTheoLo phia tren.
+  const hoaDonTrongKy = hoaDonList.filter(
+    (h) => h.ngay_xuat >= tuNgay && h.ngay_xuat <= denNgay && h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế"
+  );
   const congNoPhaiThu = useMemo(() => {
     const map = new Map<string, { ten: string; tongHoaDon: number; daThu: number }>();
     for (const h of hoaDonTrongKy) {
@@ -466,6 +472,11 @@ export default function BaoCaoView({
         <Link href="/tam-ung-giai-chi" className="ml-auto text-sm font-medium text-blue-600 underline">
           Xem báo cáo Tạm ứng - Giải chi →
         </Link>
+        {isKeToanOrGiamDoc && (
+          <Link href="/bao-cao/vat" className="text-sm font-medium text-blue-600 underline">
+            Xem báo cáo VAT →
+          </Link>
+        )}
       </div>
 
       <Section title="Đơn hàng theo trạng thái">

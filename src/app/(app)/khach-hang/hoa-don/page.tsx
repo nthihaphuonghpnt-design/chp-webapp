@@ -48,7 +48,7 @@ export default async function HoaDonPage() {
       : [{ data: [] }, { data: [] }];
 
   const canEdit = user?.phong_ban === "Chứng từ" || user?.phong_ban === "Kế toán";
-  const canDelete = user?.phong_ban === "Kế toán";
+  const canHuy = user?.phong_ban === "Kế toán" || user?.phong_ban === "Giám đốc";
 
   // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng.
   const chiPhiRowsDayDu = await ghepGiaBanChiPhi(supabase, chiPhiRows ?? []);
@@ -70,7 +70,7 @@ export default async function HoaDonPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       phuThuRows={(phuThuRows ?? []) as any[]}
       canEdit={canEdit}
-      canDelete={canDelete}
+      canHuy={canHuy}
       currentUserId={user?.id}
     />
   );
