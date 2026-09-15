@@ -416,6 +416,54 @@ export default function HoaDonDauVaoView({
     if (refetched) setRows((prev) => prev.map((r) => (r.id === row.id ? (refetched as HoaDonDauVao) : r)));
   }
 
+  async function dieuChinhGiaTri(row: HoaDonDauVao) {
+    const tongHangNhap = window.prompt(
+      `Khoản "${row.khoan_muc}" đang có tổng tiền hàng ${row.tong_tien_hang.toLocaleString("en-US")}, đã thanh toán ${(row.so_tien_da_thanh_toan ?? 0).toLocaleString("en-US")}.\nNhập ĐÚNG tổng tiền hàng mới (theo hóa đơn điều chỉnh của NCC):`,
+      String(row.tong_tien_hang),
+    );
+    if (tongHangNhap === null) return;
+    const tongHangMoi = Number(tongHangNhap.replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(tongHangMoi) || tongHangMoi < 0) {
+      window.alert("Tổng tiền hàng không hợp lệ.");
+      return;
+    }
+    const thueNhap = window.prompt("Nhập ĐÚNG tiền thuế GTGT mới:", String(row.tien_thue_gtgt));
+    if (thueNhap === null) return;
+    const thueMoi = Number(thueNhap.replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(thueMoi) || thueMoi < 0) {
+      window.alert("Tiền thuế GTGT không hợp lệ.");
+      return;
+    }
+    const lyDo = window.prompt("Lý do điều chỉnh giá trị hóa đơn (bắt buộc)?");
+    if (lyDo === null) return;
+    if (!lyDo.trim()) {
+      window.alert("Phải nhập lý do khi điều chỉnh giá trị.");
+      return;
+    }
+    const { data, error } = await supabase.rpc("dieu_chinh_gia_tri_hoa_don_dau_vao", {
+      p_hoa_don_id: row.id,
+      p_tong_tien_hang_moi: tongHangMoi,
+      p_tien_thue_gtgt_moi: thueMoi,
+      p_ly_do: lyDo,
+    });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    const ketQua = data as { thua_thanh_credit_ncc: number; ky_da_ke_khai: boolean; ky_ke_khai: string } | null;
+    if (ketQua && ketQua.thua_thanh_credit_ncc > 0) {
+      window.alert(
+        `Đã cập nhật giá trị hóa đơn. Số đã trả trước đó vượt giá trị mới ${ketQua.thua_thanh_credit_ncc.toLocaleString("en-US")} — khoản này KHÔNG chi lại, đã tự động chuyển thành CREDIT phải thu lại từ NCC (xem trang Credit khách hàng/NCC).${
+          ketQua.ky_da_ke_khai ? `\n\nLưu ý: kỳ ${ketQua.ky_ke_khai} đã kê khai VAT — nhớ lập 01/KHBS bổ sung cho đúng số liệu mới.` : ""
+        }`,
+      );
+    } else if (ketQua?.ky_da_ke_khai) {
+      window.alert(`Đã cập nhật giá trị hóa đơn. Lưu ý: kỳ ${ketQua.ky_ke_khai} đã kê khai VAT — nhớ lập 01/KHBS bổ sung cho đúng số liệu mới.`);
+    }
+    const { data: refetched } = await supabase.from("hoa_don_dau_vao").select().eq("id", row.id).single();
+    if (refetched) setRows((prev) => prev.map((r) => (r.id === row.id ? (refetched as HoaDonDauVao) : r)));
+  }
+
   async function xoa(row: HoaDonDauVao) {
     if (row.id.startsWith("new-")) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
@@ -943,6 +991,15 @@ export default function HoaDonDauVaoView({
                           className="mr-3 text-sm font-medium text-teal-700 hover:underline disabled:opacity-40"
                         >
                           Sửa phương thức
+                        </button>
+                      )}
+                      {(row.so_tien_da_thanh_toan ?? 0) > 0 && (
+                        <button
+                          onClick={() => dieuChinhGiaTri(row)}
+                          disabled={editingId !== null}
+                          className="mr-3 text-sm font-medium text-amber-700 hover:underline disabled:opacity-40"
+                        >
+                          Điều chỉnh giá trị
                         </button>
                       )}
                       <button onClick={() => xoa(row)} disabled={editingId !== null} className="text-sm font-medium text-red-600 hover:underline disabled:opacity-40">
