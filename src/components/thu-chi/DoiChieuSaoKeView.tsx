@@ -110,7 +110,17 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
     const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
     function excelDate(v: unknown): string {
-      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      // Dung thanh phan ngay THEO GIO DIA PHUONG (getFullYear/getMonth/getDate),
+      // KHONG dung toISOString() — toISOString quy doi ve UTC, khien ngay bi
+      // lui 1 hom voi bat ky nguoi dung nao o timezone truoc UTC (vd Viet Nam
+      // UTC+7): new Date(2026,8,10) 00:00 gio VN = 2026-09-09 17:00 UTC, nen
+      // toISOString().slice(0,10) tra ve sai "2026-09-09" thay vi "2026-09-10".
+      if (v instanceof Date) {
+        const y = v.getFullYear();
+        const m = String(v.getMonth() + 1).padStart(2, "0");
+        const d = String(v.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
       return String(v ?? "").trim();
     }
 
