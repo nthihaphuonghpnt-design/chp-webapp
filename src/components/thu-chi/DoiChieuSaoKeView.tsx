@@ -47,12 +47,19 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
       const [{ data: psc }, { data: dtn }, { data: hddv }] = await Promise.all([
         supabase
           .from("phat_sinh_chi_phi")
-          .select("id, tong_tien, so_tien_da_thanh_toan, ngay_phat_sinh, ghi_chu, tinh_trang_thanh_toan, don_hang:don_hang_id(so_don_hang)")
-          .neq("tinh_trang_thanh_toan", "Đã đủ"),
+          .select("id, tong_tien, so_tien_da_thanh_toan, ngay_phat_sinh, ghi_chu, tinh_trang_thanh_toan, nguon_thanh_toan, don_hang:don_hang_id(so_don_hang)")
+          .neq("tinh_trang_thanh_toan", "Đã đủ")
+          // Khoan da gan nguon "Tạm ứng nhân viên" phai quyet toan qua Phieu
+          // quyet toan tam ung, KHONG doi chieu qua sao ke ngan hang — neu
+          // khong se lam sai lech: ghi nhan "da thanh toan qua ngan hang"
+          // trong khi thuc te la nhan vien tu ung tien, khien nhan vien
+          // khong bao gio duoc hoan ung.
+          .or("nguon_thanh_toan.is.null,nguon_thanh_toan.neq.Tạm ứng nhân viên"),
         supabase
           .from("don_thue_ngoai")
-          .select("id, so_tien_da_chi, so_tien_da_thanh_toan, ngay_thue, noi_dung, tinh_trang_thanh_toan, don_hang:don_hang_id(so_don_hang)")
-          .neq("tinh_trang_thanh_toan", "Đã đủ"),
+          .select("id, so_tien_da_chi, so_tien_da_thanh_toan, ngay_thue, noi_dung, tinh_trang_thanh_toan, nguon_thanh_toan, don_hang:don_hang_id(so_don_hang)")
+          .neq("tinh_trang_thanh_toan", "Đã đủ")
+          .or("nguon_thanh_toan.is.null,nguon_thanh_toan.neq.Tạm ứng nhân viên"),
         supabase
           .from("hoa_don_dau_vao")
           .select("id, tong_tien_thanh_toan, so_tien_da_thanh_toan, ngay_hoa_don, khoan_muc, tinh_trang_thanh_toan")
@@ -139,7 +146,14 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
     setError(null);
     const phuongThuc = loaiSo;
     let thanhCong = 0;
+    let boQuaDaXuLy = 0;
     const loiTungDong: string[] = [];
+    // stt cua cac dong da xu ly xong (thanh cong HOAC phat hien da duoc xu ly
+    // tu truoc) — dung de loc khoi dongList sau vong lap, tranh viec bam lai
+    // "Xac nhan" (vd sau khi 1 vai dong loi, retry) se cong tien THEM LAN NUA
+    // cho cac dong da ap dung thanh cong tu lan truoc.
+    const daXongStt = new Set<number>();
+
     for (const d of dongList) {
       if (!d.daChon) continue;
       const [bang, id] = d.daChon.split(":");
@@ -147,36 +161,80 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
       if (!ungVien) continue;
 
       if (bang === "hoa_don_xuat") {
-        const { data: hd } = await supabase.from("hoa_don_xuat").select("so_tien_da_thu, tong_tien").eq("id", id).single();
+        const { data: hd } = await supabase.from("hoa_don_xuat").select("so_tien_da_thu, tong_tien, trang_thai_thanh_toan").eq("id", id).single();
+        if (hd?.trang_thai_thanh_toan === "Đã thu đủ") {
+          // Da duoc doi chieu/thu du tu truoc (vd bam Xac nhan 2 lan, hoac
+          // nguoi khac vua ap dung) — bo qua, KHONG cong tien them lan nua.
+          boQuaDaXuLy++;
+          daXongStt.add(d.stt);
+          continue;
+        }
         const daThuMoi = (hd?.so_tien_da_thu ?? 0) + d.soTien;
         const trangThai = daThuMoi >= (hd?.tong_tien ?? 0) ? "Đã thu đủ" : "Thu một phần";
-        const { error: err } = await supabase
+        // .neq(...) la guard NGUYEN TU o tang DB — ngay ca khi 2 request chay
+        // gan nhu dong thoi (khong chi dua vao select-roi-check phia tren,
+        // vi giua select va update van co khe ho rat nho), UPDATE se khong
+        // khop dong nao (0 rows) neu trang_thai_thanh_toan da la "Đã thu đủ"
+        // tai thoi diem ghi — kiem tra qua .select() de biet co that su ap
+        // dung hay khong, tranh dem nham la thanh cong.
+        const { data: updated, error: err } = await supabase
           .from("hoa_don_xuat")
           .update({ so_tien_da_thu: daThuMoi, trang_thai_thanh_toan: trangThai, phuong_thuc_thu: phuongThuc })
-          .eq("id", id);
-        if (!err) thanhCong++;
-        else loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+          .eq("id", id)
+          .neq("trang_thai_thanh_toan", "Đã thu đủ")
+          .select("id");
+        if (err) {
+          loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+        } else if (updated && updated.length > 0) {
+          thanhCong++;
+          daXongStt.add(d.stt);
+        } else {
+          boQuaDaXuLy++;
+          daXongStt.add(d.stt);
+        }
       } else {
         // Ung vien chi duoc goi y khi conLai === d.soTien (trong sai so 1 don
         // vi tien te), nen sau khi ap dung khoan nay se luon vua du — khong
         // can tinh lai "Mot phan" o day.
-        const { data: hienTai } = await supabase.from(bang).select("so_tien_da_thanh_toan").eq("id", id).single();
-        const daTraMoi = ((hienTai as { so_tien_da_thanh_toan?: number } | null)?.so_tien_da_thanh_toan ?? 0) + d.soTien;
-        const { error: err } = await supabase
+        const { data: hienTai } = await supabase.from(bang).select("so_tien_da_thanh_toan, tinh_trang_thanh_toan").eq("id", id).single();
+        const hienTaiRow = hienTai as { so_tien_da_thanh_toan?: number; tinh_trang_thanh_toan?: string } | null;
+        if (hienTaiRow?.tinh_trang_thanh_toan === "Đã đủ") {
+          boQuaDaXuLy++;
+          daXongStt.add(d.stt);
+          continue;
+        }
+        const daTraMoi = (hienTaiRow?.so_tien_da_thanh_toan ?? 0) + d.soTien;
+        // Cung dung .neq(...) lam guard nguyen tu nhu nhanh hoa_don_xuat o tren.
+        const { data: updated, error: err } = await supabase
           .from(bang)
           .update({ so_tien_da_thanh_toan: daTraMoi, tinh_trang_thanh_toan: "Đã đủ", phuong_thuc_thanh_toan: phuongThuc })
-          .eq("id", id);
-        if (!err) thanhCong++;
-        else loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+          .eq("id", id)
+          .neq("tinh_trang_thanh_toan", "Đã đủ")
+          .select("id");
+        if (err) {
+          loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+        } else if (updated && updated.length > 0) {
+          thanhCong++;
+          daXongStt.add(d.stt);
+        } else {
+          boQuaDaXuLy++;
+          daXongStt.add(d.stt);
+        }
       }
     }
     setDangApDung(false);
-    if (thanhCong === 0 && loiTungDong.length === 0) {
+    // Loai cac dong da xong (thanh cong hoac da-xu-ly-tu-truoc) khoi danh
+    // sach — chi giu lai dong loi that su de nguoi dung sua/thu lai, tranh
+    // bam "Xac nhan" lan nua ap dung trung cac dong da xong.
+    setDongList((prev) => prev.filter((d) => !daXongStt.has(d.stt)));
+    if (thanhCong === 0 && boQuaDaXuLy === 0 && loiTungDong.length === 0) {
       setError("Không có dòng nào được xác nhận khớp — chưa áp dụng gì.");
       return;
     }
     if (loiTungDong.length > 0) {
-      setError(`Đã xác nhận ${thanhCong} dòng, còn ${loiTungDong.length} dòng lỗi:\n${loiTungDong.join("\n")}`);
+      setError(
+        `Đã xác nhận ${thanhCong} dòng${boQuaDaXuLy > 0 ? `, bỏ qua ${boQuaDaXuLy} dòng đã xử lý từ trước` : ""}, còn ${loiTungDong.length} dòng lỗi (có thể bấm "Xác nhận" lại để thử lại các dòng này):\n${loiTungDong.join("\n")}`,
+      );
     }
     router.refresh();
     if (loiTungDong.length === 0) onXong();
