@@ -308,6 +308,36 @@ export default function HoaDonView({
     if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
   }
 
+  async function handleSuaPhuongThucThu(row: Row) {
+    const hienTai = row.phuong_thuc_thu || "(chưa có)";
+    const moi = window.prompt(
+      `Hóa đơn "${row.so_hoa_don ?? ""}" đang ghi nhận thu qua "${hienTai}".\nSửa lại đúng phương thức thực tế — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":`,
+      hienTai === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
+    );
+    if (moi === null) return;
+    if (moi !== "Tiền mặt" && moi !== "Tài khoản công ty") {
+      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
+      return;
+    }
+    const lyDo = window.prompt("Lý do sửa phương thức thu tiền (bắt buộc)?");
+    if (lyDo === null) return;
+    if (!lyDo.trim()) {
+      window.alert("Phải nhập lý do khi sửa phương thức.");
+      return;
+    }
+    const { error } = await supabase.rpc("sua_phuong_thuc_thu_hoa_don_xuat", {
+      p_hoa_don_id: row.id,
+      p_phuong_thuc_moi: moi,
+      p_ly_do: lyDo,
+    });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    const updated = await refetchRow(row.id);
+    if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+  }
+
   async function handleHuy(row: Row) {
     const lyDo = window.prompt(`Lý do hủy hóa đơn "${row.so_hoa_don ?? ""}"?`);
     if (lyDo === null) return;
@@ -524,6 +554,11 @@ export default function HoaDonView({
               {canEdit && row.trang_thai === "Đã phát hành" && row.trang_thai_thanh_toan !== "Đã thu đủ" && (
                 <button onClick={() => handleThuTien(row)} className="text-xs font-medium text-green-700">
                   Thu tiền
+                </button>
+              )}
+              {canEdit && row.trang_thai === "Đã phát hành" && (row.so_tien_da_thu ?? 0) > 0 && (
+                <button onClick={() => handleSuaPhuongThucThu(row)} className="text-xs font-medium text-teal-700">
+                  Sửa phương thức thu
                 </button>
               )}
               {canEdit && row.trang_thai === "Đã phát hành" && (

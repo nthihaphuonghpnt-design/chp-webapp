@@ -386,6 +386,36 @@ export default function HoaDonDauVaoView({
     setEditingId(null);
   }
 
+  async function suaPhuongThucThanhToan(row: HoaDonDauVao) {
+    const hienTai = row.phuong_thuc_thanh_toan || "(chưa có)";
+    const moi = window.prompt(
+      `Khoản "${row.khoan_muc}" đang ghi nhận thanh toán qua "${hienTai}".\nSửa lại đúng phương thức thực tế — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":`,
+      hienTai === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
+    );
+    if (moi === null) return;
+    if (moi !== "Tiền mặt" && moi !== "Tài khoản công ty") {
+      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
+      return;
+    }
+    const lyDo = window.prompt("Lý do sửa phương thức thanh toán (bắt buộc)?");
+    if (lyDo === null) return;
+    if (!lyDo.trim()) {
+      window.alert("Phải nhập lý do khi sửa phương thức.");
+      return;
+    }
+    const { error } = await supabase.rpc("sua_phuong_thuc_thanh_toan_hoa_don_dau_vao", {
+      p_hoa_don_id: row.id,
+      p_phuong_thuc_moi: moi,
+      p_ly_do: lyDo,
+    });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    const { data: refetched } = await supabase.from("hoa_don_dau_vao").select().eq("id", row.id).single();
+    if (refetched) setRows((prev) => prev.map((r) => (r.id === row.id ? (refetched as HoaDonDauVao) : r)));
+  }
+
   async function xoa(row: HoaDonDauVao) {
     if (row.id.startsWith("new-")) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
@@ -906,6 +936,15 @@ export default function HoaDonDauVaoView({
                       <button onClick={() => batDauSua(row)} disabled={editingId !== null} className="mr-3 text-sm font-medium text-blue-600 hover:underline disabled:opacity-40">
                         Sửa
                       </button>
+                      {(row.so_tien_da_thanh_toan ?? 0) > 0 && (
+                        <button
+                          onClick={() => suaPhuongThucThanhToan(row)}
+                          disabled={editingId !== null}
+                          className="mr-3 text-sm font-medium text-teal-700 hover:underline disabled:opacity-40"
+                        >
+                          Sửa phương thức
+                        </button>
+                      )}
                       <button onClick={() => xoa(row)} disabled={editingId !== null} className="text-sm font-medium text-red-600 hover:underline disabled:opacity-40">
                         Xóa
                       </button>

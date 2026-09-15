@@ -171,6 +171,37 @@ export default function PhieuQuyetToanView({
     await reload();
   }
 
+  async function handleSuaPhuongThuc(phieu: PhieuRow) {
+    const hienTai = phieu.phuong_thuc || "(chưa có)";
+    const moi = window.prompt(
+      `Phiếu "${phieu.so_phieu}" đang ghi nhận thanh toán qua "${hienTai}".\nSửa lại đúng phương thức thực tế — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":`,
+      hienTai === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
+    );
+    if (moi === null) return;
+    if (moi !== "Tiền mặt" && moi !== "Tài khoản công ty") {
+      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
+      return;
+    }
+    const lyDo = window.prompt("Lý do sửa phương thức thanh toán (bắt buộc)?");
+    if (lyDo === null) return;
+    if (!lyDo.trim()) {
+      window.alert("Phải nhập lý do khi sửa phương thức.");
+      return;
+    }
+    setBusy(phieu.id);
+    const { error } = await supabase.rpc("sua_phuong_thuc_phieu_quyet_toan_tam_ung", {
+      p_phieu_id: phieu.id,
+      p_phuong_thuc_moi: moi,
+      p_ly_do: lyDo,
+    });
+    setBusy(null);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    await reload();
+  }
+
   async function handleSaveGhiChu(phieu: PhieuRow, ghiChu: string) {
     const { error } = await supabase.from("phieu_quyet_toan_tam_ung").update({ ghi_chu: ghiChu || null }).eq("id", phieu.id);
     if (error) window.alert(error.message);
@@ -242,6 +273,7 @@ export default function PhieuQuyetToanView({
             onHuy={() => handleHuy(phieu)}
             onThanhToan={() => setPayDialog(phieu)}
             onSaveGhiChu={(gc) => handleSaveGhiChu(phieu, gc)}
+            onSuaPhuongThuc={() => handleSuaPhuongThuc(phieu)}
           />
         ))}
         {filtered.length === 0 && <p className="py-8 text-center text-sm text-slate-400">Chưa có phiếu nào.</p>}
@@ -334,6 +366,7 @@ function PhieuCard({
   onHuy,
   onThanhToan,
   onSaveGhiChu,
+  onSuaPhuongThuc,
 }: {
   phieu: PhieuRow;
   isKeToanOrGiamDoc: boolean;
@@ -342,6 +375,7 @@ function PhieuCard({
   onHuy: () => void;
   onThanhToan: () => void;
   onSaveGhiChu: (ghiChu: string) => void;
+  onSuaPhuongThuc: () => void;
 }) {
   const [ghiChu, setGhiChu] = useState(phieu.ghi_chu ?? "");
   const donHangList = (phieu.chi_tiet ?? []).map((c) => one(c.don_hang)).filter((d): d is DonHangRef => !!d);
@@ -379,6 +413,11 @@ function PhieuCard({
       {phieu.trang_thai === "Đã thanh toán" && (
         <p className="mt-2 text-xs text-slate-500">
           Đã thanh toán qua {phieu.phuong_thuc} · Người duyệt: {one(phieu.nguoi_duyet)?.ho_ten ?? "—"}
+          {isKeToanOrGiamDoc && (
+            <button onClick={onSuaPhuongThuc} disabled={busy} className="ml-2 font-medium text-teal-700 hover:underline disabled:opacity-40">
+              Sửa phương thức
+            </button>
+          )}
         </p>
       )}
       {phieu.trang_thai === "Đã duyệt" && (
