@@ -393,11 +393,12 @@ function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiCh
   ];
   const tongGiaBanVaChiHo = dong.reduce((s, r) => s + r.soTien, 0);
   const tongVat = dong.reduce((s, r) => s + r.tienVat, 0);
-  // row.tong_tien la cot generated CHI = truoc_thue + VAT, KHONG gom tien_chi_ho
-  // (xem migration 0068) — trong khi tongGiaBanVaChiHo o day cong CA dong "Chi
-  // hộ". Phai cong them tien_chi_ho vao ve phai thi moi doi chieu dung, neu
-  // khong moi hoa don co chi ho se bao "Chenh lech" gia (khong phai loi that).
-  const tongHoaDonThatSu = row.tong_tien + (row.tien_chi_ho ?? 0);
+  // row.tong_tien la cot generated = truoc_thue + VAT + tien_chi_ho (xem
+  // migration 0031/0038) — DA GOM san chi ho, va tongGiaBanVaChiHo o day cung
+  // da cong ca dong "Chi hộ" nen khop thang voi tong_tien, khong duoc cong
+  // them tien_chi_ho lan nua (tung nham la khong gom, gay bao "Chenh lech" gia
+  // tren moi hoa don co chi ho).
+  const tongHoaDonThatSu = row.tong_tien;
   const khop = tongGiaBanVaChiHo + tongVat === tongHoaDonThatSu;
 
   return (

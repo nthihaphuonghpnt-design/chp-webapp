@@ -199,13 +199,11 @@ export default function BaoCaoView({
       const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
       const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id));
-      // tong_tien la cot generated CHI = truoc_thue + VAT (KHONG gom chi ho —
-      // xem migration 0068/dinhKhoan) — nhung khach hang THUC SU phai tra ca
-      // phan chi ho (CHP ung ho roi thu lai), va so_tien_da_thu theo doi tien
-      // thu VE THEO TONG SO DO. Neu chi cong tong_tien se tinh thieu "con phai
-      // thu" dung bang phan chi ho khi hoa don chua thu du — phai cong ca
-      // tien_chi_ho vao day.
-      const tongHoaDon = hoaDonLienQuan.reduce((s, h) => s + h.tong_tien + (h.tien_chi_ho ?? 0), 0);
+      // tong_tien la cot generated = truoc_thue + VAT + tien_chi_ho (xem
+      // migration 0031/0038) — DA GOM san chi ho, khong duoc cong them lan nua
+      // (tung nham la khong gom, cong du 1 lan tien_chi_ho gay tinh THUA cong
+      // no, da sua lai dung).
+      const tongHoaDon = hoaDonLienQuan.reduce((s, h) => s + h.tong_tien, 0);
       const daThu = hoaDonLienQuan.reduce((s, h) => s + (h.so_tien_da_thu ?? 0), 0);
       return {
         donHang: d,
@@ -287,8 +285,8 @@ export default function BaoCaoView({
       const key = h.khach_hang_id;
       if (!map.has(key)) map.set(key, { ten: khTen(key), tongHoaDon: 0, daThu: 0 });
       const m = map.get(key)!;
-      // Cong ca tien_chi_ho — xem giai thich chi tiet o congNoTheoLo phia tren.
-      m.tongHoaDon += h.tong_tien + (h.tien_chi_ho ?? 0);
+      // tong_tien da gom san tien_chi_ho — xem giai thich o congNoTheoLo phia tren.
+      m.tongHoaDon += h.tong_tien;
       m.daThu += h.so_tien_da_thu ?? 0;
     }
     return Array.from(map.values()).map((m) => ({ ...m, conPhaiThu: m.tongHoaDon - m.daThu }));
