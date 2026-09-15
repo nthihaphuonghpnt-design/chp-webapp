@@ -105,21 +105,23 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
     setDangTai(true);
     setError(null);
     const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    // KHONG dung cellDates:true — sheet_to_json() tu tao lai Date object cho o
+    // ngay theo 1 duong khac voi luc doc cell truc tiep, va tru di lech mui
+    // gio cua may nguoi dung khoi gia tri dung (da kiem chung: doc 1 o ngay
+    // 10/9/2026 tra ve Date "2026-09-09T17:00:00Z" thay vi dung
+    // "2026-09-10T00:00:00Z" tren may UTC+7) — sai theo tung may, khong on
+    // dinh. Doc RAW (raw:true) de o ngay tra ve dung SO SERIAL EXCEL (vd
+    // 46275), roi tu tay quy doi bang XLSX.SSF.parse_date_code() — ham nay
+    // tinh thuan tren con so serial, KHONG dinh gi den JS Date/timezone nen
+    // luon dung bat ke may nguoi dung o mui gio nao.
+    const wb = XLSX.read(buf, { type: "array" });
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true });
 
     function excelDate(v: unknown): string {
-      // Dung thanh phan ngay THEO GIO DIA PHUONG (getFullYear/getMonth/getDate),
-      // KHONG dung toISOString() — toISOString quy doi ve UTC, khien ngay bi
-      // lui 1 hom voi bat ky nguoi dung nao o timezone truoc UTC (vd Viet Nam
-      // UTC+7): new Date(2026,8,10) 00:00 gio VN = 2026-09-09 17:00 UTC, nen
-      // toISOString().slice(0,10) tra ve sai "2026-09-09" thay vi "2026-09-10".
-      if (v instanceof Date) {
-        const y = v.getFullYear();
-        const m = String(v.getMonth() + 1).padStart(2, "0");
-        const d = String(v.getDate()).padStart(2, "0");
-        return `${y}-${m}-${d}`;
+      if (typeof v === "number") {
+        const { y, m, d } = XLSX.SSF.parse_date_code(v);
+        return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       }
       return String(v ?? "").trim();
     }
