@@ -393,7 +393,12 @@ function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiCh
   ];
   const tongGiaBanVaChiHo = dong.reduce((s, r) => s + r.soTien, 0);
   const tongVat = dong.reduce((s, r) => s + r.tienVat, 0);
-  const khop = tongGiaBanVaChiHo + tongVat === row.tong_tien;
+  // row.tong_tien la cot generated CHI = truoc_thue + VAT, KHONG gom tien_chi_ho
+  // (xem migration 0068) — trong khi tongGiaBanVaChiHo o day cong CA dong "Chi
+  // hộ". Phai cong them tien_chi_ho vao ve phai thi moi doi chieu dung, neu
+  // khong moi hoa don co chi ho se bao "Chenh lech" gia (khong phai loi that).
+  const tongHoaDonThatSu = row.tong_tien + (row.tien_chi_ho ?? 0);
+  const khop = tongGiaBanVaChiHo + tongVat === tongHoaDonThatSu;
 
   return (
     <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
@@ -435,8 +440,8 @@ function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiCh
           </table>
           <p className={`mt-2 text-xs font-medium ${khop ? "text-green-700" : "text-red-600"}`}>
             {khop
-              ? `Khớp: Tổng dòng ${tongGiaBanVaChiHo.toLocaleString("en-US")} + VAT ${tongVat.toLocaleString("en-US")} = Tổng hóa đơn ${row.tong_tien.toLocaleString("en-US")}.`
-              : `Chênh lệch ${(row.tong_tien - tongGiaBanVaChiHo - tongVat).toLocaleString("en-US")} so với hóa đơn (${row.tong_tien.toLocaleString("en-US")}) — có thể do sửa tay số liệu hóa đơn sau khi xuất.`}
+              ? `Khớp: Tổng dòng ${tongGiaBanVaChiHo.toLocaleString("en-US")} + VAT ${tongVat.toLocaleString("en-US")} = Tổng hóa đơn (gồm chi hộ nếu có) ${tongHoaDonThatSu.toLocaleString("en-US")}.`
+              : `Chênh lệch ${(tongHoaDonThatSu - tongGiaBanVaChiHo - tongVat).toLocaleString("en-US")} so với hóa đơn (gồm chi hộ nếu có) ${tongHoaDonThatSu.toLocaleString("en-US")} — có thể do sửa tay số liệu hóa đơn sau khi xuất.`}
           </p>
         </>
       )}
