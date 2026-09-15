@@ -177,14 +177,6 @@ export default function HoaDonView({
     const tienVat = Math.round((tongTruocThue * vatPercent) / 100);
     const kyKeKhai = values.ky_ke_khai || values.ngay_xuat.slice(0, 7);
 
-    const truongLuonGhiDuoc: Record<string, unknown> = {
-      trang_thai_thanh_toan: values.trang_thai_thanh_toan || "Chưa thu",
-      so_tien_da_thu: values.so_tien_da_thu ? Number(values.so_tien_da_thu) : null,
-      phuong_thuc_thu: values.phuong_thuc_thu || null,
-      ghi_chu: values.ghi_chu || null,
-      ky_ke_khai: kyKeKhai,
-    };
-
     let hoaDonId = editing?.id;
 
     if (editing) {
@@ -205,9 +197,14 @@ export default function HoaDonView({
           return;
         }
       }
+      // CHI con ghi_chu/ky_ke_khai — so_tien_da_thu/trang_thai_thanh_toan/
+      // phuong_thuc_thu KHONG con sua truc tiep duoc tu sau migration 0099
+      // (bi khoa o tang GRANT), phai di qua nut "Thu tiền" -> RPC
+      // thu_tien_hoa_don_xuat de xu ly dung phan tra thua thanh credit,
+      // khong am tham "an" tien thua vao trang_thai_thanh_toan nua.
       const { data, error } = await supabase
         .from("hoa_don_xuat")
-        .update(truongLuonGhiDuoc)
+        .update({ ghi_chu: values.ghi_chu || null, ky_ke_khai: kyKeKhai })
         .eq("id", editing.id)
         .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
         .single();
@@ -222,6 +219,9 @@ export default function HoaDonView({
       } = await supabase.auth.getUser();
       const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
 
+      // Hoa don MOI TAO chua ai dung toi nen van duoc phep set san mot khoan
+      // da thu ngay tu luc tao (vd nhap lieu lai giao dich cu) — INSERT
+      // khong bi khoa nhu UPDATE.
       const { data, error } = await supabase
         .from("hoa_don_xuat")
         .insert({
@@ -232,7 +232,11 @@ export default function HoaDonView({
           vat_percent: values.vat_percent ? vatPercent : null,
           tien_vat: tienVat,
           tien_chi_ho: values.tien_chi_ho ? Number(values.tien_chi_ho) : null,
-          ...truongLuonGhiDuoc,
+          trang_thai_thanh_toan: values.trang_thai_thanh_toan || "Chưa thu",
+          so_tien_da_thu: values.so_tien_da_thu ? Number(values.so_tien_da_thu) : null,
+          phuong_thuc_thu: values.phuong_thuc_thu || null,
+          ghi_chu: values.ghi_chu || null,
+          ky_ke_khai: kyKeKhai,
           nguoi_tao_id: nv?.id,
         })
         .select("*, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
@@ -266,6 +270,42 @@ export default function HoaDonView({
       .eq("id", id)
       .single();
     return data as Row | null;
+  }
+
+  async function handleThuTien(row: Row) {
+    const conLai = row.tong_tien - (row.so_tien_da_thu ?? 0);
+    const nhap = window.prompt(
+      `Ghi nhận thu tiền cho hóa đơn "${row.so_hoa_don ?? ""}" — còn phải thu ${conLai.toLocaleString("en-US")}.\nNhập số tiền thực nhận (có thể lớn hơn số còn phải thu, phần dư sẽ tự chuyển thành credit của khách hàng):`,
+    );
+    if (nhap === null) return;
+    const soTien = Number(nhap.replace(/[^\d.]/g, ""));
+    if (!soTien || soTien <= 0) {
+      window.alert("Số tiền không hợp lệ.");
+      return;
+    }
+    const phuongThuc = window.prompt('Phương thức thu — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":', row.phuong_thuc_thu || "Tài khoản công ty");
+    if (phuongThuc !== "Tiền mặt" && phuongThuc !== "Tài khoản công ty") {
+      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
+      return;
+    }
+    const { data, error } = await supabase.rpc("thu_tien_hoa_don_xuat", {
+      p_hoa_don_id: row.id,
+      p_so_tien: soTien,
+      p_phuong_thuc: phuongThuc,
+      p_ghi_chu: null,
+    });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    const ketQua = data as { ap_dung_hoa_don: number; thua_thanh_credit: number } | null;
+    if (ketQua && ketQua.thua_thanh_credit > 0) {
+      window.alert(
+        `Đã áp dụng ${ketQua.ap_dung_hoa_don.toLocaleString("en-US")} vào hóa đơn (Đã thu đủ).\nPhần dư ${ketQua.thua_thanh_credit.toLocaleString("en-US")} đã tự động chuyển thành CREDIT cho khách hàng này — xem ở trang Credit khách hàng/NCC.`,
+      );
+    }
+    const updated = await refetchRow(row.id);
+    if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
   }
 
   async function handleHuy(row: Row) {
@@ -479,6 +519,11 @@ export default function HoaDonView({
                   className="text-xs font-medium text-blue-600"
                 >
                   Sửa
+                </button>
+              )}
+              {canEdit && row.trang_thai === "Đã phát hành" && row.trang_thai_thanh_toan !== "Đã thu đủ" && (
+                <button onClick={() => handleThuTien(row)} className="text-xs font-medium text-green-700">
+                  Thu tiền
                 </button>
               )}
               {canEdit && row.trang_thai === "Đã phát hành" && (
@@ -781,25 +826,40 @@ function HoaDonForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái thanh toán</label>
-            <select value={values.trang_thai_thanh_toan} onChange={(e) => set("trang_thai_thanh_toan", e.target.value)} className={cls}>
-              {TT_THU.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
+            {initial ? (
+              <p className={`rounded-lg px-3 py-2 text-sm ${TT_COLOR[values.trang_thai_thanh_toan] ?? ""}`}>{values.trang_thai_thanh_toan}</p>
+            ) : (
+              <select value={values.trang_thai_thanh_toan} onChange={(e) => set("trang_thai_thanh_toan", e.target.value)} className={cls}>
+                {TT_THU.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Đã thu</label>
-            <MoneyInput value={values.so_tien_da_thu} onChange={(v) => set("so_tien_da_thu", v)} className={cls} />
+            {initial ? (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {(initial.so_tien_da_thu ?? 0).toLocaleString("en-US")}
+                <span className="ml-1 text-xs text-slate-400">— dùng nút &quot;Thu tiền&quot; ở danh sách để ghi nhận thêm</span>
+              </p>
+            ) : (
+              <MoneyInput value={values.so_tien_da_thu} onChange={(v) => set("so_tien_da_thu", v)} className={cls} />
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức thu</label>
-            <select value={values.phuong_thuc_thu} onChange={(e) => set("phuong_thuc_thu", e.target.value)} className={cls}>
-              <option value="">-- Chọn --</option>
-              <option value="Tiền mặt">Tiền mặt</option>
-              <option value="Tài khoản công ty">Tài khoản công ty</option>
-            </select>
+            {initial ? (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{values.phuong_thuc_thu || "—"}</p>
+            ) : (
+              <select value={values.phuong_thuc_thu} onChange={(e) => set("phuong_thuc_thu", e.target.value)} className={cls}>
+                <option value="">-- Chọn --</option>
+                <option value="Tiền mặt">Tiền mặt</option>
+                <option value="Tài khoản công ty">Tài khoản công ty</option>
+              </select>
+            )}
           </div>
         </div>
 

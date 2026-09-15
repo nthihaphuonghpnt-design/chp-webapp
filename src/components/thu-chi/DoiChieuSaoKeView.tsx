@@ -173,7 +173,7 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
       if (!ungVien) continue;
 
       if (bang === "hoa_don_xuat") {
-        const { data: hd } = await supabase.from("hoa_don_xuat").select("so_tien_da_thu, tong_tien, trang_thai_thanh_toan").eq("id", id).single();
+        const { data: hd } = await supabase.from("hoa_don_xuat").select("trang_thai_thanh_toan").eq("id", id).single();
         if (hd?.trang_thai_thanh_toan === "Đã thu đủ") {
           // Da duoc doi chieu/thu du tu truoc (vd bam Xac nhan 2 lan, hoac
           // nguoi khac vua ap dung) — bo qua, KHONG cong tien them lan nua.
@@ -181,33 +181,63 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
           daXongStt.add(d.stt);
           continue;
         }
-        const daThuMoi = (hd?.so_tien_da_thu ?? 0) + d.soTien;
-        const trangThai = daThuMoi >= (hd?.tong_tien ?? 0) ? "Đã thu đủ" : "Thu một phần";
-        // .neq(...) la guard NGUYEN TU o tang DB — ngay ca khi 2 request chay
-        // gan nhu dong thoi (khong chi dua vao select-roi-check phia tren,
-        // vi giua select va update van co khe ho rat nho), UPDATE se khong
-        // khop dong nao (0 rows) neu trang_thai_thanh_toan da la "Đã thu đủ"
-        // tai thoi diem ghi — kiem tra qua .select() de biet co that su ap
-        // dung hay khong, tranh dem nham la thanh cong.
-        const { data: updated, error: err } = await supabase
-          .from("hoa_don_xuat")
-          .update({ so_tien_da_thu: daThuMoi, trang_thai_thanh_toan: trangThai, phuong_thuc_thu: phuongThuc })
-          .eq("id", id)
-          .neq("trang_thai_thanh_toan", "Đã thu đủ")
-          .select("id");
+        // Tu migration 0099: khong con UPDATE thang duoc nua, phai qua RPC
+        // thu_tien_hoa_don_xuat — RPC tu co guard nguyen tu rieng (kiem tra
+        // lai trang_thai_thanh_toan duoi khoa FOR UPDATE), an toan y het co
+        // che .neq(...) truoc day ke ca khi 2 request chay gan dong thoi.
+        // ungVien chi duoc goi y khi conLai === d.soTien nen thua_thanh_credit
+        // se luon la 0 qua duong nay — khong can xu ly UI rieng cho phan thua.
+        const { error: err } = await supabase.rpc("thu_tien_hoa_don_xuat", {
+          p_hoa_don_id: id,
+          p_so_tien: d.soTien,
+          p_phuong_thuc: phuongThuc,
+          p_ghi_chu: "Đối chiếu sao kê",
+        });
         if (err) {
-          loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
-        } else if (updated && updated.length > 0) {
+          if (err.message?.includes("đã") && err.message?.includes("Đã thu đủ")) {
+            boQuaDaXuLy++;
+            daXongStt.add(d.stt);
+          } else {
+            loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+          }
+        } else {
           thanhCong++;
           daXongStt.add(d.stt);
-        } else {
+        }
+      } else if (bang === "hoa_don_dau_vao") {
+        const { data: hd } = await supabase.from("hoa_don_dau_vao").select("tinh_trang_thanh_toan").eq("id", id).single();
+        if (hd?.tinh_trang_thanh_toan === "Đã đủ") {
           boQuaDaXuLy++;
+          daXongStt.add(d.stt);
+          continue;
+        }
+        // Tu migration 0099: khong con UPDATE thang duoc nua, phai qua RPC
+        // thanh_toan_hoa_don_dau_vao — cung nguyen tac guard nhu nhanh
+        // hoa_don_xuat o tren.
+        const { error: err } = await supabase.rpc("thanh_toan_hoa_don_dau_vao", {
+          p_hoa_don_id: id,
+          p_so_tien: d.soTien,
+          p_phuong_thuc: phuongThuc,
+          p_ghi_chu: "Đối chiếu sao kê",
+        });
+        if (err) {
+          if (err.message?.includes("đã") && err.message?.includes("Đã đủ")) {
+            boQuaDaXuLy++;
+            daXongStt.add(d.stt);
+          } else {
+            loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+          }
+        } else {
+          thanhCong++;
           daXongStt.add(d.stt);
         }
       } else {
         // Ung vien chi duoc goi y khi conLai === d.soTien (trong sai so 1 don
         // vi tien te), nen sau khi ap dung khoan nay se luon vua du — khong
-        // can tinh lai "Mot phan" o day.
+        // can tinh lai "Mot phan" o day. phat_sinh_chi_phi/don_thue_ngoai
+        // chua bi khoa GRANT nhu hoa_don_xuat/hoa_don_dau_vao nen van ghi
+        // truc tiep duoc — khong nam trong pham vi trả thừa/credit lan nay
+        // (xem bao cao nghiem thu).
         const { data: hienTai } = await supabase.from(bang).select("so_tien_da_thanh_toan, tinh_trang_thanh_toan").eq("id", id).single();
         const hienTaiRow = hienTai as { so_tien_da_thanh_toan?: number; tinh_trang_thanh_toan?: string } | null;
         if (hienTaiRow?.tinh_trang_thanh_toan === "Đã đủ") {

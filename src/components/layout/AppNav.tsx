@@ -48,6 +48,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/chi-phi/hoa-don-dau-vao", label: "Hóa đơn đầu vào", roles: ["Kế toán", "Giám đốc"] },
       { href: "/bao-cao", label: "Báo cáo", roles: ["Sale", "Kế toán", "Giám đốc"] },
       { href: "/bao-cao/vat", label: "Báo cáo VAT", roles: ["Kế toán", "Giám đốc"] },
+      { href: "/thu-chi/credit", label: "Credit khách hàng/NCC", roles: ["Chứng từ", "Kế toán", "Giám đốc"] },
     ],
   },
   {

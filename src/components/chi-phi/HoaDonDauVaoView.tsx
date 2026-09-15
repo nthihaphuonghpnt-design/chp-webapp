@@ -301,7 +301,7 @@ export default function HoaDonDauVaoView({
     const tenDonHangGo = editValues.don_hang_ten.trim();
     const donHangMatch = tenDonHangGo ? donHangList.find((d) => d.so_don_hang.toLowerCase() === tenDonHangGo.toLowerCase()) : undefined;
 
-    const payload = {
+    const payloadChung = {
       mau_so_hoa_don: editValues.mau_so_hoa_don || null,
       so_hoa_don: editValues.so_hoa_don || null,
       ngay_hoa_don: editValues.ngay_hoa_don,
@@ -317,19 +317,23 @@ export default function HoaDonDauVaoView({
       tai_khoan_no: editValues.tai_khoan_no || null,
       tong_tien_hang: editValues.tong_tien_hang ? Number(editValues.tong_tien_hang) : 0,
       tien_thue_gtgt: editValues.tien_thue_gtgt ? Number(editValues.tien_thue_gtgt) : 0,
-      tinh_trang_thanh_toan: editValues.tinh_trang_thanh_toan,
-      so_tien_da_thanh_toan: editValues.so_tien_da_thanh_toan ? Number(editValues.so_tien_da_thanh_toan) : 0,
-      phuong_thuc_thanh_toan: editValues.phuong_thuc_thanh_toan || null,
       ghi_chu: editValues.ghi_chu || null,
       ky_ke_khai: editValues.ky_ke_khai || editValues.ngay_hoa_don.slice(0, 7),
       dieu_kien_khau_tru: editValues.dieu_kien_khau_tru,
       chi_ho: editValues.chi_ho === "true",
     };
+    const soTienMoi = editValues.so_tien_da_thanh_toan ? Number(editValues.so_tien_da_thanh_toan) : 0;
 
     if (row.id.startsWith("new-")) {
       const { data, error: err } = await supabase
         .from("hoa_don_dau_vao")
-        .insert({ ...payload, nguoi_nhap_id: nv?.id })
+        .insert({
+          ...payloadChung,
+          tinh_trang_thanh_toan: editValues.tinh_trang_thanh_toan,
+          so_tien_da_thanh_toan: soTienMoi,
+          phuong_thuc_thanh_toan: editValues.phuong_thuc_thanh_toan || null,
+          nguoi_nhap_id: nv?.id,
+        })
         .select()
         .single();
       setSaving(false);
@@ -339,13 +343,45 @@ export default function HoaDonDauVaoView({
       }
       setRows((prev) => prev.map((r) => (r.id === row.id ? (data as HoaDonDauVao) : r)));
     } else {
-      const { data, error: err } = await supabase.from("hoa_don_dau_vao").update(payload).eq("id", row.id).select().single();
-      setSaving(false);
+      // tinh_trang_thanh_toan/so_tien_da_thanh_toan/phuong_thuc_thanh_toan
+      // KHONG con sua truc tiep duoc tu sau migration 0099 (bi khoa o tang
+      // GRANT) — phan chenh lech (neu tang) phai di qua RPC
+      // thanh_toan_hoa_don_dau_vao de xu ly dung phan tra thua thanh credit.
+      const soTienCu = row.so_tien_da_thanh_toan ?? 0;
+      const delta = soTienMoi - soTienCu;
+      if (delta < 0) {
+        setSaving(false);
+        setError('Không thể giảm "Đã thanh toán" trực tiếp nữa — số tiền đã ghi nhận chỉ tăng qua thanh toán mới. Liên hệ để xử lý điều chỉnh nếu nhập nhầm.');
+        return;
+      }
+      const { data, error: err } = await supabase.from("hoa_don_dau_vao").update(payloadChung).eq("id", row.id).select().single();
       if (err) {
+        setSaving(false);
         setError(err.message);
         return;
       }
-      setRows((prev) => prev.map((r) => (r.id === row.id ? (data as HoaDonDauVao) : r)));
+      let finalRow = data as HoaDonDauVao;
+      if (delta > 0) {
+        const { data: ketQua, error: rpcErr } = await supabase.rpc("thanh_toan_hoa_don_dau_vao", {
+          p_hoa_don_id: row.id,
+          p_so_tien: delta,
+          p_phuong_thuc: editValues.phuong_thuc_thanh_toan || "Tài khoản công ty",
+          p_ghi_chu: null,
+        });
+        if (rpcErr) {
+          setSaving(false);
+          setError(rpcErr.message);
+          return;
+        }
+        const q = ketQua as { thua_thanh_credit: number } | null;
+        if (q && q.thua_thanh_credit > 0) {
+          window.alert(`Phần dư ${q.thua_thanh_credit.toLocaleString("en-US")} đã tự động chuyển thành CREDIT của nhà cung cấp này — xem ở trang Credit khách hàng/NCC.`);
+        }
+        const { data: refetched } = await supabase.from("hoa_don_dau_vao").select().eq("id", row.id).single();
+        if (refetched) finalRow = refetched as HoaDonDauVao;
+      }
+      setSaving(false);
+      setRows((prev) => prev.map((r) => (r.id === row.id ? finalRow : r)));
     }
     setEditingId(null);
   }
@@ -754,11 +790,17 @@ export default function HoaDonDauVaoView({
                     {fmt(Number(editValues.tong_tien_hang || 0) + Number(editValues.tien_thue_gtgt || 0))}
                   </td>
                   <td className="px-2 py-1.5">
-                    <select value={editValues.tinh_trang_thanh_toan} onChange={(e) => set("tinh_trang_thanh_toan", e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm">
-                      <option>Chưa thanh toán</option>
-                      <option>Một phần</option>
-                      <option>Đã đủ</option>
-                    </select>
+                    {row.id.startsWith("new-") ? (
+                      <select value={editValues.tinh_trang_thanh_toan} onChange={(e) => set("tinh_trang_thanh_toan", e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm">
+                        <option>Chưa thanh toán</option>
+                        <option>Một phần</option>
+                        <option>Đã đủ</option>
+                      </select>
+                    ) : (
+                      <span className="text-xs text-slate-500" title='Trạng thái tự tính theo "Đã thanh toán" — sửa số tiền để đổi'>
+                        {editValues.tinh_trang_thanh_toan}
+                      </span>
+                    )}
                   </td>
                   <td className="px-2 py-1.5">
                     <MoneyInput value={editValues.so_tien_da_thanh_toan} onChange={(v) => set("so_tien_da_thanh_toan", v)} className="w-24 rounded border border-slate-300 px-2 py-1.5 text-right text-sm" />
