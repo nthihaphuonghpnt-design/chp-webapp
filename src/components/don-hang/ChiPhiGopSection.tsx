@@ -445,6 +445,20 @@ export default function ChiPhiGopSection({
 
   async function luuSua(rv: RowView) {
     if (!editValues) return;
+    // Da duyet -> Ke toan sua truc tiep phai nhap ly do, bat buoc o tang DB
+    // (enforce_phat_sinh_chi_phi_update/enforce_don_thue_ngoai_update, 0104) —
+    // hoi truoc o day de khong ghi de mat du lieu form neu nguoi dung huy,
+    // va de bao loi ro rang ngay tren UI thay vi lo message loi tho tu DB.
+    let lyDoSuaGanNhat: string | null = null;
+    if ((rv.loai === "chi_phi" || rv.loai === "thue_ngoai") && rv.trangThai === "Đã duyệt") {
+      const lyDo = window.prompt(`"${LOAI_LABEL[rv.loai]}" này đã duyệt — phải nhập lý do khi sửa:`);
+      if (lyDo === null) return;
+      if (!lyDo.trim()) {
+        window.alert("Phải nhập lý do khi sửa dòng đã duyệt.");
+        return;
+      }
+      lyDoSuaGanNhat = lyDo;
+    }
     if (rv.loai === "chi_phi") {
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
@@ -461,6 +475,7 @@ export default function ChiPhiGopSection({
           ...(canChonNguonThanhToan
             ? { nguon_thanh_toan: editValues.nguon_thanh_toan || null, tam_ung_id: editValues.tam_ung_id || null }
             : {}),
+          ...(lyDoSuaGanNhat ? { ly_do_sua_gan_nhat: lyDoSuaGanNhat } : {}),
         })
         .eq("id", rv.raw.id)
         .eq("updated_at", rv.raw.updated_at)
@@ -481,6 +496,7 @@ export default function ChiPhiGopSection({
           ...(canChonNguonThanhToan
             ? { nguon_thanh_toan: editValues.nguon_thanh_toan || null, tam_ung_id: editValues.tam_ung_id || null }
             : {}),
+          ...(lyDoSuaGanNhat ? { ly_do_sua_gan_nhat: lyDoSuaGanNhat } : {}),
         })
         .eq("id", rv.raw.id)
         .eq("updated_at", rv.raw.updated_at)
