@@ -64,7 +64,6 @@ export default function DonHangForm({
     dvt: initial?.dvt ?? "",
     so_luong: initial?.so_luong?.toString() ?? "",
     so_bl_bk: initial?.so_bl_bk ?? "",
-    so_lo: initial?.so_lo ?? "",
     hang_hoa_id: initial?.hang_hoa_id ?? "",
     kich_thuoc: initial?.kich_thuoc ?? "",
     noi_lay_cont_hang_id: initial?.noi_lay_cont_hang_id ?? "",
@@ -278,9 +277,6 @@ export default function DonHangForm({
       <Section title="Số chứng từ">
         <Field label="Số vận đơn / booking">
           <input value={values.so_bl_bk} onChange={(e) => set("so_bl_bk", e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Số lô">
-          <input value={values.so_lo} onChange={(e) => set("so_lo", e.target.value)} className={inputClass} />
         </Field>
         {!initial && (
           <p className="sm:col-span-2 text-xs text-slate-400">
