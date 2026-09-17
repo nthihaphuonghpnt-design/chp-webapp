@@ -609,6 +609,13 @@ export function FormModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // FormModal mo lung tung (khong qua portal) nen khi duoc goi tu ben trong
+    // 1 form khac (vi du nut "+" o QuickAddSelect trong DonHangForm), <form>
+    // o day nam long trong <form> ngoai. preventDefault() khong chan duoc
+    // submit event tiep tuc bubble len — neu khong stopPropagation, form
+    // ngoai cung bi submit theo (mat du lieu dang nhap, dieu huong di noi
+    // khac truoc khi state "vua them xong" kip cap nhat).
+    e.stopPropagation();
     onSubmit(values);
   }
 
