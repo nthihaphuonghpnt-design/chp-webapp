@@ -44,12 +44,14 @@ export default function DinhKemSection({
 
   useEffect(() => {
     async function loadUrls() {
-      const entries = await Promise.all(
-        rows.map(async (r) => {
-          const { data } = await supabase.storage.from("dinh-kem").createSignedUrl(r.duong_dan_file, 3600);
-          return [r.id, data?.signedUrl ?? ""] as const;
-        })
-      );
+      // 1 request createSignedUrls (batch) thay vi N request createSignedUrl
+      // rieng le cho tung file dinh kem — don hang cang nhieu anh/chung tu
+      // dinh kem thi cang cham khi mo trang chi tiet, day la nguyen nhan
+      // chinh gay cam giac "chon don hang de nhap thong tin cham".
+      const { data } = await supabase.storage
+        .from("dinh-kem")
+        .createSignedUrls(rows.map((r) => r.duong_dan_file), 3600);
+      const entries = rows.map((r, i) => [r.id, data?.[i]?.signedUrl ?? ""] as const);
       setUrls(Object.fromEntries(entries));
     }
     if (rows.length > 0) loadUrls();
