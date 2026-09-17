@@ -35,21 +35,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Nhan vien da nghi viec (dang_lam_viec=false): chan ngay tu day thay vi
-  // chi an khoi UI — dang xuat cuong buc de session cu (con hieu luc theo
-  // JWT) khong the tiep tuc dieu huong sang trang khac. Day la lop UX/chan
-  // som; lop bao ve THAT SU la current_phong_ban() tra ve NULL cho nguoi da
-  // nghi viec (xem migration rieng), vi goi Supabase API truc tiep tu trinh
-  // duyet (khong qua Next.js server) se khong bao gio di qua middleware nay.
-  if (user && !isLoginPage) {
-    const { data: nv } = await supabase.from("nhan_vien").select("dang_lam_viec").eq("auth_user_id", user.id).single();
-    if (nv && nv.dang_lam_viec === false) {
-      await supabase.auth.signOut();
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
-    }
-  }
+  // Nhan vien da nghi viec (dang_lam_viec=false): KHONG con truy van rieng o
+  // day nua — tung them 1 round-trip Supabase o day tren MOI request (kem
+  // theo round-trip auth.getUser() ben tren = 2 lan/trang), la nguyen nhan
+  // chinh gay "dang nhap lau, phan hoi cham" toan he thong sau go-live. Kiem
+  // tra nay hoan toan trung voi cai getCurrentUser() (src/lib/auth.ts) DA
+  // lam va (app)/layout.tsx DA redirect ve /login neu null — chay ngay sau
+  // middleware nay, truoc khi bat ky noi dung bao ve nao duoc render, nen bo
+  // o day khong mo ra khoang ho nao. Lop bao ve THAT SU van la
+  // current_phong_ban() tra ve NULL qua RLS (xem comment cu) — khong doi.
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
