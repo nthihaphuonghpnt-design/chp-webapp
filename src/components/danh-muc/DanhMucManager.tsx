@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
@@ -609,17 +610,26 @@ export function FormModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // FormModal mo lung tung (khong qua portal) nen khi duoc goi tu ben trong
-    // 1 form khac (vi du nut "+" o QuickAddSelect trong DonHangForm), <form>
-    // o day nam long trong <form> ngoai. preventDefault() khong chan duoc
-    // submit event tiep tuc bubble len — neu khong stopPropagation, form
-    // ngoai cung bi submit theo (mat du lieu dang nhap, dieu huong di noi
-    // khac truoc khi state "vua them xong" kip cap nhat).
+    // FormModal duoc goi tu ben trong 1 form khac (vi du nut "+" o
+    // QuickAddSelect trong DonHangForm) nen <form> o day co the nam long
+    // trong <form> ngoai ve mat REACT TREE (props/children), du DOM thuc te
+    // da duoc tach ra qua createPortal ben duoi. stopPropagation() o day
+    // chan dung React synthetic event bubble len form ngoai theo cay React
+    // (portal khong lam mat lien ket nay) — thieu dong nay thi form ngoai
+    // van bi submit theo (mat du lieu dang nhap).
     e.stopPropagation();
     onSubmit(values);
   }
 
-  return (
+  // Nested <form> that trong DOM (form ngoai chua form nay) khong chi sai
+  // HTML ma con lam TRINH DUYET tu xu ly submit event nhu mot native form
+  // submission binh thuong, KHONG qua duoc React synthetic event system —
+  // nghia la ca preventDefault() lan stopPropagation() o tren deu khong
+  // chay toi (da kiem chung truc tiep bang repro doc lap, khong chi doc
+  // code). createPortal ra document.body giai quyet tan goc: form nay
+  // khong con la con chau DOM cua form ngoai nua nen khong con "nested
+  // form" that su, React synthetic event lai hoat dong binh thuong.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
       <form
         onSubmit={handleSubmit}
@@ -751,6 +761,7 @@ export function FormModal({
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
