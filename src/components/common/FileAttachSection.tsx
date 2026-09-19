@@ -104,7 +104,7 @@ export default function FileAttachSection({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.pdf"
+          accept="image/*,.pdf,.xls,.xlsx,.doc,.docx"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

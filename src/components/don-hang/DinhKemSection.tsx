@@ -130,7 +130,7 @@ export default function DinhKemSection({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,.pdf"
+            accept="image/*,.pdf,.xls,.xlsx,.doc,.docx"
             capture="environment"
             className="hidden"
             onChange={(e) => {
