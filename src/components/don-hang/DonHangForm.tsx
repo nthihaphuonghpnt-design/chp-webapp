@@ -153,10 +153,18 @@ export default function DonHangForm({
         }
       }
 
-      if (so_cont_ban_dau.trim()) {
+      // Cho phep go nhieu so container cach nhau boi dau phay (VD lo hang le
+      // ghep nhieu container) — tach thanh tung dong rieng trong
+      // don_hang_container, khong gop chung 1 dong 1 chuoi (moi container 1
+      // dong de sau con sua/xoa rieng tung cai duoc o trang chi tiet).
+      const soContList = so_cont_ban_dau
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (soContList.length > 0) {
         const { error: contErr } = await supabase
           .from("don_hang_container")
-          .insert({ don_hang_id: data.id, so_cont: so_cont_ban_dau.trim() });
+          .insert(soContList.map((so_cont) => ({ don_hang_id: data.id, so_cont })));
         if (contErr) {
           window.alert(
             `Đã tạo đơn hàng, nhưng lưu Số container bị lỗi: ${contErr.message}\nVào chi tiết đơn hàng để thêm container thủ công.`
@@ -292,7 +300,10 @@ export default function DonHangForm({
         </Field>
         {!initial && (
           <>
-            <Field label="Số container" hint="Bỏ trống nếu chưa có — có thể thêm sau ở trang chi tiết">
+            <Field
+              label="Số container"
+              hint="Bỏ trống nếu chưa có — nhiều container cách nhau bởi dấu phẩy, có thể thêm sau ở trang chi tiết"
+            >
               <input
                 value={values.so_cont_ban_dau}
                 onChange={(e) => set("so_cont_ban_dau", e.target.value)}
