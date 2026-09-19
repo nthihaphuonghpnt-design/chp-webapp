@@ -5,7 +5,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { canManageDonHang } from "@/lib/permissions";
 import StatusBadge from "@/components/don-hang/StatusBadge";
 import ConfirmButtons from "@/components/don-hang/ConfirmButtons";
-import ContainerSection from "@/components/don-hang/ContainerSection";
 import ToKhaiSection from "@/components/don-hang/ToKhaiSection";
 import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSection";
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
@@ -27,7 +26,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: chiTietRows },
     { data: dinhKemRows },
     { data: diaDiemList },
-    { data: loaiContainerList },
     { data: chiPhiRows },
     { data: phuThuRows },
     { data: chiPhiGiaoNhanRows },
@@ -50,7 +48,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     supabase.from("chi_tiet_van_chuyen").select("*").eq("don_hang_id", id).order("ngay_vc"),
     supabase.from("dinh_kem").select("*").eq("don_hang_id", id).order("thoi_gian_upload", { ascending: false }),
     supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
-    supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("phat_sinh_chi_phi").select(PHAT_SINH_CHI_PHI_SAFE_COLS).eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("phu_thu").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
     supabase.from("chi_phi_giao_nhan").select("*").eq("don_hang_id", id).order("created_at", { ascending: false }),
@@ -206,7 +203,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   // lo khong do Chung tu xu ly nen Chung tu khong nhap to khai, Sale phai
   // tu lam thay theo yeu cau cua Bao Dung (2026-09-19).
   const canEditToKhai = ["Chứng từ", "Sale"].includes(user?.phong_ban ?? "");
-  const canEditContainer = canManageDonHang(user?.phong_ban);
   // Dinh/xoa ho so dinh kem cua don hang (va cua tung to khai) — rong hon
   // canEditVanChuyen, co them Sale theo yeu cau + migration 0106.
   const canUploadDinhKem = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán", "Sale"].includes(user?.phong_ban ?? "");
@@ -277,15 +273,6 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             <p className="font-medium text-slate-900">{order.ghi_chu_van_chuyen}</p>
           </div>
         )}
-
-        <div className="sm:col-span-2">
-          <ContainerSection
-            donHangId={order.id}
-            initialRows={containerRows ?? []}
-            loaiContainerList={loaiContainerList ?? []}
-            canEdit={canEditContainer}
-          />
-        </div>
       </div>
 
       <div className="mb-4">
