@@ -24,6 +24,7 @@ export default function ContainerSection({
   const [rows, setRows] = useState<DonHangContainer[]>(initialRows);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DonHangContainer | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   function loaiTen(id: string | null) {
     return loaiContainerList.find((l) => l.id === id)?.ten ?? "—";
@@ -70,24 +71,48 @@ export default function ContainerSection({
     else window.alert(error.message);
   }
 
-  // Khong con la 1 the rieng ("mục riêng") tren trang chi tiet nua — theo
-  // yeu cau, gop chung vao ngay trong the "Thong tin chung" o page.tsx (chi
-  // ngan cach bang duong ke tren, khong con vien/bo cuc rieng).
+  const soContSummary = rows.map((r) => r.so_cont).filter(Boolean).join(", ") || null;
+
+  // Khong con hien ca danh sach ngay tren trang nua (trung voi o "So
+  // container" tom tat) — mac dinh chi hien 1 dong nhu 1 truong Info binh
+  // thuong, bam "Sửa" moi mo rong ra day du de them/sua/xoa (van can vi 1 lo
+  // co the co nhieu container, ma o tom tat chi hien duoc text).
+  if (!expanded) {
+    return (
+      <div>
+        <p className="text-slate-500">Số container</p>
+        <div className="flex items-center gap-2">
+          <p className="font-medium text-slate-900">{soContSummary ?? "—"}</p>
+          {canEdit && (
+            <button type="button" onClick={() => setExpanded(true)} className="text-xs font-medium text-blue-600">
+              Sửa
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="border-t border-slate-100 pt-3">
+    <div className="sm:col-span-2">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">Container / số ký</h2>
-        {canEdit && (
-          <button
-            onClick={() => {
-              setEditing(null);
-              setShowForm(true);
-            }}
-            className="text-sm font-medium text-blue-600"
-          >
-            + Thêm container
+        <div className="flex items-center gap-3">
+          {canEdit && (
+            <button
+              onClick={() => {
+                setEditing(null);
+                setShowForm(true);
+              }}
+              className="text-sm font-medium text-blue-600"
+            >
+              + Thêm container
+            </button>
+          )}
+          <button onClick={() => setExpanded(false)} className="text-sm font-medium text-slate-500">
+            Thu gọn
           </button>
-        )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
