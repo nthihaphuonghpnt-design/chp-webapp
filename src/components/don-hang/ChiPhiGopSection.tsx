@@ -312,7 +312,11 @@ export default function ChiPhiGopSection({
           chi_ho: row.chi_ho,
           ghi_chu: row.ghi_chu || null,
           nguoi_nhap_id: nhanVienId,
-          trang_thai: "Chờ duyệt",
+          // Ke toan tu nhap thi khong can ai duyet lai (chinh ho la nguoi
+          // duyet) — vao thang "Da duyet" luon, khoi phai tu tay duyet lai
+          // dong minh vua nhap. Phong ban khac van "Cho duyet" nhu cu, cho
+          // Ke toan duyet.
+          trang_thai: isKeToan ? "Đã duyệt" : "Chờ duyệt",
           // Hien truong/Chung tu khong tu chon nguon thanh toan — de trong de
           // trigger tu_dong_nguon_thanh_toan_hien_truong (0062/0066) tu gan.
           ...(canChonNguonThanhToan ? { nguon_thanh_toan: row.nguon_thanh_toan || null, tam_ung_id: row.tam_ung_id || null } : {}),
@@ -340,6 +344,9 @@ export default function ChiPhiGopSection({
           gia_ban_sell: row.sell ? Number(row.sell) : null,
           ngay_thue: new Date().toISOString().slice(0, 10),
           nguoi_nhap_id: nhanVienId,
+          // Cung logic voi chi_phi phia tren: Ke toan tu nhap thi vao thang
+          // "Da duyet" luon.
+          trang_thai: isKeToan ? "Đã duyệt" : "Chờ duyệt",
           ...(canChonNguonThanhToan ? { nguon_thanh_toan: row.nguon_thanh_toan || null, tam_ung_id: row.tam_ung_id || null } : {}),
         })
         .select(DON_THUE_NGOAI_SAFE_COLS)
