@@ -320,6 +320,14 @@ export default function ChiPhiGopSection({
           // Hien truong/Chung tu khong tu chon nguon thanh toan — de trong de
           // trigger tu_dong_nguon_thanh_toan_hien_truong (0062/0066) tu gan.
           ...(canChonNguonThanhToan ? { nguon_thanh_toan: row.nguon_thanh_toan || null, tam_ung_id: row.tam_ung_id || null } : {}),
+          // Ke toan tu nhap + nguon la Tien mat/Tai khoan cong ty (khong phai
+          // Tam ung nhan vien) — coi nhu da thanh toan du ngay luc nhap, tu
+          // chay vao So quy (giong het logic o duyet() ben duoi). Form nay
+          // chua co o VAT nen tong_tien (generated column) == so_tien_da_chi
+          // luc insert, dung Number(row.buy) truc tiep la chinh xac.
+          ...(isKeToan && (row.nguon_thanh_toan === "Tiền mặt" || row.nguon_thanh_toan === "Tài khoản công ty")
+            ? { so_tien_da_thanh_toan: Number(row.buy), phuong_thuc_thanh_toan: row.nguon_thanh_toan, tinh_trang_thanh_toan: "Đã đủ" }
+            : {}),
         })
         .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
         .single();
@@ -348,6 +356,9 @@ export default function ChiPhiGopSection({
           // "Da duyet" luon.
           trang_thai: isKeToan ? "Đã duyệt" : "Chờ duyệt",
           ...(canChonNguonThanhToan ? { nguon_thanh_toan: row.nguon_thanh_toan || null, tam_ung_id: row.tam_ung_id || null } : {}),
+          ...(isKeToan && (row.nguon_thanh_toan === "Tiền mặt" || row.nguon_thanh_toan === "Tài khoản công ty")
+            ? { so_tien_da_thanh_toan: Number(row.buy), phuong_thuc_thanh_toan: row.nguon_thanh_toan, tinh_trang_thanh_toan: "Đã đủ" }
+            : {}),
         })
         .select(DON_THUE_NGOAI_SAFE_COLS)
         .single();
@@ -546,6 +557,22 @@ export default function ChiPhiGopSection({
     const nhanVienId = rv.loai === "chi_phi" ? await layNhanVienId() : undefined;
     const payload: Record<string, unknown> = { trang_thai: trangThai };
     if (nhanVienId) payload.nguoi_duyet_id = nhanVienId;
+    // Duyet (khong phai Tu choi) voi nguon Tien mat/Tai khoan cong ty (KHONG
+    // phai Tam ung nhan vien — khoan do di qua Phieu quyet toan tam ung
+    // rieng, xem DoiChieuSaoKeView) — coi nhu da thanh toan du ngay luc
+    // duyet, khong bat phai qua Doi chieu sao ke rieng nua thi moi len So
+    // quy. sync_so_quy_chi_phi/sync_so_quy_thue_ngoai (0063) tu bat theo
+    // dung dieu kien nay.
+    if (trangThai === "Đã duyệt") {
+      const raw = rv.raw as PhatSinhChiPhi & DonThueNgoai;
+      const nguon = raw.nguon_thanh_toan;
+      if (nguon === "Tiền mặt" || nguon === "Tài khoản công ty") {
+        const tongTienNo = rv.loai === "chi_phi" ? raw.tong_tien : raw.so_tien_da_chi;
+        payload.so_tien_da_thanh_toan = tongTienNo;
+        payload.phuong_thuc_thanh_toan = nguon;
+        payload.tinh_trang_thanh_toan = "Đã đủ";
+      }
+    }
     const { data, error } = await supabase.from(table).update(payload).eq("id", rv.raw.id).select(safeCols).single();
     if (error) return window.alert(error.message);
     // gia_ban_sell khong doi trong thao tac duyet — giu nguyen tu rv.sell.
