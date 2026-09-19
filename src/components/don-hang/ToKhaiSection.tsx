@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
-import FileAttachSection from "@/components/common/FileAttachSection";
-import type { DinhKem, ToKhaiHaiQuan } from "@/types/database";
+import type { ToKhaiHaiQuan } from "@/types/database";
 
 const LOAI_HINH = ["Nhập kinh doanh", "Nhập ủy thác", "Xuất kinh doanh", "Xuất ủy thác", "Tạm nhập tái xuất", "Khác"];
 const LUONG = ["Xanh", "Vàng", "Đỏ"];
@@ -17,34 +16,22 @@ const LUONG_COLOR: Record<string, string> = {
   Đỏ: "bg-red-100 text-red-700",
 };
 
-function makeUploadPath(toKhaiId: string, index: number, fileName: string) {
-  return `to-khai/${toKhaiId}/${Date.now()}-${index}-${fileName}`;
-}
-
 export default function ToKhaiSection({
   donHangId,
   initialRows,
-  dinhKemRows,
   canEdit,
-  canUploadDinhKem,
-  currentUserId,
 }: {
   donHangId: string;
   initialRows: ToKhaiHaiQuan[];
-  dinhKemRows: DinhKem[];
   canEdit: boolean;
-  /** Quyen dinh/xoa ho so (dinh_kem) rieng — rong hon canEdit, xem 0106. */
-  canUploadDinhKem: boolean;
-  currentUserId?: string;
 }) {
   const supabase = createClient();
   const [rows, setRows] = useState<ToKhaiHaiQuan[]>(initialRows);
-  const [dinhKem, setDinhKem] = useState<DinhKem[]>(dinhKemRows);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ToKhaiHaiQuan | null>(null);
   const [saving, setSaving] = useState(false);
 
-  async function handleSave(values: Record<string, string>, pendingFiles: File[]) {
+  async function handleSave(values: Record<string, string>) {
     setSaving(true);
     const payload: Record<string, unknown> = {
       don_hang_id: donHangId,
@@ -61,8 +48,6 @@ export default function ToKhaiSection({
       ai_dong_thue: values.ai_dong_thue || "Khách hàng tự đóng",
     };
 
-    let toKhaiId = editing?.id;
-
     if (editing) {
       const { data, error } = await supabase.from("to_khai_hai_quan").update(payload).eq("id", editing.id).select().single();
       if (error) {
@@ -78,34 +63,7 @@ export default function ToKhaiSection({
         setSaving(false);
         return;
       }
-      toKhaiId = data.id;
       setRows((prev) => [...prev, data as ToKhaiHaiQuan]);
-    }
-
-    if (toKhaiId && pendingFiles.length > 0) {
-      for (let i = 0; i < pendingFiles.length; i++) {
-        const file = pendingFiles[i];
-        const path = makeUploadPath(toKhaiId, i, file.name);
-        const { error: uploadErr } = await supabase.storage.from("dinh-kem").upload(path, file);
-        if (uploadErr) {
-          window.alert(`Tải file "${file.name}" thất bại: ${uploadErr.message}`);
-          continue;
-        }
-        const { data: dk } = await supabase
-          .from("dinh_kem")
-          .insert({
-            to_khai_id: toKhaiId,
-            don_hang_id: donHangId,
-            lien_ket_toi: "Thông quan",
-            loai_dinh_kem: "Khác",
-            duong_dan_file: path,
-            ten_file: file.name,
-            nguoi_upload_id: currentUserId ?? null,
-          })
-          .select()
-          .single();
-        if (dk) setDinhKem((prev) => [dk as DinhKem, ...prev]);
-      }
     }
 
     setSaving(false);
@@ -163,16 +121,6 @@ export default function ToKhaiSection({
                 <span className={row.ai_dong_thue === "CHP đóng hộ" ? "font-medium text-amber-600" : ""}>{row.ai_dong_thue}</span>
               </p>
             )}
-            <FileAttachSection
-              parentField="to_khai_id"
-              parentId={row.id}
-              pathPrefix="to-khai"
-              lienKetToi="Thông quan"
-              initialRows={dinhKem.filter((d) => d.to_khai_id === row.id)}
-              canUpload={canUploadDinhKem}
-              currentUserId={currentUserId}
-              donHangId={donHangId}
-            />
             {canEdit && (
               <div className="mt-2 flex gap-3">
                 <button
@@ -208,7 +156,7 @@ function ToKhaiForm({
   initial: ToKhaiHaiQuan | null;
   saving: boolean;
   onCancel: () => void;
-  onSave: (values: Record<string, string>, pendingFiles: File[]) => void;
+  onSave: (values: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState({
     so_to_khai: initial?.so_to_khai ?? "",
@@ -223,19 +171,9 @@ function ToKhaiForm({
     trang_thai: initial?.trang_thai ?? "Đang mở tờ khai",
     ai_dong_thue: initial?.ai_dong_thue ?? "Khách hàng tự đóng",
   });
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   function set(key: keyof typeof values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function addFiles(files: FileList | null) {
-    if (!files) return;
-    setPendingFiles((prev) => [...prev, ...Array.from(files)]);
-  }
-
-  function removePendingFile(idx: number) {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
   }
 
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
@@ -245,7 +183,7 @@ function ToKhaiForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(values, pendingFiles);
+          onSave(values);
         }}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
@@ -325,29 +263,6 @@ function ToKhaiForm({
               sinh để tính đúng công nợ phải thu (gồm cả VAT).
             </p>
           </div>
-        </div>
-
-        <div className="mt-4">
-          <label className="mb-1 block text-sm font-medium text-slate-700">Đính kèm chứng từ / hình ảnh</label>
-          <label className="inline-block cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">
-            + Chọn file
-            <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
-          </label>
-          {pendingFiles.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1">
-              {pendingFiles.map((f, i) => (
-                <li key={i} className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1 text-xs text-slate-600">
-                  <span className="truncate">{f.name}</span>
-                  <button type="button" onClick={() => removePendingFile(i)} className="ml-2 text-red-500">
-                    Xóa
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {initial && (
-            <p className="mt-1 text-xs text-slate-400">File đã đính kèm trước đó xem/thêm ở ngoài thẻ tờ khai sau khi lưu.</p>
-          )}
         </div>
 
         <div className="mt-6 flex gap-3">

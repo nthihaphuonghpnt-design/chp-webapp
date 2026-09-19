@@ -74,30 +74,20 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const [monthYear, monthNum] = monthKey.split("-").map(Number);
   const monthStart = `${monthKey}-01`;
   const nextMonthStart = new Date(Date.UTC(monthYear, monthNum, 1)).toISOString().slice(0, 10);
-  const toKhaiIds = (toKhaiRows ?? []).map((t) => t.id);
 
   // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng
   // (tu kiem tra dung quyen theo phong ban), giu dung shape PhatSinhChiPhi/
   // DonThueNgoai nhu truoc de ChiPhiGopSection khong doi gi ve kieu du lieu.
   // dinh_phi_thang da duoc thay the boi hoa_don_dau_vao (migration 0082) —
   // bang moi nhay cam hon nen khong SELECT thang duoc, chi lay tong qua RPC.
-  // Gop chung 1 Promise.all: ca 5 truy van duoi day chi phu thuoc ket qua
-  // cua Promise.all dau tien (order/chiPhiRows/thueNgoaiRows/toKhaiRows),
-  // khong phu thuoc lan nhau — truoc day tach thanh 3 buoc await noi tiep,
-  // moi buoc cong them 1 vong round-trip mang, gay cham khi mo trang chi
-  // tiet don hang.
-  const [
-    chiPhiRowsDayDu,
-    thueNgoaiRowsDayDu,
-    { data: toKhaiDinhKemRows },
-    { data: dinhPhiRows },
-    { count: soLoTrongThang },
-  ] = await Promise.all([
+  // Gop chung 1 Promise.all: ca 4 truy van duoi day chi phu thuoc ket qua
+  // cua Promise.all dau tien (order/chiPhiRows/thueNgoaiRows), khong phu
+  // thuoc lan nhau — truoc day tach thanh nhieu buoc await noi tiep, moi
+  // buoc cong them 1 vong round-trip mang, gay cham khi mo trang chi tiet
+  // don hang.
+  const [chiPhiRowsDayDu, thueNgoaiRowsDayDu, { data: dinhPhiRows }, { count: soLoTrongThang }] = await Promise.all([
     ghepGiaBanChiPhi(supabase, chiPhiRows ?? []),
     ghepGiaBanThueNgoai(supabase, thueNgoaiRows ?? []),
-    toKhaiIds.length > 0
-      ? supabase.from("dinh_kem").select("*").in("to_khai_id", toKhaiIds).order("thoi_gian_upload", { ascending: false })
-      : Promise.resolve({ data: [] as typeof dinhKemRows }),
     supabase.rpc("tong_dinh_phi_theo_thang"),
     supabase
       .from("don_hang")
@@ -282,14 +272,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="mb-4">
-        <ToKhaiSection
-          donHangId={order.id}
-          initialRows={toKhaiRows ?? []}
-          dinhKemRows={toKhaiDinhKemRows ?? []}
-          canEdit={canEditToKhai}
-          canUploadDinhKem={canUploadDinhKem}
-          currentUserId={user?.id}
-        />
+        <ToKhaiSection donHangId={order.id} initialRows={toKhaiRows ?? []} canEdit={canEditToKhai} />
       </div>
 
       <div className="mb-4">
