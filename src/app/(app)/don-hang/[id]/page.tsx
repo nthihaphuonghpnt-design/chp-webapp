@@ -202,8 +202,14 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   }
 
   const canEditVanChuyen = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán"].includes(user?.phong_ban ?? "");
-  const canEditToKhai = user?.phong_ban === "Chứng từ";
+  // Sale cung duoc nhap to khai day du (khong chi ho so/trang thai) — nhieu
+  // lo khong do Chung tu xu ly nen Chung tu khong nhap to khai, Sale phai
+  // tu lam thay theo yeu cau cua Bao Dung (2026-09-19).
+  const canEditToKhai = ["Chứng từ", "Sale"].includes(user?.phong_ban ?? "");
   const canEditContainer = canManageDonHang(user?.phong_ban);
+  // Dinh/xoa ho so dinh kem cua don hang (va cua tung to khai) — rong hon
+  // canEditVanChuyen, co them Sale theo yeu cau + migration 0106.
+  const canUploadDinhKem = ["Hiện trường", "Điều phối", "Chứng từ", "Kế toán", "Sale"].includes(user?.phong_ban ?? "");
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -268,15 +274,15 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             <p className="font-medium text-slate-900">{order.ghi_chu_van_chuyen}</p>
           </div>
         )}
-      </div>
 
-      <div className="mb-4">
-        <ContainerSection
-          donHangId={order.id}
-          initialRows={containerRows ?? []}
-          loaiContainerList={loaiContainerList ?? []}
-          canEdit={canEditContainer}
-        />
+        <div className="sm:col-span-2">
+          <ContainerSection
+            donHangId={order.id}
+            initialRows={containerRows ?? []}
+            loaiContainerList={loaiContainerList ?? []}
+            canEdit={canEditContainer}
+          />
+        </div>
       </div>
 
       <div className="mb-4">
@@ -285,6 +291,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           initialRows={toKhaiRows ?? []}
           dinhKemRows={toKhaiDinhKemRows ?? []}
           canEdit={canEditToKhai}
+          canUploadDinhKem={canUploadDinhKem}
           currentUserId={user?.id}
         />
       </div>
@@ -367,7 +374,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      <DinhKemSection donHangId={order.id} initialRows={dinhKemRows ?? []} currentUserId={user?.id} canUpload={canEditVanChuyen} />
+      <DinhKemSection donHangId={order.id} initialRows={dinhKemRows ?? []} currentUserId={user?.id} canUpload={canUploadDinhKem} />
     </div>
   );
 }

@@ -26,12 +26,15 @@ export default function ToKhaiSection({
   initialRows,
   dinhKemRows,
   canEdit,
+  canUploadDinhKem,
   currentUserId,
 }: {
   donHangId: string;
   initialRows: ToKhaiHaiQuan[];
   dinhKemRows: DinhKem[];
   canEdit: boolean;
+  /** Quyen dinh/xoa ho so (dinh_kem) rieng — rong hon canEdit, xem 0106. */
+  canUploadDinhKem: boolean;
   currentUserId?: string;
 }) {
   const supabase = createClient();
@@ -166,7 +169,7 @@ export default function ToKhaiSection({
               pathPrefix="to-khai"
               lienKetToi="Thông quan"
               initialRows={dinhKem.filter((d) => d.to_khai_id === row.id)}
-              canUpload={canEdit}
+              canUpload={canUploadDinhKem}
               currentUserId={currentUserId}
               donHangId={donHangId}
             />

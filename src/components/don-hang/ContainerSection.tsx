@@ -70,8 +70,11 @@ export default function ContainerSection({
     else window.alert(error.message);
   }
 
+  // Khong con la 1 the rieng ("mục riêng") tren trang chi tiet nua — theo
+  // yeu cau, gop chung vao ngay trong the "Thong tin chung" o page.tsx (chi
+  // ngan cach bang duong ke tren, khong con vien/bo cuc rieng).
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="border-t border-slate-100 pt-3">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">Container / số ký</h2>
         {canEdit && (

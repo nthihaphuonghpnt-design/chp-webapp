@@ -89,6 +89,17 @@ export default function DinhKemSection({
     setRows((prev) => [data as DinhKem, ...prev]);
   }
 
+  async function handleDelete(row: DinhKem) {
+    if (!window.confirm(`Xóa file "${row.ten_file}"?`)) return;
+    const { error: delErr } = await supabase.from("dinh_kem").delete().eq("id", row.id);
+    if (delErr) {
+      window.alert(`Xóa thất bại: ${delErr.message}`);
+      return;
+    }
+    await supabase.storage.from("dinh-kem").remove([row.duong_dan_file]);
+    setRows((prev) => prev.filter((r) => r.id !== row.id));
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <h2 className="mb-3 text-sm font-semibold text-slate-900">Đính kèm ảnh / chứng từ</h2>
@@ -133,21 +144,32 @@ export default function DinhKemSection({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {rows.map((r) => (
-          <a
-            key={r.id}
-            href={urls[r.id] || "#"}
-            target="_blank"
-            rel="noreferrer"
-            className="block rounded-lg border border-slate-100 p-2 text-xs hover:border-blue-300"
-          >
-            {r.ten_file?.match(/\.(png|jpe?g|gif|webp)$/i) ? (
-              <img src={urls[r.id]} alt={r.ten_file ?? ""} className="mb-1 h-20 w-full rounded object-cover" />
-            ) : (
-              <div className="mb-1 flex h-20 w-full items-center justify-center rounded bg-slate-50 text-2xl">📄</div>
+          <div key={r.id} className="relative">
+            <a
+              href={urls[r.id] || "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="block rounded-lg border border-slate-100 p-2 text-xs hover:border-blue-300"
+            >
+              {r.ten_file?.match(/\.(png|jpe?g|gif|webp)$/i) ? (
+                <img src={urls[r.id]} alt={r.ten_file ?? ""} className="mb-1 h-20 w-full rounded object-cover" />
+              ) : (
+                <div className="mb-1 flex h-20 w-full items-center justify-center rounded bg-slate-50 text-2xl">📄</div>
+              )}
+              <p className="truncate text-slate-700">{r.ten_file}</p>
+              <p className="truncate text-slate-400">{r.loai_dinh_kem}</p>
+            </a>
+            {canUpload && (
+              <button
+                type="button"
+                onClick={() => handleDelete(r)}
+                title="Xóa file"
+                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-red-600 shadow"
+              >
+                ×
+              </button>
             )}
-            <p className="truncate text-slate-700">{r.ten_file}</p>
-            <p className="truncate text-slate-400">{r.loai_dinh_kem}</p>
-          </a>
+          </div>
         ))}
         {rows.length === 0 && <p className="col-span-full text-sm text-slate-400">Chưa có file đính kèm.</p>}
       </div>

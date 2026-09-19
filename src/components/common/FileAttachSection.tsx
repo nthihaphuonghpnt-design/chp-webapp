@@ -32,12 +32,12 @@ export default function FileAttachSection({
 
   useEffect(() => {
     async function loadUrls() {
-      const entries = await Promise.all(
-        rows.map(async (r) => {
-          const { data } = await supabase.storage.from("dinh-kem").createSignedUrl(r.duong_dan_file, 3600);
-          return [r.id, data?.signedUrl ?? ""] as const;
-        })
-      );
+      // 1 request createSignedUrls (batch) thay vi N request rieng le —
+      // xem DinhKemSection.tsx, cung 1 nguyen nhan gay cham khi mo trang.
+      const { data } = await supabase.storage
+        .from("dinh-kem")
+        .createSignedUrls(rows.map((r) => r.duong_dan_file), 3600);
+      const entries = rows.map((r, i) => [r.id, data?.[i]?.signedUrl ?? ""] as const);
       setUrls(Object.fromEntries(entries));
     }
     if (rows.length > 0) loadUrls();
@@ -76,6 +76,17 @@ export default function FileAttachSection({
     setRows((prev) => [data as DinhKem, ...prev]);
   }
 
+  async function handleDelete(row: DinhKem) {
+    if (!window.confirm(`Xóa file "${row.ten_file}"?`)) return;
+    const { error: delErr } = await supabase.from("dinh_kem").delete().eq("id", row.id);
+    if (delErr) {
+      window.alert(`Xóa thất bại: ${delErr.message}`);
+      return;
+    }
+    await supabase.storage.from("dinh-kem").remove([row.duong_dan_file]);
+    setRows((prev) => prev.filter((r) => r.id !== row.id));
+  }
+
   return (
     <div className="mt-2 border-t border-slate-100 pt-2">
       <div className="mb-1 flex items-center justify-between">
@@ -107,20 +118,31 @@ export default function FileAttachSection({
       ) : (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {rows.map((r) => (
-            <a
-              key={r.id}
-              href={urls[r.id] || "#"}
-              target="_blank"
-              rel="noreferrer"
-              className="block rounded-lg border border-slate-100 p-1.5 text-xs hover:border-blue-300"
-            >
-              {r.ten_file?.match(/\.(png|jpe?g|gif|webp)$/i) ? (
-                <img src={urls[r.id]} alt={r.ten_file ?? ""} className="mb-1 h-14 w-full rounded object-cover" />
-              ) : (
-                <div className="mb-1 flex h-14 w-full items-center justify-center rounded bg-slate-50 text-xl">📄</div>
+            <div key={r.id} className="relative">
+              <a
+                href={urls[r.id] || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-lg border border-slate-100 p-1.5 text-xs hover:border-blue-300"
+              >
+                {r.ten_file?.match(/\.(png|jpe?g|gif|webp)$/i) ? (
+                  <img src={urls[r.id]} alt={r.ten_file ?? ""} className="mb-1 h-14 w-full rounded object-cover" />
+                ) : (
+                  <div className="mb-1 flex h-14 w-full items-center justify-center rounded bg-slate-50 text-xl">📄</div>
+                )}
+                <p className="truncate text-slate-600">{r.ten_file}</p>
+              </a>
+              {canUpload && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(r)}
+                  title="Xóa file"
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-red-600 shadow"
+                >
+                  ×
+                </button>
               )}
-              <p className="truncate text-slate-600">{r.ten_file}</p>
-            </a>
+            </div>
           ))}
         </div>
       )}
