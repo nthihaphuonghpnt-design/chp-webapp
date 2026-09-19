@@ -32,7 +32,7 @@ export default async function BaoCaoPage() {
     { data: khachHangList },
     { data: nhanVienList },
   ] = await Promise.all([
-    supabase.from("don_hang").select("id, so_don_hang, ngay_len_don, trang_thai, sale_phu_trach_id, khach_hang_id"),
+    supabase.from("don_hang").select("id, so_don_hang, ngay_len_don, trang_thai, sale_phu_trach_id, khach_hang_id, gia"),
     // Khong gate theo isKeToanOrGiamDoc: Sale can chinh du lieu nay de tinh "Doanh so
     // theo Sale" cua rieng minh — RLS (0040/0041) da tu gioi han Sale chi thay dong
     // chi phi cua don hang do minh phu trach, khong can chan them o day.

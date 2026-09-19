@@ -35,3 +35,13 @@ export function tongPhanLoaiChiPhi(rows: ChiPhiPhanLoaiInput[]): PhanLoaiChiPhiK
     { doanhThu: 0, chiPhiThuc: 0, chiHo: 0 },
   );
 }
+
+// Nhieu lo hang Sale chua nhap gia ban tung dong chi phi/phu thu/thue ngoai
+// (chi nhap "Gia ban" chung 1 lan luc tao don, xem don_hang.gia) — neu tong
+// doanh thu gop tu tung dong = 0 (chua ai itemize gi ca), dung tam gia ban
+// chung cua don hang lam co so tinh loi nhuan/bao cao, theo yeu cau Bao Dung
+// (2026-09-19). CHI ap dung khi tong itemize dung la 0 — da co du 1 dong gia
+// ban (du nho) thi khong ghi de, tranh sai lech voi du lieu da nhap that.
+export function doanhThuVoiFallbackGiaDonHang(tongDoanhThuItemize: number, giaDonHang: number | null): number {
+  return tongDoanhThuItemize > 0 ? tongDoanhThuItemize : (giaDonHang ?? 0);
+}

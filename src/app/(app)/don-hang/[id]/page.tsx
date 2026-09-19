@@ -13,7 +13,7 @@ import LineItemsSection from "@/components/don-hang/LineItemsSection";
 import ChiPhiGopSection from "@/components/don-hang/ChiPhiGopSection";
 import CongViecHoanThanhSection, { type CongViecEntry } from "@/components/don-hang/CongViecHoanThanhSection";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
-import { tongPhanLoaiChiPhi } from "@/lib/baoCao";
+import { tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -110,10 +110,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const chiPhiHopLe = chiPhiRowsDayDu.filter((r) => r.trang_thai !== "Từ chối");
   const thueNgoaiHopLe = thueNgoaiRowsDayDu.filter((r) => r.trang_thai !== "Từ chối");
   const { doanhThu: sellTuChiPhi, chiPhiThuc: tongBuyNoiBo } = tongPhanLoaiChiPhi(chiPhiHopLe);
-  const tongSell =
+  const tongSellItemize =
     sellTuChiPhi +
     (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0) +
     thueNgoaiHopLe.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
+  // Chua ai nhap gia ban tung dong (tongSellItemize = 0) thi tam dung "Gia
+  // ban" chung cua don hang lam co so tinh loi nhuan, theo yeu cau Bao Dung.
+  const tongSell = doanhThuVoiFallbackGiaDonHang(tongSellItemize, order.gia);
   const tongChiPhiGiaoNhan = (chiPhiGiaoNhanRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
   const tongChiPhiThueNgoai = thueNgoaiHopLe.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
 

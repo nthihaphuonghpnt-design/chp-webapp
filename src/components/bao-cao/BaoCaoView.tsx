@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { taoWorkbook, themSheetKeO, taiWorkbook } from "@/lib/excel";
-import { phanLoaiChiPhi, tongPhanLoaiChiPhi } from "@/lib/baoCao";
+import { phanLoaiChiPhi, tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
 
 interface DonHang {
   id: string;
@@ -12,6 +12,7 @@ interface DonHang {
   trang_thai: string;
   sale_phu_trach_id: string | null;
   khach_hang_id: string | null;
+  gia: number | null;
 }
 interface ChiPhi {
   don_hang_id: string;
@@ -177,10 +178,13 @@ export default function BaoCaoView({
       const { doanhThu, chiPhiThuc, chiHo } = tongPhanLoaiChiPhi(cp);
       const buy = chiPhiThuc;
       const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
-      const sell =
+      const sellItemize =
         doanhThu +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
         thueNgoaiHopLe.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
+      // Chua ai nhap gia ban tung dong thi tam dung Gia ban chung cua don
+      // hang lam co so — xem doanhThuVoiFallbackGiaDonHang trong baoCao.ts.
+      const sell = doanhThuVoiFallbackGiaDonHang(sellItemize, d.gia);
       const thueNgoaiBuy = thueNgoaiHopLe.reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
       const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
@@ -194,9 +198,10 @@ export default function BaoCaoView({
     if (!isKeToanOrGiamDoc) return [];
     return donHangTrongKy.map((d) => {
       const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
-      const giaBan =
+      const giaBanItemize =
         cp.filter((c) => !c.chi_ho).reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
+      const giaBan = doanhThuVoiFallbackGiaDonHang(giaBanItemize, d.gia);
       const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
       // Hoa don Da huy/Da thay the khong con la nghia vu cong no thuc su cua
@@ -242,10 +247,11 @@ export default function BaoCaoView({
         const saleId = d.sale_phu_trach_id ?? "chua-gan";
         const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
         const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
-        const sell =
+        const sellItemize =
           tongPhanLoaiChiPhi(cp).doanhThu +
           phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
           thueNgoaiHopLe.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
+        const sell = doanhThuVoiFallbackGiaDonHang(sellItemize, d.gia);
         map.set(saleId, (map.get(saleId) ?? 0) + sell);
       }
     }
