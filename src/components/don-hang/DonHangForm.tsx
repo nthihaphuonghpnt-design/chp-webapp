@@ -79,6 +79,7 @@ export default function DonHangForm({
     hien_truong_phu_trach_id: initial?.hien_truong_phu_trach_id ?? "",
     chung_tu_phu_trach_id: initial?.chung_tu_phu_trach_id ?? "",
     so_to_khai_ban_dau: "",
+    so_cont_ban_dau: "",
   });
 
   function set(key: keyof typeof values, value: string) {
@@ -101,7 +102,7 @@ export default function DonHangForm({
     setSaving(true);
     setError(null);
 
-    const { so_to_khai_ban_dau, ...donHangValues } = values;
+    const { so_to_khai_ban_dau, so_cont_ban_dau, ...donHangValues } = values;
 
     const payload: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(donHangValues)) {
@@ -148,6 +149,17 @@ export default function DonHangForm({
         if (tkErr) {
           window.alert(
             `Đã tạo đơn hàng, nhưng lưu Số tờ khai ban đầu bị lỗi: ${tkErr.message}\nVào chi tiết đơn hàng để thêm tờ khai thủ công.`
+          );
+        }
+      }
+
+      if (so_cont_ban_dau.trim()) {
+        const { error: contErr } = await supabase
+          .from("don_hang_container")
+          .insert({ don_hang_id: data.id, so_cont: so_cont_ban_dau.trim() });
+        if (contErr) {
+          window.alert(
+            `Đã tạo đơn hàng, nhưng lưu Số container bị lỗi: ${contErr.message}\nVào chi tiết đơn hàng để thêm container thủ công.`
           );
         }
       }
@@ -279,10 +291,19 @@ export default function DonHangForm({
           <input value={values.so_bl_bk} onChange={(e) => set("so_bl_bk", e.target.value)} className={inputClass} />
         </Field>
         {!initial && (
-          <p className="sm:col-span-2 text-xs text-slate-400">
-            Số container, số seal, khối lượng/số ký từng container sẽ nhập ở trang chi tiết sau khi lưu đơn hàng
-            này (một lô có thể có nhiều container).
-          </p>
+          <>
+            <Field label="Số container" hint="Bỏ trống nếu chưa có — có thể thêm sau ở trang chi tiết">
+              <input
+                value={values.so_cont_ban_dau}
+                onChange={(e) => set("so_cont_ban_dau", e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <p className="sm:col-span-2 text-xs text-slate-400">
+              Số seal, khối lượng/số ký, loại container, hoặc container thứ 2 trở đi sẽ nhập ở trang chi tiết sau
+              khi lưu đơn hàng này (một lô có thể có nhiều container).
+            </p>
+          </>
         )}
       </Section>
 
