@@ -37,7 +37,6 @@ const IMPORT_COLUMNS = [
   { header: "Số vận đơn/booking", key: "so_bl_bk", kind: "text" },
   { header: "Số lô", key: "so_lo", kind: "text" },
   { header: "Hàng hóa", key: "hang_hoa_id", kind: "hangHoa" },
-  { header: "Khối lượng", key: "khoi_luong", kind: "number" },
   { header: "Kích thước", key: "kich_thuoc", kind: "text" },
   { header: "Nơi lấy cont/hàng", key: "noi_lay_cont_hang_id", kind: "diaDiem" },
   { header: "Nơi đóng/giao", key: "noi_dong_giao_id", kind: "diaDiem" },
