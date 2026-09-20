@@ -41,6 +41,8 @@ interface RowView {
   ten: string;
   doiTac: string;
   chang: string | null;
+  soLuong: number | null;
+  donGia: number | null;
   buy: number | null;
   sell: number | null;
   noiBo: boolean | null; // null = khong ap dung (thue ngoai / phu thu)
@@ -58,6 +60,8 @@ interface NewRowValues {
   nha_cung_cap_id: string | null;
   doi_tac_thue_ngoai_id: string | null;
   chi_tiet_van_chuyen_id: string | null;
+  so_luong: string;
+  don_gia: string;
   buy: string;
   sell: string;
   noi_bo: boolean;
@@ -71,7 +75,7 @@ interface NewRowValues {
   nhan_vien_tam_ung_id: string;
 }
 
-function blankNewRow(loaiMacDinh: Loai): NewRowValues {
+function blankNewRow(loaiMacDinh: Loai, soLuongMacDinh?: number | null): NewRowValues {
   return {
     loai: loaiMacDinh,
     loai_chi_phi_id: "",
@@ -80,6 +84,11 @@ function blankNewRow(loaiMacDinh: Loai): NewRowValues {
     nha_cung_cap_id: null,
     doi_tac_thue_ngoai_id: null,
     chi_tiet_van_chuyen_id: null,
+    // Dien san "So luong" tu So luong cua don hang (vd 2 Cont) — tien loi
+    // cho cac khoan tinh phi theo dau cont (phi HQ, phi ha cont...); nguoi
+    // dung van sua duoc rieng tung dong neu khoan do khong tinh theo dau.
+    so_luong: soLuongMacDinh ? String(soLuongMacDinh) : "",
+    don_gia: "",
     buy: "",
     sell: "",
     noi_bo: true,
@@ -89,6 +98,23 @@ function blankNewRow(loaiMacDinh: Loai): NewRowValues {
     tam_ung_id: "",
     nhan_vien_tam_ung_id: "",
   };
+}
+
+// So luong/Don gia la tien ich nhap nhanh: khi ca 2 co gia tri hop le thi tu
+// tinh lai "So tien da chi" (buy) = so_luong * don_gia — nguoi dung van sua
+// tay "So tien da chi" duoc binh thuong sau do (khong khoa cung theo cong
+// thuc), phu hop ca khoan tinh theo dau (nhan len) lan khoan flat-fee (bo
+// trong 2 o nay, go thang tong tien nhu truoc gio).
+function tinhLaiSoTienDaChi(values: NewRowValues, patch: Partial<NewRowValues>): Partial<NewRowValues> {
+  if (!("so_luong" in patch) && !("don_gia" in patch)) return patch;
+  const soLuongMoi = patch.so_luong !== undefined ? patch.so_luong : values.so_luong;
+  const donGiaMoi = patch.don_gia !== undefined ? patch.don_gia : values.don_gia;
+  const sl = Number(soLuongMoi);
+  const dg = Number(donGiaMoi);
+  if (soLuongMoi && donGiaMoi && !Number.isNaN(sl) && !Number.isNaN(dg)) {
+    return { ...patch, buy: String(Math.round(sl * dg)) };
+  }
+  return patch;
 }
 
 interface TamUngOption {
@@ -112,6 +138,7 @@ export default function ChiPhiGopSection({
   nhanVienChiPhiTamUngOptions,
   nhanVienThueNgoaiTamUngOptions,
   congViecMap,
+  donHangSoLuong,
 }: {
   donHangId: string;
   initialChiPhiRows: PhatSinhChiPhi[];
@@ -126,6 +153,8 @@ export default function ChiPhiGopSection({
   nhanVienChiPhiTamUngOptions: Option[];
   nhanVienThueNgoaiTamUngOptions: Option[];
   congViecMap: Record<string, string>;
+  /** So luong cua don hang (vd 2 Cont) — dien san vao "So luong" luc them dong moi. */
+  donHangSoLuong?: number | null;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [chiPhiRows, setChiPhiRows] = useState<PhatSinhChiPhi[]>(initialChiPhiRows);
@@ -211,6 +240,8 @@ export default function ChiPhiGopSection({
         ten: loaiChiPhiTen(r.loai_chi_phi_id),
         doiTac: r.nha_cung_cap_id ? nccTen(r.nha_cung_cap_id) : r.doi_tac_thue_ngoai_id ? doiTacTen(r.doi_tac_thue_ngoai_id) : "—",
         chang: changTen(r.chi_tiet_van_chuyen_id),
+        soLuong: r.so_luong,
+        donGia: r.don_gia,
         buy: r.so_tien_da_chi,
         sell: r.gia_ban_sell,
         noiBo: r.noi_bo,
@@ -229,6 +260,8 @@ export default function ChiPhiGopSection({
         ten: r.loai_dich_vu_thue ?? "—",
         doiTac: doiTacTen(r.doi_tac_thue_ngoai_id),
         chang: changTen(r.chi_tiet_van_chuyen_id),
+        soLuong: r.so_luong,
+        donGia: r.don_gia,
         buy: r.so_tien_da_chi,
         sell: r.gia_ban_sell,
         noiBo: null,
@@ -247,6 +280,8 @@ export default function ChiPhiGopSection({
           ten: r.loai_phu_thu ?? "—",
           doiTac: "—",
           chang: null,
+          soLuong: null,
+          donGia: null,
           buy: null,
           sell: r.thanh_tien,
           noiBo: null,
@@ -282,7 +317,7 @@ export default function ChiPhiGopSection({
 
   // ---- Them dong moi (co the them nhieu dong 1 luc, moi dong luu rieng khi bam Luu) ----
   function themDongMoi() {
-    setAddingRows((prev) => [...prev, { key: nextKey, ...blankNewRow(loaiChoPhepThem[0]) }]);
+    setAddingRows((prev) => [...prev, { key: nextKey, ...blankNewRow(loaiChoPhepThem[0], donHangSoLuong) }]);
     setNextKey((k) => k + 1);
   }
   function capNhatDongMoi(key: number, patch: Partial<NewRowValues>) {
@@ -325,6 +360,8 @@ export default function ChiPhiGopSection({
           nha_cung_cap_id: row.nha_cung_cap_id,
           doi_tac_thue_ngoai_id: row.doi_tac_thue_ngoai_id,
           chi_tiet_van_chuyen_id: row.chi_tiet_van_chuyen_id,
+          so_luong: row.so_luong ? Number(row.so_luong) : null,
+          don_gia: row.don_gia ? Number(row.don_gia) : null,
           so_tien_da_chi: Number(row.buy),
           gia_ban_sell: row.sell ? Number(row.sell) : null,
           noi_bo: row.noi_bo,
@@ -368,6 +405,8 @@ export default function ChiPhiGopSection({
           doi_tac_thue_ngoai_id: row.doi_tac_thue_ngoai_id,
           chi_tiet_van_chuyen_id: row.chi_tiet_van_chuyen_id,
           noi_dung: row.ghi_chu || null,
+          so_luong: row.so_luong ? Number(row.so_luong) : null,
+          don_gia: row.don_gia ? Number(row.don_gia) : null,
           so_tien_da_chi: Number(row.buy),
           gia_ban_sell: row.sell ? Number(row.sell) : null,
           ngay_thue: new Date().toISOString().slice(0, 10),
@@ -414,6 +453,8 @@ export default function ChiPhiGopSection({
         nha_cung_cap_id: r.nha_cung_cap_id,
         doi_tac_thue_ngoai_id: r.doi_tac_thue_ngoai_id,
         chi_tiet_van_chuyen_id: r.chi_tiet_van_chuyen_id,
+        so_luong: r.so_luong?.toString() ?? "",
+        don_gia: r.don_gia?.toString() ?? "",
         buy: r.so_tien_da_chi?.toString() ?? "",
         sell: r.gia_ban_sell?.toString() ?? "",
         noi_bo: r.noi_bo,
@@ -436,6 +477,8 @@ export default function ChiPhiGopSection({
         nha_cung_cap_id: null,
         doi_tac_thue_ngoai_id: r.doi_tac_thue_ngoai_id,
         chi_tiet_van_chuyen_id: r.chi_tiet_van_chuyen_id,
+        so_luong: r.so_luong?.toString() ?? "",
+        don_gia: r.don_gia?.toString() ?? "",
         buy: r.so_tien_da_chi?.toString() ?? "",
         sell: r.gia_ban_sell?.toString() ?? "",
         noi_bo: false,
@@ -458,6 +501,8 @@ export default function ChiPhiGopSection({
         nha_cung_cap_id: null,
         doi_tac_thue_ngoai_id: null,
         chi_tiet_van_chuyen_id: null,
+        so_luong: "",
+        don_gia: "",
         buy: "",
         sell: r.thanh_tien?.toString() ?? "",
         noi_bo: false,
@@ -505,6 +550,8 @@ export default function ChiPhiGopSection({
           nha_cung_cap_id: editValues.nha_cung_cap_id,
           doi_tac_thue_ngoai_id: editValues.doi_tac_thue_ngoai_id,
           chi_tiet_van_chuyen_id: editValues.chi_tiet_van_chuyen_id,
+          so_luong: editValues.so_luong ? Number(editValues.so_luong) : null,
+          don_gia: editValues.don_gia ? Number(editValues.don_gia) : null,
           so_tien_da_chi: editValues.buy ? Number(editValues.buy) : null,
           gia_ban_sell: editValues.sell ? Number(editValues.sell) : null,
           noi_bo: editValues.noi_bo,
@@ -530,6 +577,8 @@ export default function ChiPhiGopSection({
           doi_tac_thue_ngoai_id: editValues.doi_tac_thue_ngoai_id,
           chi_tiet_van_chuyen_id: editValues.chi_tiet_van_chuyen_id,
           noi_dung: editValues.ghi_chu || null,
+          so_luong: editValues.so_luong ? Number(editValues.so_luong) : null,
+          don_gia: editValues.don_gia ? Number(editValues.don_gia) : null,
           so_tien_da_chi: editValues.buy ? Number(editValues.buy) : null,
           gia_ban_sell: editValues.sell ? Number(editValues.sell) : null,
           ...(canChonNguonThanhToan
@@ -770,6 +819,20 @@ export default function ChiPhiGopSection({
           )}
         </td>
         <td className="px-2 py-1.5">
+          {loai === "phu_thu" ? (
+            <span className="text-slate-300">—</span>
+          ) : (
+            <input disabled={disabledKhac} value={values.so_luong} onChange={(e) => set(tinhLaiSoTienDaChi(values, { so_luong: e.target.value }))} className={cls} placeholder="SL" />
+          )}
+        </td>
+        <td className="px-2 py-1.5">
+          {loai === "phu_thu" ? (
+            <span className="text-slate-300">—</span>
+          ) : (
+            <MoneyInput disabled={disabledKhac} value={values.don_gia} onChange={(v) => set(tinhLaiSoTienDaChi(values, { don_gia: v }))} className={cls} />
+          )}
+        </td>
+        <td className="px-2 py-1.5">
           {loai === "phu_thu" ? <span className="text-slate-300">—</span> : <MoneyInput disabled={disabledKhac} value={values.buy} onChange={(v) => set({ buy: v })} className={cls} />}
         </td>
         {canSeeSell && (
@@ -819,12 +882,14 @@ export default function ChiPhiGopSection({
 
       {/* ---- Desktop: bang inline ---- */}
       <div className="hidden overflow-x-auto sm:block">
-        <table className={`w-full text-sm ${canSeeSell ? "min-w-[1490px]" : "min-w-[1270px]"}`} style={{ tableLayout: "fixed" }}>
+        <table className={`w-full text-sm ${canSeeSell ? "min-w-[1680px]" : "min-w-[1460px]"}`} style={{ tableLayout: "fixed" }}>
           <colgroup>
             <col style={{ width: 110 }} />
             <col style={{ width: 180 }} />
             <col style={{ width: 190 }} />
             <col style={{ width: 160 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 110 }} />
             <col style={{ width: 110 }} />
             {canSeeSell && <col style={{ width: 110 }} />}
             <col style={{ width: 130 }} />
@@ -839,6 +904,8 @@ export default function ChiPhiGopSection({
               <th className="px-2 py-2">Loại chi phí / dịch vụ</th>
               <th className="px-2 py-2">NCC / Đối tác</th>
               <th className="px-2 py-2">Chặng</th>
+              <th className="px-2 py-2">SL</th>
+              <th className="px-2 py-2">Đơn giá</th>
               <th className="px-2 py-2">Số tiền đã chi</th>
               {canSeeSell && <th className="px-2 py-2">Giá bán</th>}
               <th className="px-2 py-2">Nội bộ / Chi hộ</th>
@@ -894,6 +961,8 @@ export default function ChiPhiGopSection({
                       <td className="px-2 py-2 font-medium text-slate-900">{rv.ten}</td>
                       <td className="px-2 py-2 text-slate-600">{rv.doiTac}</td>
                       <td className="px-2 py-2 text-slate-500">{rv.chang ?? "—"}</td>
+                      <td className="px-2 py-2 text-slate-500">{rv.soLuong ?? "—"}</td>
+                      <td className="px-2 py-2 text-slate-500">{rv.donGia !== null ? fmt(rv.donGia) : "—"}</td>
                       <td className="px-2 py-2 text-slate-700">{rv.buy !== null ? fmt(rv.buy) : "—"}</td>
                       {canSeeSell && <td className="px-2 py-2 text-slate-700">{rv.sell !== null ? fmt(rv.sell) : "—"}</td>}
                       <td className="px-2 py-2 text-slate-500">{rv.noiBo === null ? "—" : rv.noiBo ? "Nội bộ" : rv.chiHo ? "Chi hộ" : "—"}</td>
@@ -940,7 +1009,7 @@ export default function ChiPhiGopSection({
                 <td className="px-2 py-1.5">
                   <select
                     value={r.loai}
-                    onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai))}
+                    onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai, donHangSoLuong))}
                     className={cls}
                   >
                     {loaiChoPhepThem.map((l) => (
@@ -971,7 +1040,7 @@ export default function ChiPhiGopSection({
 
             {rows.length === 0 && addingRows.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-2 py-6 text-center text-slate-400">
+                <td colSpan={13} className="px-2 py-6 text-center text-slate-400">
                   Chưa có dòng nào.
                 </td>
               </tr>
@@ -1028,6 +1097,27 @@ export default function ChiPhiGopSection({
               {editingKey === rv.key && editValues && (
                 <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
                   {editValues.loai === "chi_phi" && <SearchableSelect options={loaiChiPhiOptions} value={editValues.loai_chi_phi_id} onChange={(v) => setEditValues((p) => (p ? { ...p, loai_chi_phi_id: v } : p))} />}
+                  {rv.loai !== "phu_thu" && (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-slate-500">Số lượng</label>
+                        <input
+                          value={editValues.so_luong}
+                          onChange={(e) => setEditValues((p) => (p ? { ...p, ...tinhLaiSoTienDaChi(p, { so_luong: e.target.value }) } : p))}
+                          className={cls}
+                          placeholder="SL"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-slate-500">Đơn giá</label>
+                        <MoneyInput
+                          value={editValues.don_gia}
+                          onChange={(v) => setEditValues((p) => (p ? { ...p, ...tinhLaiSoTienDaChi(p, { don_gia: v }) } : p))}
+                          className={cls}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1 block text-xs text-slate-500">Số tiền đã chi</label>
                     <MoneyInput value={editValues.buy} onChange={(v) => setEditValues((p) => (p ? { ...p, buy: v } : p))} className={cls} disabled={rv.loai === "phu_thu"} />
@@ -1074,7 +1164,7 @@ export default function ChiPhiGopSection({
         {addingRows.map((r) => (
           <div key={r.key} className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 text-sm">
             <label className="mb-1 block text-xs text-slate-500">Loại dòng</label>
-            <select value={r.loai} onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai))} className={`${cls} mb-2`}>
+            <select value={r.loai} onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai, donHangSoLuong))} className={`${cls} mb-2`}>
               {loaiChoPhepThem.map((l) => (
                 <option key={l} value={l}>
                   {LOAI_LABEL[l]}
@@ -1110,6 +1200,18 @@ export default function ChiPhiGopSection({
               <div className="mb-2">
                 <label className="mb-1 block text-xs text-slate-500">Loại phụ thu</label>
                 <input value={r.loai_phu_thu} onChange={(e) => capNhatDongMoi(r.key, { loai_phu_thu: e.target.value })} className={cls} placeholder="VD: Phí lưu kho" />
+              </div>
+            )}
+            {r.loai !== "phu_thu" && (
+              <div className="mb-2 flex gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-500">Số lượng</label>
+                  <input value={r.so_luong} onChange={(e) => capNhatDongMoi(r.key, tinhLaiSoTienDaChi(r, { so_luong: e.target.value }))} className={cls} placeholder="SL" />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-500">Đơn giá</label>
+                  <MoneyInput value={r.don_gia} onChange={(v) => capNhatDongMoi(r.key, tinhLaiSoTienDaChi(r, { don_gia: v }))} className={cls} />
+                </div>
               </div>
             )}
             {r.loai !== "phu_thu" && (

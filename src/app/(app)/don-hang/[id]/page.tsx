@@ -307,6 +307,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           nhanVienChiPhiTamUngOptions={nhanVienChiPhiTamUngOptions}
           nhanVienThueNgoaiTamUngOptions={nhanVienThueNgoaiTamUngOptions}
           congViecMap={congViecMap}
+          donHangSoLuong={order.so_luong}
         />
       </div>
 
