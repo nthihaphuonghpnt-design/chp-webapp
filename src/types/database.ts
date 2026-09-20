@@ -357,6 +357,7 @@ export interface DonThueNgoai {
   nguon_thanh_toan: NguonThanhToan | null;
   tam_ung_id: string | null;
   phieu_quyet_toan_id: string | null;
+  hoa_don_id: string | null;
   ngay_thue: string;
   trang_thai: TrangThaiThueNgoai;
   nguoi_nhap_id: string | null;

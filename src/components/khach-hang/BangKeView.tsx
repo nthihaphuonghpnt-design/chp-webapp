@@ -62,6 +62,13 @@ interface PhuThuRow {
   thanh_tien: number | null;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
+interface ThueNgoaiRow {
+  id: string;
+  don_hang_id: string;
+  loai_dich_vu_thue: string | null;
+  gia_ban_sell: number | null;
+  don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
+}
 
 function one<T>(v: T | T[] | null): T | null {
   return Array.isArray(v) ? v[0] ?? null : v;
@@ -84,6 +91,7 @@ export default function BangKeView({
   donHangList,
   chiPhiRows: initialChiPhi,
   phuThuRows: initialPhuThu,
+  thueNgoaiRows: initialThueNgoai,
 }: {
   khachHangList: KhachHang[];
   khachHangIdChon: string;
@@ -91,11 +99,13 @@ export default function BangKeView({
   donHangList: DonHangOpt[];
   chiPhiRows: ChiPhiRow[];
   phuThuRows: PhuThuRow[];
+  thueNgoaiRows: ThueNgoaiRow[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [chiPhiRowsAll, setChiPhiRows] = useState<ChiPhiRow[]>(initialChiPhi);
   const [phuThuRowsAll] = useState<PhuThuRow[]>(initialPhuThu);
+  const [thueNgoaiRowsAll] = useState<ThueNgoaiRow[]>(initialThueNgoai);
   const [donHangFilter, setDonHangFilter] = useState("");
   const [vatPercent, setVatPercent] = useState("");
   const [soHoaDon, setSoHoaDon] = useState("");
@@ -103,9 +113,11 @@ export default function BangKeView({
 
   const chiPhiRows = donHangFilter ? chiPhiRowsAll.filter((r) => r.don_hang_id === donHangFilter) : chiPhiRowsAll;
   const phuThuRows = donHangFilter ? phuThuRowsAll.filter((r) => r.don_hang_id === donHangFilter) : phuThuRowsAll;
+  const thueNgoaiRows = donHangFilter ? thueNgoaiRowsAll.filter((r) => r.don_hang_id === donHangFilter) : thueNgoaiRowsAll;
 
   const [chonChiPhi, setChonChiPhi] = useState<Set<string>>(new Set(initialChiPhi.map((r) => r.id)));
   const [chonPhuThu, setChonPhuThu] = useState<Set<string>>(new Set(initialPhuThu.map((r) => r.id)));
+  const [chonThueNgoai, setChonThueNgoai] = useState<Set<string>>(new Set(initialThueNgoai.map((r) => r.id)));
 
   const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const donHangOptions = donHangList.map((d) => ({
@@ -170,7 +182,10 @@ export default function BangKeView({
   const tongChiHo = dongChiHo.filter((r) => chonChiPhi.has(r.id)).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
   const tongGiaBanChiPhi = dongGiaBan.filter((r) => chonChiPhi.has(r.id)).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   const tongPhuThu = phuThuRows.filter((r) => chonPhuThu.has(r.id)).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
-  const tongTruocThue = tongGiaBanChiPhi + tongPhuThu;
+  // Thue ngoai khong co khai niem "chi ho" (khong co cot chi_ho tren
+  // don_thue_ngoai) — luon la khoan Gia ban binh thuong.
+  const tongThueNgoai = thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)).reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
+  const tongTruocThue = tongGiaBanChiPhi + tongPhuThu + tongThueNgoai;
   // Cong don VAT tung dong (giong het cach tinh o bang "Bang ke chi tiet" phia
   // tren), thay vi ap 1 ty le chung cho ca tong — de so tien hoa don luon khop
   // voi Bang ke chi tiet du khung "VAT %" duoi day co nhap hay khong.
@@ -179,14 +194,17 @@ export default function BangKeView({
     dongGiaBan
       .filter((r) => chonChiPhi.has(r.id))
       .reduce((s, r) => s + Math.round(((r.gia_ban_sell ?? 0) * (vatChungNhapTay || r.vat_percent || 0)) / 100), 0) +
-    phuThuRows.filter((r) => chonPhuThu.has(r.id)).reduce((s, r) => s + Math.round(((r.thanh_tien ?? 0) * vatChungNhapTay) / 100), 0);
+    phuThuRows.filter((r) => chonPhuThu.has(r.id)).reduce((s, r) => s + Math.round(((r.thanh_tien ?? 0) * vatChungNhapTay) / 100), 0) +
+    // don_thue_ngoai chua co cot vat_percent rieng tung dong (giong phu_thu) —
+    // chi ap dung VAT% chung o khung "Tao hoa don".
+    thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)).reduce((s, r) => s + Math.round(((r.gia_ban_sell ?? 0) * vatChungNhapTay) / 100), 0);
   const tongCong = tongTruocThue + tienVat + tongChiHo;
 
   const chiTietBangKe = useMemo(() => {
     const vat = Number(vatPercent) || 0;
     const rows: {
       id: string;
-      loai: "chi_phi" | "phu_thu";
+      loai: "chi_phi" | "phu_thu" | "thue_ngoai";
       dienGiai: string;
       donHangId: string;
       donHang: string;
@@ -243,10 +261,29 @@ export default function BangKeView({
         coTheSuaVat: false, // phu_thu chua co cot vat_percent rieng trong DB
       });
     }
+    for (const r of thueNgoaiRows) {
+      const soTien = r.gia_ban_sell ?? 0;
+      const tienVatDong = Math.round((soTien * vat) / 100);
+      rows.push({
+        id: r.id,
+        loai: "thue_ngoai",
+        dienGiai: `Thuê ngoài: ${r.loai_dich_vu_thue ?? "—"}`,
+        donHangId: r.don_hang_id,
+        donHang: one(r.don_hang)?.so_don_hang ?? "—",
+        donGia: soTien,
+        soLuong: 1,
+        thanhTien: soTien,
+        vatPercent: vat,
+        tienVat: tienVatDong,
+        tongSauVat: soTien + tienVatDong,
+        ghiChu: "Xuất HĐ (Thuê ngoài)",
+        coTheSuaVat: false, // don_thue_ngoai chua co cot vat_percent rieng trong DB
+      });
+    }
     // Chi ho truoc, Xuat HD sau (giu nguyen thu tu ngay phat sinh trong tung nhom).
     rows.sort((a, b) => (a.ghiChu === "Chi hộ" ? 0 : 1) - (b.ghiChu === "Chi hộ" ? 0 : 1));
     return rows;
-  }, [chiPhiRows, phuThuRows, vatPercent]);
+  }, [chiPhiRows, phuThuRows, thueNgoaiRows, vatPercent]);
 
   async function handleXuatExcelBangKe() {
     const khTen = khachHangList.find((k) => k.id === khachHangIdChon);
@@ -351,7 +388,8 @@ export default function BangKeView({
     if (!khachHangIdChon) return;
     const chiPhiIds = chiPhiRows.filter((r) => chonChiPhi.has(r.id)).map((r) => r.id);
     const phuThuIds = phuThuRows.filter((r) => chonPhuThu.has(r.id)).map((r) => r.id);
-    if (chiPhiIds.length === 0 && phuThuIds.length === 0) {
+    const thueNgoaiIds = thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)).map((r) => r.id);
+    if (chiPhiIds.length === 0 && phuThuIds.length === 0 && thueNgoaiIds.length === 0) {
       window.alert("Chưa chọn dòng nào để xuất hóa đơn.");
       return;
     }
@@ -373,6 +411,7 @@ export default function BangKeView({
       p_tien_chi_ho: tongChiHo || 0,
       p_chi_phi_ids: chiPhiIds,
       p_phu_thu_ids: phuThuIds,
+      p_thue_ngoai_ids: thueNgoaiIds,
     });
 
     setDangXuat(false);
@@ -513,7 +552,7 @@ export default function BangKeView({
             {dongChiHo.length === 0 && <p className="text-sm text-slate-400">Không có dòng chi hộ nào.</p>}
           </Section>
 
-          <Section title={`Giá bán / dịch vụ nội bộ (chịu VAT) — ${dongGiaBan.length + phuThuRows.length} dòng`}>
+          <Section title={`Giá bán / dịch vụ nội bộ (chịu VAT) — ${dongGiaBan.length + phuThuRows.length + thueNgoaiRows.length} dòng`}>
             {dongGiaBan.map((r) => (
               <RowItem
                 key={r.id}
@@ -534,7 +573,18 @@ export default function BangKeView({
                 amount={r.thanh_tien ?? 0}
               />
             ))}
-            {dongGiaBan.length === 0 && phuThuRows.length === 0 && <p className="text-sm text-slate-400">Không có dòng giá bán nào.</p>}
+            {thueNgoaiRows.map((r) => (
+              <RowItem
+                key={r.id}
+                checked={chonThueNgoai.has(r.id)}
+                onToggleCheck={() => toggle(chonThueNgoai, r.id, setChonThueNgoai)}
+                label={`Thuê ngoài: ${r.loai_dich_vu_thue ?? "—"} · Đơn ${one(r.don_hang)?.so_don_hang ?? "—"}`}
+                amount={r.gia_ban_sell ?? 0}
+              />
+            ))}
+            {dongGiaBan.length === 0 && phuThuRows.length === 0 && thueNgoaiRows.length === 0 && (
+              <p className="text-sm text-slate-400">Không có dòng giá bán nào.</p>
+            )}
           </Section>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BangKeView from "@/components/khach-hang/BangKeView";
-import { PHAT_SINH_CHI_PHI_SAFE_COLS, ghepGiaBanChiPhi } from "@/lib/giaBan";
+import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function BangKePage({
   searchParams,
@@ -34,6 +34,7 @@ export default async function BangKePage({
   let donHangList: unknown[] = [];
   let chiPhiRows: unknown[] = [];
   let phuThuRows: unknown[] = [];
+  let thueNgoaiRows: unknown[] = [];
   let khachHangChiTiet: unknown = null;
 
   if (khach_hang) {
@@ -58,7 +59,7 @@ export default async function BangKePage({
     let toKhaiMap: Record<string, string[]> = {};
     let contMap: Record<string, string[]> = {};
     if (donHangIds.length > 0) {
-      const [{ data: cp }, { data: pt }, { data: ctvc }, { data: tk }, { data: cont }] = await Promise.all([
+      const [{ data: cp }, { data: pt }, { data: tn }, { data: ctvc }, { data: tk }, { data: cont }] = await Promise.all([
         supabase
           .from("phat_sinh_chi_phi")
           .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
@@ -72,6 +73,13 @@ export default async function BangKePage({
           .in("don_hang_id", donHangIds)
           .is("hoa_don_id", null)
           .order("created_at"),
+        supabase
+          .from("don_thue_ngoai")
+          .select(`${DON_THUE_NGOAI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang)`)
+          .in("don_hang_id", donHangIds)
+          .is("hoa_don_id", null)
+          .neq("trang_thai", "Từ chối")
+          .order("ngay_thue"),
         supabase
           .from("chi_tiet_van_chuyen")
           .select("don_hang_id, so_xe")
@@ -90,6 +98,7 @@ export default async function BangKePage({
       ]);
       chiPhiRows = await ghepGiaBanChiPhi(supabase, cp ?? []);
       phuThuRows = pt ?? [];
+      thueNgoaiRows = await ghepGiaBanThueNgoai(supabase, tn ?? []);
       bienSoMap = {};
       for (const r of ctvc ?? []) {
         if (!r.so_xe) continue;
@@ -128,6 +137,8 @@ export default async function BangKePage({
       chiPhiRows={chiPhiRows as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       phuThuRows={phuThuRows as any[]}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      thueNgoaiRows={thueNgoaiRows as any[]}
     />
   );
 }

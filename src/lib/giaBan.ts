@@ -10,7 +10,7 @@ export const PHAT_SINH_CHI_PHI_SAFE_COLS =
   "id, don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, chi_tiet_van_chuyen_id, to_khai_id, nguon_tu_dong, phuong_thuc_thanh_toan, nguon_thanh_toan, tam_ung_id, phieu_quyet_toan_id, so_luong, don_gia, so_tien_da_chi, vat_percent, tien_thue, tong_tien, noi_bo, chi_ho, tt_thue, ngay_phat_sinh, nguoi_nhap_id, nguoi_duyet_id, hoa_don_id, trang_thai, tinh_trang_thanh_toan, so_tien_da_thanh_toan, ghi_chu, created_at, updated_at";
 
 export const DON_THUE_NGOAI_SAFE_COLS =
-  "id, don_hang_id, loai_dich_vu_thue, doi_tac_thue_ngoai_id, chi_tiet_van_chuyen_id, noi_dung, so_tien_da_chi, tinh_trang_thanh_toan, so_tien_da_thanh_toan, phuong_thuc_thanh_toan, nguon_thanh_toan, tam_ung_id, phieu_quyet_toan_id, ngay_thue, trang_thai, nguoi_nhap_id, created_at, updated_at";
+  "id, don_hang_id, loai_dich_vu_thue, doi_tac_thue_ngoai_id, chi_tiet_van_chuyen_id, noi_dung, so_tien_da_chi, tinh_trang_thanh_toan, so_tien_da_thanh_toan, phuong_thuc_thanh_toan, nguon_thanh_toan, tam_ung_id, phieu_quyet_toan_id, hoa_don_id, ngay_thue, trang_thai, nguoi_nhap_id, created_at, updated_at";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseAny = any;
