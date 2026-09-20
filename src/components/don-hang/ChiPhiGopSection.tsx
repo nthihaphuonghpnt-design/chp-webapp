@@ -138,6 +138,11 @@ export default function ChiPhiGopSection({
   const [editValues, setEditValues] = useState<NewRowValues | null>(null);
   const [addingRows, setAddingRows] = useState<({ key: number } & NewRowValues)[]>([]);
   const [nextKey, setNextKey] = useState(1);
+  // Chan bam "Luu" 2 lan lien tiep (mang cham, tay nhanh) tao 2 dong trung
+  // nhau — truoc day chi la phien toai (Cho duyet trung, tu xoa 1 dong), gio
+  // nghiem trong hon vi Da duyet chay thang vao So quy, trung dong = trung
+  // tien chi trong so quy that.
+  const [savingRowKeys, setSavingRowKeys] = useState<Set<number>>(new Set());
 
   // Danh sach tam ung tai theo tung "dong dang sua" (state key "edit:<rv.key>")
   // hoac "dong dang them" (state key "add:<r.key>") — moi dong doc lap, vi co
@@ -288,6 +293,20 @@ export default function ChiPhiGopSection({
   }
 
   async function luuDongMoi(row: { key: number } & NewRowValues) {
+    if (savingRowKeys.has(row.key)) return;
+    setSavingRowKeys((prev) => new Set(prev).add(row.key));
+    try {
+      await luuDongMoiThucHien(row);
+    } finally {
+      setSavingRowKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(row.key);
+        return next;
+      });
+    }
+  }
+
+  async function luuDongMoiThucHien(row: { key: number } & NewRowValues) {
     // Ke toan nhap ho: khi chon "Tam ung nhan vien" + chon dung nhan vien,
     // nguoi_nhap_id phai la NHAN VIEN DO (khong phai Ke toan dang dang
     // nhap) de khop dieu kien tam_ung.nhan_vien_id = nguoi_nhap_id ma
@@ -933,8 +952,12 @@ export default function ChiPhiGopSection({
                 <td className="px-2 py-1.5 text-slate-300">—</td>
                 <td className="px-2 py-1.5">
                   <div className="flex gap-2">
-                    <button onClick={() => luuDongMoi(r)} className="text-xs font-medium text-green-600">
-                      Lưu
+                    <button
+                      onClick={() => luuDongMoi(r)}
+                      disabled={savingRowKeys.has(r.key)}
+                      className="text-xs font-medium text-green-600 disabled:opacity-60"
+                    >
+                      {savingRowKeys.has(r.key) ? "Đang lưu..." : "Lưu"}
                     </button>
                     <button onClick={() => huyDongMoi(r.key)} className="text-xs font-medium text-slate-500">
                       Hủy
@@ -1116,8 +1139,12 @@ export default function ChiPhiGopSection({
               </div>
             )}
             <div className="flex gap-2">
-              <button onClick={() => luuDongMoi(r)} className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
-                Lưu
+              <button
+                onClick={() => luuDongMoi(r)}
+                disabled={savingRowKeys.has(r.key)}
+                className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+              >
+                {savingRowKeys.has(r.key) ? "Đang lưu..." : "Lưu"}
               </button>
               <button onClick={() => huyDongMoi(r.key)} className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700">
                 Hủy
