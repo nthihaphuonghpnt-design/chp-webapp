@@ -347,6 +347,7 @@ export interface DonThueNgoai {
   don_hang_id: string;
   loai_dich_vu_thue: LoaiDichVuThue | null;
   doi_tac_thue_ngoai_id: string | null;
+  chi_tiet_van_chuyen_id: string | null;
   noi_dung: string | null;
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;

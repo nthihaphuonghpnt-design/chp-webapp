@@ -228,7 +228,7 @@ export default function ChiPhiGopSection({
         raw: r,
         ten: r.loai_dich_vu_thue ?? "—",
         doiTac: doiTacTen(r.doi_tac_thue_ngoai_id),
-        chang: null,
+        chang: changTen(r.chi_tiet_van_chuyen_id),
         buy: r.so_tien_da_chi,
         sell: r.gia_ban_sell,
         noiBo: null,
@@ -366,6 +366,7 @@ export default function ChiPhiGopSection({
           don_hang_id: donHangId,
           loai_dich_vu_thue: row.loai_dich_vu_thue,
           doi_tac_thue_ngoai_id: row.doi_tac_thue_ngoai_id,
+          chi_tiet_van_chuyen_id: row.chi_tiet_van_chuyen_id,
           noi_dung: row.ghi_chu || null,
           so_tien_da_chi: Number(row.buy),
           gia_ban_sell: row.sell ? Number(row.sell) : null,
@@ -434,7 +435,7 @@ export default function ChiPhiGopSection({
         loai_phu_thu: "",
         nha_cung_cap_id: null,
         doi_tac_thue_ngoai_id: r.doi_tac_thue_ngoai_id,
-        chi_tiet_van_chuyen_id: null,
+        chi_tiet_van_chuyen_id: r.chi_tiet_van_chuyen_id,
         buy: r.so_tien_da_chi?.toString() ?? "",
         sell: r.gia_ban_sell?.toString() ?? "",
         noi_bo: false,
@@ -527,6 +528,7 @@ export default function ChiPhiGopSection({
         .update({
           loai_dich_vu_thue: editValues.loai_dich_vu_thue || null,
           doi_tac_thue_ngoai_id: editValues.doi_tac_thue_ngoai_id,
+          chi_tiet_van_chuyen_id: editValues.chi_tiet_van_chuyen_id,
           noi_dung: editValues.ghi_chu || null,
           so_tien_da_chi: editValues.buy ? Number(editValues.buy) : null,
           gia_ban_sell: editValues.sell ? Number(editValues.sell) : null,
@@ -755,7 +757,7 @@ export default function ChiPhiGopSection({
           )}
         </td>
         <td className="px-2 py-1.5">
-          {loai === "chi_phi" ? (
+          {loai === "chi_phi" || loai === "thue_ngoai" ? (
             <SearchableSelect
               disabled={disabledKhac}
               options={changOptions}
