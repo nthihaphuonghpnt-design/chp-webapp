@@ -44,36 +44,37 @@ export default function FileAttachSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length]);
 
-  async function handleUpload(file: File) {
+  async function handleUpload(files: FileList) {
     setUploading(true);
-    const path = `${pathPrefix}/${parentId}/${Date.now()}-${file.name}`;
-    const { error: uploadErr } = await supabase.storage.from("dinh-kem").upload(path, file);
-    if (uploadErr) {
-      window.alert(`Tải file thất bại: ${uploadErr.message}`);
-      setUploading(false);
-      return;
+    for (const file of Array.from(files)) {
+      const path = `${pathPrefix}/${parentId}/${Date.now()}-${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from("dinh-kem").upload(path, file);
+      if (uploadErr) {
+        window.alert(`Tải file "${file.name}" thất bại: ${uploadErr.message}`);
+        continue;
+      }
+
+      const { data, error: insertErr } = await supabase
+        .from("dinh_kem")
+        .insert({
+          [parentField]: parentId,
+          ...(donHangId ? { don_hang_id: donHangId } : {}),
+          lien_ket_toi: lienKetToi,
+          loai_dinh_kem: "Khác",
+          duong_dan_file: path,
+          ten_file: file.name,
+          nguoi_upload_id: currentUserId ?? null,
+        })
+        .select()
+        .single();
+
+      if (insertErr) {
+        window.alert(`Lưu thông tin file "${file.name}" thất bại: ${insertErr.message}`);
+        continue;
+      }
+      setRows((prev) => [data as DinhKem, ...prev]);
     }
-
-    const { data, error: insertErr } = await supabase
-      .from("dinh_kem")
-      .insert({
-        [parentField]: parentId,
-        ...(donHangId ? { don_hang_id: donHangId } : {}),
-        lien_ket_toi: lienKetToi,
-        loai_dinh_kem: "Khác",
-        duong_dan_file: path,
-        ten_file: file.name,
-        nguoi_upload_id: currentUserId ?? null,
-      })
-      .select()
-      .single();
-
     setUploading(false);
-    if (insertErr) {
-      window.alert(`Lưu thông tin file thất bại: ${insertErr.message}`);
-      return;
-    }
-    setRows((prev) => [data as DinhKem, ...prev]);
   }
 
   async function handleDelete(row: DinhKem) {
@@ -105,10 +106,11 @@ export default function FileAttachSection({
           ref={fileInputRef}
           type="file"
           accept="image/*,.pdf,.xls,.xlsx,.doc,.docx"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleUpload(file);
+            const files = e.target.files;
+            if (files && files.length > 0) handleUpload(files);
             e.target.value = "";
           }}
         />
