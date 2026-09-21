@@ -353,6 +353,7 @@ export interface DonThueNgoai {
   don_gia: number | null;
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
+  chi_ho: boolean;
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;
   phuong_thuc_thanh_toan: "Tiền mặt" | "Tài khoản công ty" | null;

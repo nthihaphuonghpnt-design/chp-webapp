@@ -265,7 +265,7 @@ export default function ChiPhiGopSection({
         buy: r.so_tien_da_chi,
         sell: r.gia_ban_sell,
         noiBo: null,
-        chiHo: null,
+        chiHo: r.chi_ho,
         trangThai: r.trang_thai,
         nguoiNhapId: r.nguoi_nhap_id,
         nguonThanhToan: r.nguon_thanh_toan,
@@ -409,6 +409,7 @@ export default function ChiPhiGopSection({
           don_gia: row.don_gia ? Number(row.don_gia) : null,
           so_tien_da_chi: Number(row.buy),
           gia_ban_sell: row.sell ? Number(row.sell) : null,
+          chi_ho: row.chi_ho,
           ngay_thue: new Date().toISOString().slice(0, 10),
           nguoi_nhap_id: nhanVienId,
           // Cung logic voi chi_phi phia tren: Ke toan tu nhap thi vao thang
@@ -482,7 +483,7 @@ export default function ChiPhiGopSection({
         buy: r.so_tien_da_chi?.toString() ?? "",
         sell: r.gia_ban_sell?.toString() ?? "",
         noi_bo: false,
-        chi_ho: false,
+        chi_ho: r.chi_ho,
         ghi_chu: r.noi_dung ?? "",
         nguon_thanh_toan: r.nguon_thanh_toan ?? "",
         tam_ung_id: r.tam_ung_id ?? "",
@@ -581,6 +582,7 @@ export default function ChiPhiGopSection({
           don_gia: editValues.don_gia ? Number(editValues.don_gia) : null,
           so_tien_da_chi: editValues.buy ? Number(editValues.buy) : null,
           gia_ban_sell: editValues.sell ? Number(editValues.sell) : null,
+          chi_ho: editValues.chi_ho,
           ...(canChonNguonThanhToan
             ? { nguon_thanh_toan: editValues.nguon_thanh_toan || null, tam_ung_id: editValues.tam_ung_id || null }
             : {}),
@@ -852,6 +854,11 @@ export default function ChiPhiGopSection({
                 Chi hộ
               </label>
             </div>
+          ) : loai === "thue_ngoai" ? (
+            <label className="flex items-center gap-1 text-xs">
+              <input disabled={disabledKhac} type="checkbox" checked={values.chi_ho} onChange={(e) => set({ chi_ho: e.target.checked })} />
+              Chi hộ
+            </label>
           ) : (
             <span className="text-slate-300">—</span>
           )}
@@ -965,7 +972,7 @@ export default function ChiPhiGopSection({
                       <td className="px-2 py-2 text-slate-500">{rv.donGia !== null ? fmt(rv.donGia) : "—"}</td>
                       <td className="px-2 py-2 text-slate-700">{rv.buy !== null ? fmt(rv.buy) : "—"}</td>
                       {canSeeSell && <td className="px-2 py-2 text-slate-700">{rv.sell !== null ? fmt(rv.sell) : "—"}</td>}
-                      <td className="px-2 py-2 text-slate-500">{rv.noiBo === null ? "—" : rv.noiBo ? "Nội bộ" : rv.chiHo ? "Chi hộ" : "—"}</td>
+                      <td className="px-2 py-2 text-slate-500">{rv.chiHo ? "Chi hộ" : rv.noiBo === null ? "—" : rv.noiBo ? "Nội bộ" : "—"}</td>
                       <td className="px-2 py-2 text-slate-500">{rv.nguonThanhToan ?? "—"}</td>
                       {canSeeSell && <td className="px-2 py-2 font-medium text-slate-700">{loiNhuan !== null ? fmt(loiNhuan) : "—"}</td>}
                       <td className="px-2 py-2">
@@ -1067,7 +1074,7 @@ export default function ChiPhiGopSection({
                 {rv.doiTac} · Số tiền đã chi: {rv.buy !== null ? fmt(rv.buy) : "—"}
                 {canSeeSell && rv.sell !== null && ` · Giá bán: ${fmt(rv.sell)}`}
                 {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}`}
-                {rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : rv.chiHo ? "Chi hộ" : "—"}`}
+                {rv.chiHo ? " · Chi hộ" : rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : "—"}`}
                 {rv.nguonThanhToan && ` · Nguồn: ${rv.nguonThanhToan}`}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -1238,6 +1245,14 @@ export default function ChiPhiGopSection({
                 </label>
                 <label className="flex items-center gap-1">
                   <input type="checkbox" checked={r.chi_ho} onChange={(e) => capNhatDongMoi(r.key, { chi_ho: e.target.checked, noi_bo: e.target.checked ? false : r.noi_bo })} />
+                  Chi hộ
+                </label>
+              </div>
+            )}
+            {r.loai === "thue_ngoai" && (
+              <div className="mb-2 flex items-center gap-3 text-xs">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={r.chi_ho} onChange={(e) => capNhatDongMoi(r.key, { chi_ho: e.target.checked })} />
                   Chi hộ
                 </label>
               </div>

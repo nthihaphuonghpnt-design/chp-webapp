@@ -37,6 +37,7 @@ interface ThueNgoai {
   doi_tac_thue_ngoai_id: string | null;
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
+  chi_ho: boolean;
   so_tien_da_thanh_toan: number | null;
   ngay_thue: string;
   trang_thai: string;
@@ -178,14 +179,18 @@ export default function BaoCaoView({
       const { doanhThu, chiPhiThuc, chiHo } = tongPhanLoaiChiPhi(cp);
       const buy = chiPhiThuc;
       const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
+      // Dong Thue ngoai Chi ho loai khoi ca doanh thu lan chi phi, giong het
+      // cach chi_ho dang loai o Chi phi phat sinh (xem page.tsx chi tiet don
+      // hang — cung logic, phai giu khop nhau).
+      const thueNgoaiKhongChiHo = thueNgoaiHopLe.filter((t) => !t.chi_ho);
       const sellItemize =
         doanhThu +
         phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
-        thueNgoaiHopLe.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
+        thueNgoaiKhongChiHo.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
       // Chua ai nhap gia ban tung dong thi tam dung Gia ban chung cua don
       // hang lam co so — xem doanhThuVoiFallbackGiaDonHang trong baoCao.ts.
       const sell = doanhThuVoiFallbackGiaDonHang(sellItemize, d.gia);
-      const thueNgoaiBuy = thueNgoaiHopLe.reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
+      const thueNgoaiBuy = thueNgoaiKhongChiHo.reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
       const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
       const lnTruocHoaHong = sell - buy - thueNgoaiBuy - giaoNhan - dinhPhi;
@@ -246,7 +251,7 @@ export default function BaoCaoView({
       for (const d of donHangTrongKy) {
         const saleId = d.sale_phu_trach_id ?? "chua-gan";
         const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
-        const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
+        const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối" && !t.chi_ho);
         const sellItemize =
           tongPhanLoaiChiPhi(cp).doanhThu +
           phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +

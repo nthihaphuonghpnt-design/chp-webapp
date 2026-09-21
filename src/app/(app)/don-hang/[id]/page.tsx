@@ -109,16 +109,21 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   // /bao-cao. Xem BUG-05 trong audit.
   const chiPhiHopLe = chiPhiRowsDayDu.filter((r) => r.trang_thai !== "Từ chối");
   const thueNgoaiHopLe = thueNgoaiRowsDayDu.filter((r) => r.trang_thai !== "Từ chối");
+  // Dong Thue ngoai danh dau Chi ho (theo yeu cau Bao Dung 2026-09-21) loai
+  // khoi ca doanh thu lan chi phi cong ty, giong het cach chi_ho dang loai
+  // trong tongPhanLoaiChiPhi cho Chi phi phat sinh — khong thi doanh thu/chi
+  // phi bi thoi phong sai du Loi nhuan van ra dung (vi mua ban dung gia).
+  const thueNgoaiKhongChiHo = thueNgoaiHopLe.filter((r) => !r.chi_ho);
   const { doanhThu: sellTuChiPhi, chiPhiThuc: tongBuyNoiBo } = tongPhanLoaiChiPhi(chiPhiHopLe);
   const tongSellItemize =
     sellTuChiPhi +
     (phuThuRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0) +
-    thueNgoaiHopLe.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
+    thueNgoaiKhongChiHo.reduce((s, r) => s + (r.gia_ban_sell ?? 0), 0);
   // Chua ai nhap gia ban tung dong (tongSellItemize = 0) thi tam dung "Gia
   // ban" chung cua don hang lam co so tinh loi nhuan, theo yeu cau Bao Dung.
   const tongSell = doanhThuVoiFallbackGiaDonHang(tongSellItemize, order.gia);
   const tongChiPhiGiaoNhan = (chiPhiGiaoNhanRows ?? []).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
-  const tongChiPhiThueNgoai = thueNgoaiHopLe.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
+  const tongChiPhiThueNgoai = thueNgoaiKhongChiHo.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
 
   const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - tongChiPhiThueNgoai - dinhPhiPhanBo;
   const chiPhiSale = loiNhuanTruocHoaHong * 0.4;
