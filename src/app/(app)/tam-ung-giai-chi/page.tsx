@@ -2,7 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import TamUngGiaiChiView from "@/components/tam-ung-giai-chi/TamUngGiaiChiView";
 
-export default async function TamUngGiaiChiPage() {
+export default async function TamUngGiaiChiPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ don_hang_id?: string }>;
+}) {
+  const { don_hang_id: autoProposeDonHangId } = await searchParams;
   const supabase = await createClient();
   const user = await getCurrentUser();
 
@@ -51,6 +56,7 @@ export default async function TamUngGiaiChiPage() {
       soQuyList={soQuyRows ?? []}
       currentUserId={user?.id}
       currentPhongBan={user?.phong_ban ?? ""}
+      autoProposeDonHangId={autoProposeDonHangId}
     />
   );
 }

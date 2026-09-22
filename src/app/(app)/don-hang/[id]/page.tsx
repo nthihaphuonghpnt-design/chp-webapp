@@ -219,12 +219,18 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <StatusBadge status={order.trang_thai} />
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link href="/don-hang" className="text-sm font-medium text-blue-600">
           ← Danh sách đơn hàng
         </Link>
+        <Link
+          href={`/tam-ung-giai-chi?don_hang_id=${order.id}`}
+          className="ml-auto rounded-lg border border-blue-200 px-2.5 py-1 text-sm font-medium text-blue-600"
+        >
+          + Ứng tiền nhanh
+        </Link>
         {canManageDonHang(user?.phong_ban) && (
-          <Link href={`/don-hang/${order.id}/sua`} className="ml-auto text-sm font-medium text-blue-600">
+          <Link href={`/don-hang/${order.id}/sua`} className="text-sm font-medium text-blue-600">
             Sửa thông tin
           </Link>
         )}

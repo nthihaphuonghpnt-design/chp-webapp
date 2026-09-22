@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { taoWorkbook, themSheetKeO, taiWorkbook, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
@@ -96,6 +96,7 @@ export default function TamUngGiaiChiView({
   soQuyList,
   currentUserId,
   currentPhongBan,
+  autoProposeDonHangId,
 }: {
   initialRows: Row[];
   nhanVienList: NhanVien[];
@@ -105,6 +106,8 @@ export default function TamUngGiaiChiView({
   soQuyList: SoQuyRow[];
   currentUserId?: string;
   currentPhongBan: string;
+  /** Den tu nut "Ung tien nhanh" o trang chi tiet don hang (?don_hang_id=...) — tu mo san form de nghi tam ung voi don hang nay dien san. */
+  autoProposeDonHangId?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
@@ -120,6 +123,19 @@ export default function TamUngGiaiChiView({
     ghi_chu: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tu mo san form "Đề nghị tạm ứng" voi don_hang_id dien san khi den tu link
+  // "Ung tien nhanh" tai trang don hang — chi chay 1 lan luc mount, khong lap
+  // lai khi nguoi dung tu dong huy/mo form khac sau do.
+  useEffect(() => {
+    if (!autoProposeDonHangId) return;
+    setEditing(null);
+    setProposing(true);
+    setKhachTamUngMode(false);
+    setGiaiChiPrefill({ nhan_vien_id: currentUserId ?? "", don_hang_id: autoProposeDonHangId, tam_ung_goc_id: "", so_tien: "", ghi_chu: "" });
+    setShowForm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
