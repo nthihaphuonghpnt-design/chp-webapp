@@ -454,8 +454,8 @@ export default function BangLuongView({
       </div>
 
       <p className="mt-3 text-xs text-slate-400">
-        * Số liệu tham khảo: thuế TNCN tính theo biểu lũy tiến từng phần hiện hành, giảm trừ bản thân
-        11.000.000đ (chưa tính người phụ thuộc). BHXH/BHYT/BHTN trên Mức đóng BHXH: nhân viên đóng 8% + 1,5% + 1% = 10,5%,
+        * Số liệu tham khảo: thuế TNCN tính theo biểu lũy tiến từng phần hiện hành, giảm trừ bản thân{" "}
+        {dungLuatThueMoi(thangLuong) ? "15.500.000đ" : "11.000.000đ"} (chưa tính người phụ thuộc). BHXH/BHYT/BHTN trên Mức đóng BHXH: nhân viên đóng 8% + 1,5% + 1% = 10,5%,
         công ty đóng 17,5% + 3% + 1% = 21,5%. KPCĐ (kinh phí công đoàn) 2% trên Mức đóng BHXH, công ty đóng 100% — bắt buộc với
         mọi doanh nghiệp có lao động đóng BHXH bắt buộc kể từ 16/5/2026 theo Nghị định 105/2026/NĐ-CP, kể cả khi công ty
         chưa có tổ chức công đoàn cơ sở (nộp cho Liên đoàn Lao động). Kiểm tra lại trước khi trả lương chính thức.

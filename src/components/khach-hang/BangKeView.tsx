@@ -52,6 +52,7 @@ interface ChiPhiRow {
   gia_ban_sell: number | null;
   vat_percent: number | null;
   chi_ho: boolean;
+  trang_thai: string;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
   loai_chi_phi: { ten: string } | { ten: string }[] | null;
 }
@@ -69,6 +70,7 @@ interface ThueNgoaiRow {
   gia_ban_sell: number | null;
   so_tien_da_chi: number | null;
   chi_ho: boolean;
+  trang_thai: string;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
 
@@ -138,10 +140,27 @@ export default function BangKeView({
   // gia_ban_sell khong con doc lai truc tiep duoc tu 0061 — select() chi lay
   // cac cot an toan, roi ghep lai gia_ban_sell tu chinh dong cu (khong doi
   // trong 2 thao tac nay) thay vi goi RPC round-trip.
+  // Dong "Da duyet" bi khoa boi enforce_*_update (0104): sua bat ky cot nao
+  // (ke ca chi_ho) deu can ly_do_sua_gan_nhat, khong thi DB tu choi im lim
+  // (chi bao qua error.message, de sot mat neu khong hoi truoc) — hoi ngay
+  // tai day, dung y het pattern da dung o luuSua cua ChiPhiGopSection.tsx.
+  function hoiLyDoNeuDaDuyet(trangThai: string, nhan: string): string | null | undefined {
+    if (trangThai !== "Đã duyệt") return null;
+    const lyDo = window.prompt(`"${nhan}" này đã duyệt — phải nhập lý do khi đổi Chi hộ/Giá bán:`);
+    if (lyDo === null) return undefined;
+    if (!lyDo.trim()) {
+      window.alert("Phải nhập lý do khi sửa dòng đã duyệt.");
+      return undefined;
+    }
+    return lyDo;
+  }
+
   async function toggleChiHo(row: ChiPhiRow) {
+    const lyDo = hoiLyDoNeuDaDuyet(row.trang_thai, "Chi phí phát sinh");
+    if (lyDo === undefined) return;
     const { data, error } = await supabase
       .from("phat_sinh_chi_phi")
-      .update({ chi_ho: !row.chi_ho, noi_bo: row.chi_ho })
+      .update({ chi_ho: !row.chi_ho, noi_bo: row.chi_ho, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
       .eq("id", row.id)
       .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
       .single();
@@ -154,9 +173,11 @@ export default function BangKeView({
   }
 
   async function toggleThueNgoaiChiHo(row: ThueNgoaiRow) {
+    const lyDo = hoiLyDoNeuDaDuyet(row.trang_thai, "Thuê ngoài");
+    if (lyDo === undefined) return;
     const { data, error } = await supabase
       .from("don_thue_ngoai")
-      .update({ chi_ho: !row.chi_ho })
+      .update({ chi_ho: !row.chi_ho, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
       .eq("id", row.id)
       .select(`${DON_THUE_NGOAI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang)`)
       .single();
