@@ -152,11 +152,18 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     daChiTuTamUngTheoNguoi.set(r.nguoi_nhap_id, (daChiTuTamUngTheoNguoi.get(r.nguoi_nhap_id) ?? 0) + (r.so_tien_da_chi ?? 0));
   }
   const nhanVienTenMap = new Map((nhanVienList ?? []).map((nv) => [nv.id, nv.ho_ten]));
-  const tamUngDoiChieu = Array.from(new Set([...tamUngTheoNguoi.keys(), ...daChiTuTamUngTheoNguoi.keys()])).map((nvId) => {
-    const tamUng = tamUngTheoNguoi.get(nvId) ?? 0;
-    const daChi = daChiTuTamUngTheoNguoi.get(nvId) ?? 0;
-    return { nvId, ten: nhanVienTenMap.get(nvId) ?? "—", tamUng, daChi, conLai: tamUng - daChi };
-  });
+  // Hien truong/Chung tu chi xem duoc dong tam ung/da chi cua CHINH MINH —
+  // dung y het pham vi "chiThayCuaMinh" da ap dung cho tung dong chi phi o
+  // ChiPhiGopSection.tsx, khong thi lo ho: an duoc tung dong chi tiet cua
+  // nguoi khac nhung lai lo tong hop tam ung cua ho o day.
+  const chiThayTamUngCuaMinh = ["Hiện trường", "Chứng từ"].includes(user?.phong_ban ?? "");
+  const tamUngDoiChieu = Array.from(new Set([...tamUngTheoNguoi.keys(), ...daChiTuTamUngTheoNguoi.keys()]))
+    .filter((nvId) => !chiThayTamUngCuaMinh || nvId === user?.id)
+    .map((nvId) => {
+      const tamUng = tamUngTheoNguoi.get(nvId) ?? 0;
+      const daChi = daChiTuTamUngTheoNguoi.get(nvId) ?? 0;
+      return { nvId, ten: nhanVienTenMap.get(nvId) ?? "—", tamUng, daChi, conLai: tamUng - daChi };
+    });
 
   const nhanVienGiaoNhanOptions = (nhanVienList ?? [])
     .filter((nv) => {
