@@ -37,6 +37,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     { data: doiTacList },
     { data: nhanVienList },
     { data: congViecRows },
+    { data: tamUngDonHangRows },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -64,6 +65,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
     supabase.from("cong_viec_hoan_thanh").select("id, nhan_vien_id, trang_thai").eq("don_hang_id", id),
+    supabase.from("tam_ung_giai_chi").select("nhan_vien_id, so_tien").eq("don_hang_id", id).eq("loai", "Tạm ứng").eq("trang_thai", "Đã duyệt"),
   ]);
 
   if (!order) notFound();
@@ -132,6 +134,29 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const loiNhuanTruocDinhPhi = loiNhuanTruocHoaHong + dinhPhiPhanBo;
 
   const canSeeLoiNhuan = ["Kế toán", "Giám đốc", "Sale"].includes(user?.phong_ban ?? "");
+
+  // Doi chieu tam ung <-> da chi rieng cho don hang nay (theo yeu cau Bao
+  // Dung 2026-09-22): "da tam ung cho don bao nhieu, da chi het bao nhieu,
+  // con bao nhieu" — de ops (Hien truong/Dieu phoi) tu theo doi khong can
+  // qua trang Tam ung rieng. Da chi tinh CA dong Chi ho (chi ho van la tien
+  // rut tu tam ung cua nguoi do, van phai tru — chi khac o cho khong tinh
+  // vao doanh thu/chi phi cong ty, xem thueNgoaiKhongChiHo o tren).
+  const tamUngTheoNguoi = new Map<string, number>();
+  for (const r of tamUngDonHangRows ?? []) {
+    if (!r.nhan_vien_id) continue;
+    tamUngTheoNguoi.set(r.nhan_vien_id, (tamUngTheoNguoi.get(r.nhan_vien_id) ?? 0) + (r.so_tien ?? 0));
+  }
+  const daChiTuTamUngTheoNguoi = new Map<string, number>();
+  for (const r of [...chiPhiHopLe, ...thueNgoaiHopLe]) {
+    if (r.nguon_thanh_toan !== "Tạm ứng nhân viên" || !r.nguoi_nhap_id) continue;
+    daChiTuTamUngTheoNguoi.set(r.nguoi_nhap_id, (daChiTuTamUngTheoNguoi.get(r.nguoi_nhap_id) ?? 0) + (r.so_tien_da_chi ?? 0));
+  }
+  const nhanVienTenMap = new Map((nhanVienList ?? []).map((nv) => [nv.id, nv.ho_ten]));
+  const tamUngDoiChieu = Array.from(new Set([...tamUngTheoNguoi.keys(), ...daChiTuTamUngTheoNguoi.keys()])).map((nvId) => {
+    const tamUng = tamUngTheoNguoi.get(nvId) ?? 0;
+    const daChi = daChiTuTamUngTheoNguoi.get(nvId) ?? 0;
+    return { nvId, ten: nhanVienTenMap.get(nvId) ?? "—", tamUng, daChi, conLai: tamUng - daChi };
+  });
 
   const nhanVienGiaoNhanOptions = (nhanVienList ?? [])
     .filter((nv) => {
@@ -302,6 +327,37 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           }}
         />
       </div>
+
+      {tamUngDoiChieu.length > 0 && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+          <h2 className="mb-3 text-sm font-semibold text-slate-900">Tạm ứng & đã chi cho lô này</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs font-medium text-slate-500">
+                <tr>
+                  <th className="py-1 pr-3">Nhân viên</th>
+                  <th className="py-1 pr-3">Đã tạm ứng</th>
+                  <th className="py-1 pr-3">Đã chi (kể cả chi hộ)</th>
+                  <th className="py-1 pr-3">Còn lại</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tamUngDoiChieu.map((r) => (
+                  <tr key={r.nvId} className="border-t border-slate-100">
+                    <td className="py-1.5 pr-3 font-medium text-slate-900">{r.ten}</td>
+                    <td className="py-1.5 pr-3">{r.tamUng.toLocaleString("en-US")}</td>
+                    <td className="py-1.5 pr-3">{r.daChi.toLocaleString("en-US")}</td>
+                    <td className={`py-1.5 pr-3 font-medium ${r.conLai < 0 ? "text-red-600" : "text-slate-900"}`}>{r.conLai.toLocaleString("en-US")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            &quot;Đã chi&quot; gồm cả dòng đánh dấu Chi hộ — chi hộ vẫn là tiền rút từ tạm ứng của người đó, vẫn phải trừ.
+          </p>
+        </div>
+      )}
 
       <div className="mb-4">
         <ChiPhiGopSection
