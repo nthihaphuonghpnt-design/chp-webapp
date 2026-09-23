@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import JSZip from "jszip";
 import { createClient } from "@/lib/supabase/client";
 import type { DinhKem } from "@/types/database";
 
@@ -25,11 +26,13 @@ const LOAI_DINH_KEM = [
 
 export default function DinhKemSection({
   donHangId,
+  soDonHang,
   initialRows,
   currentUserId,
   canUpload,
 }: {
   donHangId: string;
+  soDonHang?: string;
   initialRows: DinhKem[];
   currentUserId?: string;
   canUpload: boolean;
@@ -41,6 +44,84 @@ export default function DinhKemSection({
   const [uploading, setUploading] = useState(false);
   const [lienKetToi, setLienKetToi] = useState("Tiếp nhận");
   const [loaiDinhKem, setLoaiDinhKem] = useState("Khác");
+  // Mac dinh chon het moi file de "Tai xuong" la bam duoc ngay, khong bat
+  // phai tu chon tung file — bo chon rieng file nao khong muon gom vao zip.
+  // Cap nhat truc tiep tai noi rows thay doi (handleUpload/handleDelete) thay
+  // vi dung useEffect rieng dong bo theo rows.length — tranh setState long
+  // trong effect (cascading render) va giu duoc lua chon thu cong cua nguoi
+  // dung khi chi co 1 file duoc them/xoa, khong reset sach het moi lan.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialRows.map((r) => r.id)));
+  const [zipping, setZipping] = useState(false);
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleChonHet() {
+    setSelectedIds((prev) => (prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.id))));
+  }
+
+  async function handleDownloadZip() {
+    const chon = rows.filter((r) => selectedIds.has(r.id));
+    if (chon.length === 0) {
+      window.alert("Chưa chọn file nào để tải.");
+      return;
+    }
+    setZipping(true);
+    try {
+      const zip = new JSZip();
+      const tenDaDung = new Set<string>();
+      const loi: string[] = [];
+      for (const r of chon) {
+        const url = urls[r.id];
+        if (!url) {
+          loi.push(r.ten_file ?? r.id);
+          continue;
+        }
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          // Trung ten file (vd nhieu lan chup "IMG_0001.jpg") thi them hau to
+          // de khong ghi de nhau trong zip.
+          let ten = r.ten_file || r.id;
+          let dem = 2;
+          while (tenDaDung.has(ten)) {
+            const cham = (r.ten_file ?? r.id).lastIndexOf(".");
+            ten = cham > 0 ? `${(r.ten_file ?? r.id).slice(0, cham)} (${dem})${(r.ten_file ?? r.id).slice(cham)}` : `${r.ten_file ?? r.id} (${dem})`;
+            dem++;
+          }
+          tenDaDung.add(ten);
+          zip.file(ten, blob);
+        } catch {
+          loi.push(r.ten_file ?? r.id);
+        }
+      }
+      if (Object.keys(zip.files).length === 0) {
+        window.alert("Không tải được file nào — thử lại sau.");
+        return;
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      const objectUrl = URL.createObjectURL(zipBlob);
+      a.href = objectUrl;
+      a.download = `dinh-kem-${soDonHang || donHangId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      if (loi.length > 0) {
+        window.alert(`Không tải được ${loi.length} file: ${loi.join(", ")}. Các file còn lại đã gộp vào file zip.`);
+      }
+    } finally {
+      setZipping(false);
+    }
+  }
 
   useEffect(() => {
     async function loadUrls() {
@@ -89,6 +170,7 @@ export default function DinhKemSection({
         continue;
       }
       setRows((prev) => [data as DinhKem, ...prev]);
+      setSelectedIds((prev) => new Set(prev).add((data as DinhKem).id));
     }
     setUploading(false);
   }
@@ -102,6 +184,11 @@ export default function DinhKemSection({
     }
     await supabase.storage.from("dinh-kem").remove([row.duong_dan_file]);
     setRows((prev) => prev.filter((r) => r.id !== row.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(row.id);
+      return next;
+    });
   }
 
   return (
@@ -146,9 +233,33 @@ export default function DinhKemSection({
         </div>
       )}
 
+      {rows.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
+          <label className="flex items-center gap-1 text-slate-600">
+            <input type="checkbox" checked={selectedIds.size === rows.length} onChange={toggleChonHet} />
+            Chọn tất cả ({selectedIds.size}/{rows.length})
+          </label>
+          <button
+            type="button"
+            onClick={handleDownloadZip}
+            disabled={zipping || selectedIds.size === 0}
+            className="rounded-lg border border-blue-300 px-2.5 py-1.5 font-medium text-blue-700 disabled:opacity-60"
+          >
+            {zipping ? "Đang nén..." : `⬇ Tải xuống (.zip) — ${selectedIds.size} file`}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {rows.map((r) => (
           <div key={r.id} className="relative">
+            <input
+              type="checkbox"
+              checked={selectedIds.has(r.id)}
+              onChange={() => toggleSelected(r.id)}
+              className="absolute left-1 top-1 z-10 h-4 w-4"
+              title="Chọn để tải hàng loạt"
+            />
             <a
               href={urls[r.id] || "#"}
               target="_blank"
