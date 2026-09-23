@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { taoWorkbook, themSheetKeO, taiWorkbook, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
@@ -111,9 +111,13 @@ export default function TamUngGiaiChiView({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
-  const [showForm, setShowForm] = useState(false);
+  // Den tu link "Ung tien nhanh" o trang don hang (?don_hang_id=...) thi tu
+  // mo san form "Đề nghị tạm ứng" voi don hang dien san — khoi tao truc tiep
+  // qua lazy initializer (chi tinh 1 lan luc mount) thay vi 1 effect rieng
+  // goi setState, tranh cascading render luc vao trang.
+  const [showForm, setShowForm] = useState(() => !!autoProposeDonHangId);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [proposing, setProposing] = useState(false);
+  const [proposing, setProposing] = useState(() => !!autoProposeDonHangId);
   const [khachTamUngMode, setKhachTamUngMode] = useState(false);
   const [giaiChiPrefill, setGiaiChiPrefill] = useState<{
     nhan_vien_id: string;
@@ -121,21 +125,12 @@ export default function TamUngGiaiChiView({
     tam_ung_goc_id: string;
     so_tien: string;
     ghi_chu: string;
-  } | null>(null);
+  } | null>(() =>
+    autoProposeDonHangId
+      ? { nhan_vien_id: currentUserId ?? "", don_hang_id: autoProposeDonHangId, tam_ung_goc_id: "", so_tien: "", ghi_chu: "" }
+      : null
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Tu mo san form "Đề nghị tạm ứng" voi don_hang_id dien san khi den tu link
-  // "Ung tien nhanh" tai trang don hang — chi chay 1 lan luc mount, khong lap
-  // lai khi nguoi dung tu dong huy/mo form khac sau do.
-  useEffect(() => {
-    if (!autoProposeDonHangId) return;
-    setEditing(null);
-    setProposing(true);
-    setKhachTamUngMode(false);
-    setGiaiChiPrefill({ nhan_vien_id: currentUserId ?? "", don_hang_id: autoProposeDonHangId, tam_ung_goc_id: "", so_tien: "", ghi_chu: "" });
-    setShowForm(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
@@ -776,7 +771,7 @@ function TamUngForm({
   onSave: (values: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState({
-    loai: initial?.loai ?? (giaiChiPrefill ? "Giải chi" : "Tạm ứng"),
+    loai: initial?.loai ?? (proposing ? "Tạm ứng" : giaiChiPrefill ? "Giải chi" : "Tạm ứng"),
     ngay_thuc_hien: initial?.ngay_thuc_hien ?? new Date().toISOString().slice(0, 10),
     doi_tuong: initial?.doi_tuong ?? (khachTamUngMode ? "Khách hàng" : "Nhân viên"),
     nhan_vien_id: initial?.nhan_vien_id ?? giaiChiPrefill?.nhan_vien_id ?? (proposing ? currentUserId ?? "" : ""),
