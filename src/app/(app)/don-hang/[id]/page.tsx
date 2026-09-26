@@ -390,7 +390,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           table="chi_phi_giao_nhan"
           donHangId={order.id}
           soDonHang={order.so_don_hang}
-          title="Chi phí giao nhận / chuyến"
+          title="Chi phí giao nhận / COMMS Chứng từ, Hiện trường theo lô"
           fields={[
             { key: "nhan_vien_id", label: "Nhân viên", type: "select", required: true, options: nhanVienGiaoNhanOptions },
             { key: "loai", label: "Loại", type: "text", required: true },
