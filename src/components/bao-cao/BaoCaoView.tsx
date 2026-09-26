@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { taoWorkbook, themSheetKeO, taiWorkbook } from "@/lib/excel";
 import { phanLoaiChiPhi, tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
+import { khoangThangVietNam } from "@/lib/ngayVietNam";
 
 interface DonHang {
   id: string;
@@ -82,10 +83,7 @@ interface NhanVien {
 const TRANG_THAI_DON = ["Tiếp nhận", "Làm thủ tục", "Thông quan", "Giao hàng", "Hoàn tất"];
 
 function monthRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  return { start, end };
+  return khoangThangVietNam();
 }
 
 function fmt(n: number) {
@@ -179,6 +177,8 @@ export default function BaoCaoView({
       const { doanhThu, chiPhiThuc, chiHo } = tongPhanLoaiChiPhi(cp);
       const buy = chiPhiThuc;
       const thueNgoaiHopLe = thueNgoaiList.filter((t) => t.don_hang_id === d.id && t.trang_thai !== "Từ chối");
+      const soKhoanChoDuyet = cp.filter((c) => c.trang_thai !== "Đã duyệt").length +
+        thueNgoaiHopLe.filter((t) => t.trang_thai !== "Đã duyệt").length;
       // Dong Thue ngoai Chi ho loai khoi ca doanh thu lan chi phi, giong het
       // cach chi_ho dang loai o Chi phi phat sinh (xem page.tsx chi tiet don
       // hang — cung logic, phai giu khop nhau).
@@ -194,7 +194,7 @@ export default function BaoCaoView({
       const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
       const lnTruocHoaHong = sell - buy - thueNgoaiBuy - giaoNhan - dinhPhi;
-      return { donHang: d, sell, buy, thueNgoaiBuy, giaoNhan, dinhPhi, chiHo, lnTruocHoaHong, hoaHongSale: lnTruocHoaHong * 0.4, lnCongTy: lnTruocHoaHong * 0.6 };
+      return { donHang: d, sell, buy, thueNgoaiBuy, giaoNhan, dinhPhi, chiHo, soKhoanChoDuyet, lnTruocHoaHong, hoaHongSale: lnTruocHoaHong * 0.4, lnCongTy: lnTruocHoaHong * 0.6 };
     });
   }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, chiPhiGiaoNhanList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -375,12 +375,13 @@ export default function BaoCaoView({
           { header: "Giá bán", key: "sell", width: 14 },
           { header: "Số tiền đã chi", key: "buy", width: 16 },
           { header: "Số tiền đã chi thuê ngoài", key: "thueNgoaiBuy", width: 18 },
-          { header: "Chi phí giao nhận", key: "giaoNhan", width: 16 },
+          { header: "Giao nhận / COMMS CT, HT", key: "giaoNhan", width: 22 },
           { header: "Định phí phân bổ", key: "dinhPhi", width: 14 },
           { header: "Chi hộ (không tính lãi/lỗ)", key: "chiHo", width: 18 },
-          { header: "LN trước hoa hồng", key: "lnTruocHoaHong", width: 16 },
-          { header: "Hoa hồng Sale", key: "hoaHongSale", width: 14 },
-          { header: "LN công ty", key: "lnCongTy", width: 14 },
+          { header: "Khoản chưa duyệt", key: "soKhoanChoDuyet", width: 18 },
+          { header: "LN tạm tính trước hoa hồng", key: "lnTruocHoaHong", width: 27 },
+          { header: "Hoa hồng Sale dự kiến", key: "hoaHongSale", width: 23 },
+          { header: "LN công ty tạm tính", key: "lnCongTy", width: 22 },
         ],
         rows: loiNhuanTheoLo.map((r) => [
           r.donHang.so_don_hang,
@@ -390,6 +391,7 @@ export default function BaoCaoView({
           r.giaoNhan,
           r.dinhPhi,
           r.chiHo,
+          r.soKhoanChoDuyet,
           r.lnTruocHoaHong,
           r.hoaHongSale,
           r.lnCongTy,
@@ -503,12 +505,12 @@ export default function BaoCaoView({
 
       {isKeToanOrGiamDoc && (
         <>
-          <Section title="Lợi nhuận theo lô hàng">
+          <Section title="Lợi nhuận theo lô hàng (tạm tính)">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    {["Số đơn", "Giá bán", "Số tiền đã chi", "Số tiền đã chi thuê ngoài", "CP giao nhận", "Định phí", "Chi hộ", "LN trước hoa hồng", "Hoa hồng Sale", "LN công ty"].map((h) => (
+                    {["Số đơn", "Giá bán", "Số tiền đã chi", "Số tiền đã chi thuê ngoài", "Giao nhận / COMMS CT, HT", "Định phí", "Chi hộ", "Chưa duyệt", "LN trước HH Sale", "HH Sale dự kiến", "LN công ty"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium">
                         {h}
                       </th>
@@ -529,6 +531,7 @@ export default function BaoCaoView({
                       <td className="px-3 py-2">{fmt(r.giaoNhan)}</td>
                       <td className="px-3 py-2">{fmt(r.dinhPhi)}</td>
                       <td className="px-3 py-2 text-slate-500">{r.chiHo > 0 ? fmt(r.chiHo) : "—"}</td>
+                      <td className="px-3 py-2">{r.soKhoanChoDuyet > 0 ? <span className="font-medium text-amber-700">{r.soKhoanChoDuyet} khoản</span> : "—"}</td>
                       <td className="px-3 py-2">{fmt(r.lnTruocHoaHong)}</td>
                       <td className="px-3 py-2">{fmt(r.hoaHongSale)}</td>
                       <td className="px-3 py-2 font-medium">{fmt(r.lnCongTy)}</td>
@@ -536,7 +539,7 @@ export default function BaoCaoView({
                   ))}
                   {loiNhuanTheoLo.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-3 py-6 text-center text-slate-400">
+                      <td colSpan={11} className="px-3 py-6 text-center text-slate-400">
                         Không có đơn hàng trong khoảng thời gian này.
                       </td>
                     </tr>
@@ -545,7 +548,7 @@ export default function BaoCaoView({
               </table>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Cột &quot;Chi hộ&quot; chỉ để theo dõi (tiền ứng hộ khách, không phải doanh thu/chi phí của công ty) — không cộng vào LN.
+              Số liệu tạm tính có thể gồm chi phí chưa duyệt và đơn hàng chưa hoàn tất; hoa hồng Sale là mức dự kiến, chưa phải số lương đã chốt. Cột &quot;Chi hộ&quot; chỉ để theo dõi (tiền ứng hộ khách, không phải doanh thu/chi phí của công ty) — không cộng vào LN.
             </p>
           </Section>
 

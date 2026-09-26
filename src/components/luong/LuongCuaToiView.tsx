@@ -13,6 +13,8 @@ import {
   THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG,
 } from "@/lib/luong";
 import { laNhanVienVanPhong } from "@/lib/chamCong";
+import { tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
+import { ngayHienTaiVietNam } from "@/lib/ngayVietNam";
 
 interface PhongBan {
   ten: string;
@@ -32,12 +34,14 @@ interface ChamCongRow {
   trang_thai: string;
 }
 interface ChiPhiGiaoNhan {
+  don_hang_id: string;
   nhan_vien_id: string | null;
   thanh_tien: number | null;
   created_at: string;
 }
 interface DonHang {
   id: string;
+  gia: number | null;
   ngay_len_don: string;
   sale_phu_trach_id: string | null;
 }
@@ -46,6 +50,7 @@ interface ChiPhi {
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   noi_bo: boolean;
+  chi_ho: boolean;
   trang_thai: string;
 }
 interface PhuThu {
@@ -56,6 +61,8 @@ interface ThueNgoai {
   don_hang_id: string;
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
+  chi_ho: boolean;
+  trang_thai: string;
 }
 interface DinhPhi {
   thang_nam: string;
@@ -83,8 +90,7 @@ function thangTruoc(thang: string) {
 }
 
 function monthRange() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return ngayHienTaiVietNam().slice(0, 7);
 }
 
 export default function LuongCuaToiView({
@@ -134,16 +140,19 @@ export default function LuongCuaToiView({
 
   function loiNhuanTruocHoaHongCuaDon(donHangId: string, thangKey: string) {
     const cp = chiPhiList.filter((c) => c.don_hang_id === donHangId && c.trang_thai !== "Từ chối");
-    const buy = cp.filter((c) => c.noi_bo).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
-    const sell =
-      cp.reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
+    const { doanhThu, chiPhiThuc } = tongPhanLoaiChiPhi(cp);
+    const thueNgoai = thueNgoaiList.filter((t) => t.don_hang_id === donHangId && t.trang_thai !== "Từ chối" && !t.chi_ho);
+    const sell = doanhThuVoiFallbackGiaDonHang(
+      doanhThu +
       phuThuList.filter((p) => p.don_hang_id === donHangId).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
-      thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
-    const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
+      thueNgoai.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0),
+      donHangCuaToi.find((d) => d.id === donHangId)?.gia ?? null);
+    const thueNgoaiBuy = thueNgoai.reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
+    const commsVaGiaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === donHangId).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
     const tongDinhPhi = dinhPhiTheoThang.get(thangKey) ?? 0;
     const soLo = soLoTheoThang.get(thangKey) ?? 0;
     const dinhPhi = soLo > 0 ? tongDinhPhi / soLo : 0;
-    return sell - buy - thueNgoaiBuy - dinhPhi;
+    return sell - chiPhiThuc - thueNgoaiBuy - commsVaGiaoNhan - dinhPhi;
   }
 
   const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
@@ -167,10 +176,10 @@ export default function LuongCuaToiView({
     if (pb === "Sale") {
       const donThangTruoc = donHangCuaToi.filter((d) => d.ngay_len_don.slice(0, 7) === thangHoatDong);
       chiTietTheoLo = donThangTruoc.map((d) => ({ soDon: d.id, soTien: loiNhuanTruocHoaHongCuaDon(d.id, thangHoatDong) * HOA_HONG_SALE }));
-      luongTheoLo = chiTietTheoLo.reduce((s, r) => s + r.soTien, 0);
+      luongTheoLo = Math.max(0, chiTietTheoLo.reduce((s, r) => s + r.soTien, 0));
     } else {
       luongTheoLo = chiPhiGiaoNhanList
-        .filter((c) => c.created_at.slice(0, 7) === thangHoatDong)
+        .filter((c) => c.nhan_vien_id === nv.id && c.created_at.slice(0, 7) === thangHoatDong)
         .reduce((s, c) => s + (c.thanh_tien ?? 0), 0);
     }
     const tongThuNhap = luongCoDinh + luongTheoLo;

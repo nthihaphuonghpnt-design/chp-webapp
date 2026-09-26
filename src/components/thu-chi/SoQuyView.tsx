@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import { createClient } from "@/lib/supabase/client";
+import { khoangThangVietNam } from "@/lib/ngayVietNam";
 import MoneyInput from "@/components/common/MoneyInput";
 import DoiChieuSaoKeView from "@/components/thu-chi/DoiChieuSaoKeView";
 import type { SoQuy } from "@/types/database";
@@ -41,10 +42,7 @@ function fmt(n: number) {
 }
 
 function monthRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  return { start, end };
+  return khoangThangVietNam();
 }
 
 const NGUON_LABEL: Record<string, string> = {
@@ -287,6 +285,12 @@ export default function SoQuyView({
           <p className="text-lg font-semibold text-slate-900">{fmt(tonCuoiKy)}</p>
         </div>
       </div>
+
+      {tonCuoiKy < 0 && (
+        <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          Số dư {loaiSo.toLowerCase()} đang âm {fmt(Math.abs(tonCuoiKy))}. Kiểm tra số dư đầu kỳ, khoản thu/chi chưa ghi và phương thức thanh toán trước khi chốt sổ.
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
