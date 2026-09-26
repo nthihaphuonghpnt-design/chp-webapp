@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import { ngayHienTaiVietNam } from "@/lib/ngayVietNam";
 
 interface PhongBan {
   id: string;
@@ -14,6 +15,7 @@ interface PhongBan {
 interface NhanVien {
   id: string;
   ho_ten: string;
+  phong_ban_id: string | null;
 }
 interface DonHangOpt {
   id: string;
@@ -39,10 +41,7 @@ function one<T>(v: T | T[] | null): T | null {
 }
 
 function daysUntil(dateStr: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr + "T00:00:00");
-  return Math.round((target.getTime() - today.getTime()) / 86400000);
+  return Math.round((Date.parse(dateStr + "T00:00:00Z") - Date.parse(ngayHienTaiVietNam() + "T00:00:00Z")) / 86400000);
 }
 
 function statusColor(row: Row) {
@@ -81,6 +80,7 @@ export default function LichNhacNhoView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [chiChuaPhanCong, setChiChuaPhanCong] = useState(false);
 
   const [year, month] = thangNam.split("-").map(Number);
 
@@ -118,6 +118,16 @@ export default function LichNhacNhoView({
   }
 
   async function handleSave(values: Record<string, string>) {
+    const nvDuocGiao = nhanVienList.find((n) => n.id === values.nguoi_phu_trach_id);
+    if (!nvDuocGiao || nvDuocGiao.phong_ban_id !== values.phong_ban_id) {
+      window.alert("Hãy chọn người phụ trách thuộc phòng ban được giao.");
+      return;
+    }
+    if (rows.some((r) => r.id !== editing?.id && r.noi_dung.trim().toLowerCase() === values.noi_dung.trim().toLowerCase()
+      && r.ngay_du_kien === values.ngay_du_kien && r.don_hang_id === (values.don_hang_id || null))) {
+      window.alert("Đã có nhắc việc cùng nội dung, ngày và lô trong tháng này. Hãy sửa việc cũ nếu cần.");
+      return;
+    }
     const payload: Record<string, unknown> = {
       phong_ban_id: values.phong_ban_id || null,
       don_hang_id: values.don_hang_id || null,
@@ -160,6 +170,10 @@ export default function LichNhacNhoView({
   }
 
   async function toggleDone(row: Row) {
+    if (!row.nguoi_phu_trach_id && row.trang_thai !== "Đã thực hiện") {
+      window.alert("Cần phân công người phụ trách trước khi đánh dấu hoàn thành.");
+      return;
+    }
     const newStatus = row.trang_thai === "Đã thực hiện" ? "Chưa thực hiện" : "Đã thực hiện";
     const { data, error } = await supabase
       .from("lich_nhac_nho")
@@ -188,7 +202,7 @@ export default function LichNhacNhoView({
       { header: "Còn lại (ngày)", key: "conLai", width: 12 },
       { header: "Trạng thái", key: "trangThai", width: 14 },
     ];
-    const rows_ = rows.map((r) => [
+    const rows_ = rows.filter((r) => r.ngay_du_kien.startsWith(thangNam)).map((r) => [
       one(r.phong_ban)?.ten ?? phongBanTen(r.phong_ban_id),
       r.noi_dung,
       one(r.don_hang)?.so_don_hang ?? "",
@@ -206,7 +220,7 @@ export default function LichNhacNhoView({
   }
 
   function handleDownloadTemplate() {
-    const headers = ["Phòng ban *", "Nội dung *", "Đơn hàng liên quan (số đơn)", "Người phụ trách", "Ngày dự kiến (yyyy-mm-dd) *"];
+    const headers = ["Phòng ban *", "Nội dung *", "Đơn hàng liên quan (số đơn)", "Người phụ trách *", "Ngày dự kiến (yyyy-mm-dd) *"];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Mẫu nhập");
@@ -240,7 +254,7 @@ export default function LichNhacNhoView({
       for (const key of Object.keys(rawRow)) norm[key.trim().toLowerCase()] = rawRow[key];
       const get = (h: string) => {
         const v = norm[h.toLowerCase()];
-        return v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "").trim();
+        return v instanceof Date ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}` : String(v ?? "").trim();
       };
 
       const pbName = get("Phòng ban *") || get("Phòng ban");
@@ -255,26 +269,40 @@ export default function LichNhacNhoView({
         return;
       }
       const ngay = get("Ngày dự kiến (yyyy-mm-dd) *") || get("Ngày dự kiến (yyyy-mm-dd)");
-      if (!ngay) {
-        errors.push(`Dòng ${rowNum}: thiếu Ngày dự kiến.`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ngay) || Number.isNaN(Date.parse(ngay))) {
+        errors.push(`Dòng ${rowNum}: thiếu hoặc sai Ngày dự kiến (yyyy-mm-dd).`);
         return;
       }
       const donHangSo = get("Đơn hàng liên quan (số đơn)");
       const donHang = donHangSo ? donHangList.find((d) => d.so_don_hang.toLowerCase() === donHangSo.toLowerCase()) : null;
-      const nvName = get("Người phụ trách");
-      const nvMatch = nvName ? nhanVienList.find((n) => n.ho_ten.toLowerCase() === nvName.toLowerCase()) : null;
+      if (donHangSo && !donHang) {
+        errors.push(`Dòng ${rowNum}: không tìm thấy đơn hàng "${donHangSo}".`);
+        return;
+      }
+      const nvName = get("Người phụ trách *") || get("Người phụ trách");
+      const matches = nhanVienList.filter((n) => n.ho_ten.toLowerCase() === nvName.toLowerCase() && n.phong_ban_id === pb.id);
+      if (matches.length !== 1) {
+        errors.push(`Dòng ${rowNum}: người phụ trách "${nvName || "(trống)"}" không xác định duy nhất trong phòng ban ${pb.ten}.`);
+        return;
+      }
 
       records.push({
         phong_ban_id: pb.id,
         noi_dung: noiDung,
         don_hang_id: donHang?.id ?? null,
-        nguoi_phu_trach_id: nvMatch?.id ?? null,
+        nguoi_phu_trach_id: matches[0].id,
         ngay_du_kien: ngay,
         nguoi_tao_id: nv?.id,
       });
     });
 
-    if (records.length === 0) {
+    const seen = new Set(rows.map((r) => `${r.noi_dung.trim().toLowerCase()}|${r.ngay_du_kien}|${r.don_hang_id ?? ""}`));
+    records.forEach((record, idx) => {
+      const key = `${String(record.noi_dung).trim().toLowerCase()}|${record.ngay_du_kien}|${record.don_hang_id ?? ""}`;
+      if (seen.has(key)) errors.push(`Dòng hợp lệ thứ ${idx + 1}: nhắc việc đã có trong app hoặc bị lặp trong file.`);
+      seen.add(key);
+    });
+    if (records.length === 0 || errors.length > 0) {
       setImportMsg(errors.length ? errors.join(" | ") : "File không có dòng hợp lệ.");
       setImporting(false);
       return;
@@ -294,13 +322,17 @@ export default function LichNhacNhoView({
     router.refresh();
   }
 
-  const displayRows = selectedDay ? rows.filter((r) => r.ngay_du_kien === selectedDay) : rows;
+  const monthRows = rows.filter((r) => r.ngay_du_kien.startsWith(thangNam));
+  const overdueBacklog = rows.filter((r) => r.ngay_du_kien < `${thangNam}-01` && r.trang_thai === "Chưa thực hiện");
+  const displayRows = monthRows.filter((r) => (!selectedDay || r.ngay_du_kien === selectedDay)
+    && (!chiChuaPhanCong || (!r.nguoi_phu_trach_id && r.trang_thai !== "Đã thực hiện")));
+  const chuaPhanCong = monthRows.filter((r) => !r.nguoi_phu_trach_id && r.trang_thai !== "Đã thực hiện").length;
 
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
   const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
   const rowsByDay = new Map<number, Row[]>();
-  rows.forEach((r) => {
+  monthRows.forEach((r) => {
     const day = Number(r.ngay_du_kien.slice(8, 10));
     rowsByDay.set(day, [...(rowsByDay.get(day) ?? []), r]);
   });
@@ -368,6 +400,29 @@ export default function LichNhacNhoView({
       </div>
 
       {importMsg && <p className="mb-4 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">{importMsg}</p>}
+      {chuaPhanCong > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <span>{chuaPhanCong} việc trong tháng chưa có người phụ trách; phòng ban cần phân công để nhân viên biết việc cần làm.</span>
+          <button type="button" onClick={() => setChiChuaPhanCong((v) => !v)} className="font-medium underline">
+            {chiChuaPhanCong ? "Hiện tất cả" : "Xem việc chưa phân công"}
+          </button>
+        </div>
+      )}
+
+      {overdueBacklog.length > 0 && (
+        <section className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <h2 className="font-semibold">{overdueBacklog.length} việc quá hạn từ tháng trước</h2>
+          <p className="mt-1">Cần phân công và xử lý; việc cũ vẫn được theo dõi khi sang tháng mới.</p>
+          <div className="mt-2 max-h-56 space-y-1 overflow-auto">
+            {overdueBacklog.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded bg-white p-2">
+                <span>{r.ngay_du_kien} · {r.noi_dung} · {r.nguoi_phu_trach_id ? nhanVienTen(r.nguoi_phu_trach_id) : "Chờ phân công"}</span>
+                {canEditRow(r) && <button type="button" className="font-medium underline" onClick={() => { setEditing(r); setShowForm(true); }}>Phân công / sửa</button>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Calendar grid */}
       <div className="mb-6 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 text-center text-xs">
@@ -432,7 +487,7 @@ export default function LichNhacNhoView({
               <p className="text-slate-500">
                 {one(row.phong_ban)?.ten ?? phongBanTen(row.phong_ban_id)}
                 {" · "}
-                {one(row.nguoi_phu_trach)?.ho_ten ?? nhanVienTen(row.nguoi_phu_trach_id)}
+                {row.nguoi_phu_trach_id ? (one(row.nguoi_phu_trach)?.ho_ten ?? nhanVienTen(row.nguoi_phu_trach_id)) : "Chờ phân công"}
                 {one(row.don_hang)?.so_don_hang ? ` · Đơn: ${one(row.don_hang)?.so_don_hang}` : ""}
                 {" · "}
                 Ngày dự kiến: {row.ngay_du_kien}
@@ -496,7 +551,7 @@ function NhacNhoForm({
     don_hang_id: initial?.don_hang_id ?? "",
     noi_dung: initial?.noi_dung ?? "",
     nguoi_phu_trach_id: initial?.nguoi_phu_trach_id ?? "",
-    ngay_du_kien: initial?.ngay_du_kien ?? new Date().toISOString().slice(0, 10),
+    ngay_du_kien: initial?.ngay_du_kien ?? ngayHienTaiVietNam(),
   });
 
   function set(key: keyof typeof values, value: string) {
@@ -518,7 +573,7 @@ function NhacNhoForm({
         <div className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Phòng ban</label>
-            <select required value={values.phong_ban_id} onChange={(e) => set("phong_ban_id", e.target.value)} className={cls}>
+            <select required value={values.phong_ban_id} onChange={(e) => setValues((prev) => ({ ...prev, phong_ban_id: e.target.value, nguoi_phu_trach_id: "" }))} className={cls}>
               <option value="">-- Chọn --</option>
               {phongBanList.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -533,9 +588,9 @@ function NhacNhoForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Người phụ trách</label>
-            <select value={values.nguoi_phu_trach_id} onChange={(e) => set("nguoi_phu_trach_id", e.target.value)} className={cls}>
+            <select required value={values.nguoi_phu_trach_id} onChange={(e) => set("nguoi_phu_trach_id", e.target.value)} className={cls}>
               <option value="">-- Chọn --</option>
-              {nhanVienList.map((n) => (
+              {nhanVienList.filter((n) => n.phong_ban_id === values.phong_ban_id).map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.ho_ten}
                 </option>
