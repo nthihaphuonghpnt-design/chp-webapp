@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
 import MoneyInput from "@/components/common/MoneyInput";
-import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
+import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
+import { docDanhSachHoaDonDienTu } from "@/lib/danhSachHoaDonDienTu";
 import type { DinhKem } from "@/types/database";
 
 interface KhachHang {
   id: string;
+  ma_so_thue: string | null;
   ten_day_du: string;
   ten_viet_tat: string | null;
   nhom_khach_hang_ten?: string | null;
@@ -126,6 +129,46 @@ export default function HoaDonView({
   const [doiChieuMoRong, setDoiChieuMoRong] = useState<string | null>(null);
   const [dctForm, setDctForm] = useState<{ mode: "dieu_chinh" | "thay_the"; row: Row } | null>(null);
   const [lichSuMoRong, setLichSuMoRong] = useState<string | null>(null);
+  const [doiChieuCong, setDoiChieuCong] = useState<{ dong: number; so: string; ketQua: string }[] | null>(null);
+  const [loiFileCong, setLoiFileCong] = useState<string | null>(null);
+
+  async function doiChieuDanhSachHoaDon(file: File) {
+    setLoiFileCong(null);
+    try {
+      const book = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      const list = docDanhSachHoaDonDienTu(book.Sheets[book.SheetNames[0]]);
+      if (list.length === 0) {
+        setDoiChieuCong([]);
+        setLoiFileCong("File chỉ có tiêu đề, chưa có hóa đơn để đối chiếu.");
+        return;
+      }
+      const seen = new Set<string>();
+      const checks = list.map((invoice) => {
+        let ketQua = "Khớp số, khách hàng và tổng tiền";
+        const key = `${invoice.kyHieuMau}|${invoice.kyHieu}|${invoice.soHoaDon}`;
+        if (invoice.mstNguoiBan !== CONG_TY.mst) ketQua = "MST người bán không phải công ty";
+        else if (!invoice.mstNguoiMua || !khachHangList.some((k) => k.ma_so_thue?.trim() === invoice.mstNguoiMua)) ketQua = "Chưa xác định được khách hàng theo MST";
+        else if (seen.has(key)) ketQua = "Trùng hóa đơn trong file";
+        else if (!/^\d{4}-\d{2}-\d{2}$/.test(invoice.ngayLap)) ketQua = "Ngày lập không hợp lệ";
+        else if (![invoice.tienTruocThue, invoice.tienThue, invoice.tienChietKhau, invoice.tienPhi, invoice.tongThanhToan].every(Number.isFinite)) ketQua = "Số tiền không hợp lệ";
+        else if (invoice.donViTienTe && invoice.donViTienTe.toUpperCase() !== "VND") ketQua = "Ngoại tệ: cần đối chiếu tỷ giá";
+        else if (invoice.trangThai.toLowerCase().includes("hủy") || invoice.trangThai.toLowerCase().includes("huỷ")) ketQua = "Hóa đơn hủy: kiểm tra trạng thái trên app";
+        else {
+          const matched = rows.filter((r) => r.so_hoa_don?.trim() === invoice.soHoaDon && r.ngay_xuat === invoice.ngayLap);
+          if (matched.length !== 1) ketQua = matched.length === 0 ? "Chưa có trong app (hoặc sai ngày lập)" : "Trùng số và ngày lập trong app";
+          else if (khachHangList.find((k) => k.id === matched[0].khach_hang_id)?.ma_so_thue?.trim() !== invoice.mstNguoiMua) ketQua = "Sai khách hàng/MST";
+          else if (Math.abs(matched[0].tong_tien - invoice.tongThanhToan) > 1) ketQua = "Lệch tổng thanh toán";
+          else if (matched[0].trang_thai === "Đã hủy" || matched[0].trang_thai === "Đã thay thế") ketQua = "Trạng thái app cần kiểm tra";
+        }
+        seen.add(key);
+        return { dong: invoice.dong, so: invoice.soHoaDon, ketQua };
+      });
+      setDoiChieuCong(checks);
+    } catch (error) {
+      setDoiChieuCong(null);
+      setLoiFileCong(error instanceof Error ? error.message : "Không đọc được file Excel");
+    }
+  }
 
   /** Chuoi goc <-> dieu chinh/thay the cua 1 hoa don, di theo con tro
    * hoa_don_goc_id/hoa_don_thay_the_id tren mang rows da co san — khong can
@@ -455,6 +498,14 @@ export default function HoaDonView({
           <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
             Xuất Excel
           </button>
+          <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            Đối chiếu Excel HĐĐT bán ra
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void doiChieuDanhSachHoaDon(file);
+              e.target.value = "";
+            }} />
+          </label>
           {canEdit && (
             <button
               onClick={() => {
@@ -468,6 +519,18 @@ export default function HoaDonView({
           )}
         </div>
       </div>
+
+      {loiFileCong && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">{loiFileCong}</p>}
+      {doiChieuCong && doiChieuCong.length > 0 && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+          <h2 className="font-semibold">Kết quả đối chiếu danh sách hóa đơn điện tử</h2>
+          <p className="mt-1 text-slate-600">{doiChieuCong.length} hóa đơn · {doiChieuCong.filter((item) => item.ketQua !== "Khớp số, khách hàng và tổng tiền").length} cần xử lý. Chức năng này chỉ đối chiếu, không ghi dữ liệu vào sổ hóa đơn.</p>
+          {doiChieuCong.filter((item) => item.ketQua !== "Khớp số, khách hàng và tổng tiền").slice(0, 100).map((item, index) => (
+            <p key={`${item.dong}-${index}`} className="mt-1 text-amber-800">Dòng {item.dong} · HĐ {item.so}: {item.ketQua}</p>
+          ))}
+          {doiChieuCong.length > 100 && <p className="mt-1 text-slate-500">Hiển thị tối đa 100 dòng cần xử lý.</p>}
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <div className="w-56">

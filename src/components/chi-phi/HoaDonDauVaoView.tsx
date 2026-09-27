@@ -4,7 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
-import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
+import { ngayHienTaiVietNam } from "@/lib/ngayVietNam";
+import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -73,14 +74,14 @@ type EditValues = {
 };
 
 function thangHienTai() {
-  return new Date().toISOString().slice(0, 7);
+  return ngayHienTaiVietNam().slice(0, 7);
 }
 
 function dongTrong(): EditValues {
   return {
     mau_so_hoa_don: "",
     so_hoa_don: "",
-    ngay_hoa_don: new Date().toISOString().slice(0, 10),
+    ngay_hoa_don: ngayHienTaiVietNam(),
     ngay_ky_hoa_don: "",
     nha_cung_cap_ten: "",
     don_hang_ten: "",
@@ -98,7 +99,7 @@ function dongTrong(): EditValues {
     phuong_thuc_thanh_toan: "",
     ghi_chu: "",
     ky_ke_khai: "",
-    dieu_kien_khau_tru: "Đủ điều kiện",
+    dieu_kien_khau_tru: "Chưa xác định",
     chi_ho: "false",
   };
 }
@@ -220,7 +221,7 @@ export default function HoaDonDauVaoView({
       id: `new-${Date.now()}`,
       mau_so_hoa_don: null,
       so_hoa_don: null,
-      ngay_hoa_don: new Date().toISOString().slice(0, 10),
+      ngay_hoa_don: ngayHienTaiVietNam(),
       ngay_ky_hoa_don: null,
       nha_cung_cap_id: null,
       don_hang_id: null,
@@ -239,7 +240,7 @@ export default function HoaDonDauVaoView({
       phuong_thuc_thanh_toan: null,
       ghi_chu: null,
       ky_ke_khai: null,
-      dieu_kien_khau_tru: "Đủ điều kiện",
+      dieu_kien_khau_tru: "Chưa xác định",
       chi_ho: false,
     };
     setRows((prev) => [tam, ...prev]);
@@ -579,7 +580,12 @@ export default function HoaDonDauVaoView({
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+    const portalHeaderIndex = grid.findIndex((line) => String(line[0]).trim() === "STT" && String(line[3]).trim() === "Số hóa đơn" && String(line[5]).includes("MST người bán"));
+    const portalRows = portalHeaderIndex < 0 ? [] : grid.slice(portalHeaderIndex + 1)
+      .map((line, index) => ({ line, rowNumber: XLSX.utils.decode_range(sheet["!ref"] ?? "A1").s.r + portalHeaderIndex + index + 2 }))
+      .filter(({ line }) => String(line[3] ?? "").trim() !== "");
+    const raw = portalHeaderIndex < 0 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" }) : [];
 
     const {
       data: { user },
@@ -587,12 +593,73 @@ export default function HoaDonDauVaoView({
     const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
 
     function excelDate(v: unknown): string {
-      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+      if (typeof v === "number") {
+        const parsed = XLSX.SSF.parse_date_code(v);
+        if (parsed) return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+      }
+      const dateText = String(v ?? "").trim();
+      const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(dateText);
+      if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
       return String(v ?? "").trim();
     }
 
     const records: Record<string, unknown>[] = [];
     const errors: string[] = [];
+
+    if (portalHeaderIndex >= 0) {
+      if (portalRows.length === 0) errors.push("File cổng hóa đơn chỉ có tiêu đề, chưa có hóa đơn để nhập.");
+      for (const { line, rowNumber } of portalRows) {
+        const cell = (index: number) => String(line[index] ?? "").trim();
+        const buyerTax = cell(7);
+        const sellerTax = cell(5);
+        const status = cell(17).toLowerCase();
+        const currency = cell(15).toUpperCase();
+        const ngayHoaDon = excelDate(line[4]);
+        if (buyerTax !== CONG_TY.mst || sellerTax === CONG_TY.mst) {
+          errors.push(`Dòng ${rowNumber}: không phải hóa đơn mua vào của công ty (MST người mua phải là ${CONG_TY.mst}).`);
+          continue;
+        }
+        if (status.includes("hủy") || status.includes("huỷ") || status.includes("thay thế") || status.includes("điều chỉnh")) {
+          errors.push(`Dòng ${rowNumber}: hóa đơn có trạng thái “${cell(17)}”, cần đối chiếu hóa đơn gốc trước khi ghi nhận.`);
+          continue;
+        }
+        if (currency && currency !== "VND") {
+          errors.push(`Dòng ${rowNumber}: hóa đơn ${currency} cần quy đổi và kiểm tra tỷ giá trước khi ghi nhận.`);
+          continue;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(ngayHoaDon)) {
+          errors.push(`Dòng ${rowNumber}: ngày lập không hợp lệ.`);
+          continue;
+        }
+        const ncc = ncList.find((o) => String(o.ma_so_thue ?? "").trim() === sellerTax);
+        if (!ncc) {
+          errors.push(`Dòng ${rowNumber}: MST người bán ${sellerTax || "(trống)"} chưa có trong danh mục nhà cung cấp.`);
+          continue;
+        }
+        const amount = (index: number) => {
+          const value = line[index];
+          return typeof value === "number" ? value : Number(String(value ?? "0").replace(/[,.\s]/g, ""));
+        };
+        const tienHang = amount(10);
+        const tienThue = amount(11);
+        const thanhToan = amount(14);
+        if (![tienHang, tienThue, thanhToan].every(Number.isFinite) || tienHang < 0 || tienThue < 0 || Math.abs(tienHang + tienThue - thanhToan) > 1) {
+          errors.push(`Dòng ${rowNumber}: tiền hàng + thuế khác tổng thanh toán; cần kiểm tra chiết khấu/phí/điều chỉnh.`);
+          continue;
+        }
+        records.push({
+          mau_so_hoa_don: [cell(1), cell(2)].filter(Boolean).join(" / ") || null,
+          so_hoa_don: cell(3), ngay_hoa_don: ngayHoaDon,
+          nha_cung_cap_id: ncc.id, khoan_muc: `Hóa đơn mua vào ${cell(3)} — ${cell(6)}`,
+          loai_chi_phi: "Phát sinh", thang_phan_bo: ngayHoaDon.slice(0, 7),
+          tong_tien_hang: tienHang, tien_thue_gtgt: tienThue,
+          ky_ke_khai: ngayHoaDon.slice(0, 7), dieu_kien_khau_tru: "Chưa xác định",
+          ghi_chu: `Nhập từ danh sách HĐĐT. Trạng thái: ${cell(17) || "chưa có"}; kiểm tra: ${cell(18) || "chưa có"}. Kế toán cần đối chiếu hóa đơn gốc, phân loại khoản mục và kỳ kê khai.`,
+          nguoi_nhap_id: nv?.id,
+        });
+      }
+    }
 
     raw.forEach((rawRow, idx) => {
       const rowNum = idx + 2;
@@ -629,7 +696,11 @@ export default function HoaDonDauVaoView({
       }
 
       const loai = String(n["loại (định phí cố định / phát sinh)"] ?? "Phát sinh").trim();
-      const ngayHoaDon = excelDate(n["ngày hóa đơn (yyyy-mm-dd)"]) || new Date().toISOString().slice(0, 10);
+      const ngayHoaDon = excelDate(n["ngày hóa đơn (yyyy-mm-dd)"]);
+      if (!ngayHoaDon || !/^\d{4}-\d{2}-\d{2}$/.test(ngayHoaDon)) {
+        errors.push(`Dòng ${rowNum}: thiếu hoặc sai Ngày hóa đơn (yyyy-mm-dd).`);
+        return;
+      }
       const dieuKienKhauTruGo = String(n["điều kiện khấu trừ (đủ điều kiện/không đủ điều kiện/chưa xác định)"] ?? "").trim();
 
       records.push({
@@ -650,14 +721,28 @@ export default function HoaDonDauVaoView({
         tien_thue_gtgt: Number(n["tiền thuế gtgt"] || 0),
         ghi_chu: String(n["ghi chú"] ?? "").trim() || null,
         ky_ke_khai: String(n["kỳ kê khai vat (yyyy-mm)"] ?? "").trim() || ngayHoaDon.slice(0, 7),
-        dieu_kien_khau_tru: ["Đủ điều kiện", "Không đủ điều kiện", "Chưa xác định"].includes(dieuKienKhauTruGo) ? dieuKienKhauTruGo : "Đủ điều kiện",
+        dieu_kien_khau_tru: ["Đủ điều kiện", "Không đủ điều kiện", "Chưa xác định"].includes(dieuKienKhauTruGo) ? dieuKienKhauTruGo : "Chưa xác định",
         chi_ho: !!String(n["chi hộ (x nếu có)"] ?? "").trim(),
         nguoi_nhap_id: nv?.id,
       });
     });
 
-    if (records.length === 0) {
+    const daCo = new Set(rows.filter((r) => r.so_hoa_don && r.nha_cung_cap_id).map((r) =>
+      `${r.nha_cung_cap_id}|${r.mau_so_hoa_don ?? ""}|${r.so_hoa_don}|${r.ngay_hoa_don}`));
+    records.forEach((record, idx) => {
+      if (!record.so_hoa_don || !record.nha_cung_cap_id) return;
+      const key = `${record.nha_cung_cap_id}|${record.mau_so_hoa_don ?? ""}|${record.so_hoa_don}|${record.ngay_hoa_don}`;
+      if (daCo.has(key)) errors.push(`Dòng hợp lệ thứ ${idx + 1}: hóa đơn đã có trong app hoặc lặp trong file (${record.so_hoa_don}).`);
+      daCo.add(key);
+    });
+
+    if (records.length === 0 || errors.length > 0) {
       setImportSummary({ success: 0, errors: errors.length ? errors : ["File không có dòng dữ liệu hợp lệ."] });
+      setImporting(false);
+      return;
+    }
+
+    if (!window.confirm(`Đã kiểm tra ${records.length} dòng hóa đơn. Xác nhận nhập vào app?`)) {
       setImporting(false);
       return;
     }
@@ -1027,8 +1112,7 @@ export default function HoaDonDauVaoView({
         Tổng hóa đơn đầu vào tháng {thangLoc}{loaiLoc !== "Tất cả" ? ` (${loaiLoc})` : ""}: <strong>{fmt(tongTheoLoc)}</strong>
       </p>
       <p className="mt-2 max-w-3xl text-xs text-slate-400">
-        Dùng để phân bổ đều cho các lô hàng phát sinh trong tháng đó khi tính lợi nhuận (Định phí phân bổ/lô = Tổng hóa đơn đầu vào tháng ÷ Số lô hàng trong tháng) — gồm cả &ldquo;Định phí cố định&rdquo; (thuê
-        nhà, lương...) lẫn &ldquo;Phát sinh&rdquo; (ăn uống, văn phòng phẩm...). Đánh dấu &ldquo;Đã đủ&rdquo;/&ldquo;Một phần&rdquo; + chọn phương thức thanh toán để tự động ghi vào Sổ quỹ.
+        Chỉ khoản &ldquo;Định phí cố định&rdquo; không gắn đơn hàng mới được chia đều cho các lô trong tháng. VAT đã xác nhận đủ điều kiện khấu trừ không tính vào định phí; hóa đơn chưa xác minh tạm tính cả VAT. Hóa đơn &ldquo;Phát sinh&rdquo; hoặc đã gắn lô cần kế toán đối chiếu và phân bổ riêng, tránh tính chi phí hai lần. Đánh dấu &ldquo;Đã đủ&rdquo;/&ldquo;Một phần&rdquo; + chọn phương thức thanh toán để tự động ghi vào Sổ quỹ.
       </p>
     </div>
   );

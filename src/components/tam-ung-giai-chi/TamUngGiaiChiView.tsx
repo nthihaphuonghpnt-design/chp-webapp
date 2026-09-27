@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { taoWorkbook, themSheetKeO, taiWorkbook, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
+import { khoangThangVietNam } from "@/lib/ngayVietNam";
 import MoneyInput from "@/components/common/MoneyInput";
 import SearchableSelect from "@/components/common/SearchableSelect";
 
@@ -78,10 +79,7 @@ const TRANG_THAI_COLOR: Record<string, string> = {
 };
 
 function monthRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  return { start, end };
+  return khoangThangVietNam();
 }
 
 const TAM_UNG_SELECT_COLS =

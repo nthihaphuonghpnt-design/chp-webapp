@@ -32,13 +32,13 @@ export default async function BangLuongPage() {
       .select("id, ho_ten, dang_lam_viec, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, phong_ban:phong_ban_id(ten)")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
-    supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at"),
-    supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id"),
+    supabase.from("chi_phi_giao_nhan").select("don_hang_id, nhan_vien_id, thanh_tien, created_at"),
+    supabase.from("don_hang").select("id, gia, ngay_len_don, sale_phu_trach_id"),
     supabase
       .from("phat_sinh_chi_phi")
-      .select("id, don_hang_id, so_tien_da_chi, noi_bo, trang_thai"),
+      .select("id, don_hang_id, so_tien_da_chi, noi_bo, chi_ho, trang_thai"),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
-    supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi"),
+    supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi, chi_ho, trang_thai"),
     supabase.from("luong_da_tra").select("*"),
     supabase.from("cham_cong").select("nhan_vien_id, ngay, trang_thai"),
     supabase.from("lich_nghi_le").select("ngay").eq("dang_hoat_dong", true),

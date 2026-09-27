@@ -14,6 +14,8 @@ import {
   THANG_BAT_DAU_TRU_LUONG_THEO_CHAM_CONG,
 } from "@/lib/luong";
 import { createClient } from "@/lib/supabase/client";
+import { ngayHienTaiVietNam } from "@/lib/ngayVietNam";
+import { tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
 import { laNhanVienVanPhong } from "@/lib/chamCong";
 import MoneyInput from "@/components/common/MoneyInput";
 
@@ -36,12 +38,14 @@ interface ChamCongRow {
   trang_thai: string;
 }
 interface ChiPhiGiaoNhan {
+  don_hang_id: string | null;
   nhan_vien_id: string | null;
   thanh_tien: number | null;
   created_at: string;
 }
 interface DonHang {
   id: string;
+  gia: number | null;
   ngay_len_don: string;
   sale_phu_trach_id: string | null;
 }
@@ -50,6 +54,7 @@ interface ChiPhi {
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   noi_bo: boolean;
+  chi_ho: boolean;
   trang_thai: string;
 }
 interface PhuThu {
@@ -60,6 +65,8 @@ interface ThueNgoai {
   don_hang_id: string;
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
+  chi_ho: boolean;
+  trang_thai: string;
 }
 interface DinhPhi {
   thang_nam: string;
@@ -132,7 +139,7 @@ export default function BangLuongView({
   const [daTraList, setDaTraList] = useState<LuongDaTra[]>(luongDaTraList);
   const [traForm, setTraForm] = useState<{ nhanVienId: string; soTien: string } | null>(null);
   const [traPhuongThuc, setTraPhuongThuc] = useState<"Tiền mặt" | "Tài khoản công ty">("Tài khoản công ty");
-  const [traNgay, setTraNgay] = useState(new Date().toISOString().slice(0, 10));
+  const [traNgay, setTraNgay] = useState(ngayHienTaiVietNam());
   const [dangTra, setDangTra] = useState(false);
 
   const thangHoatDong = thangTruoc(thangLuong);
@@ -155,16 +162,19 @@ export default function BangLuongView({
 
   function loiNhuanTruocHoaHongCuaDon(donHangId: string, thangKey: string) {
     const cp = chiPhiList.filter((c) => c.don_hang_id === donHangId && c.trang_thai !== "Từ chối");
-    const buy = cp.filter((c) => c.noi_bo).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
-    const sell =
-      cp.reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
+    const { doanhThu, chiPhiThuc } = tongPhanLoaiChiPhi(cp);
+    const thueNgoai = thueNgoaiList.filter((t) => t.don_hang_id === donHangId && t.trang_thai !== "Từ chối" && !t.chi_ho);
+    const sell = doanhThuVoiFallbackGiaDonHang(
+      doanhThu +
       phuThuList.filter((p) => p.don_hang_id === donHangId).reduce((s, p) => s + (p.thanh_tien ?? 0), 0) +
-      thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0);
-    const thueNgoaiBuy = thueNgoaiList.filter((t) => t.don_hang_id === donHangId).reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
+      thueNgoai.reduce((s, t) => s + (t.gia_ban_sell ?? 0), 0),
+      donHangList.find((d) => d.id === donHangId)?.gia ?? null);
+    const thueNgoaiBuy = thueNgoai.reduce((s, t) => s + (t.so_tien_da_chi ?? 0), 0);
+    const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === donHangId).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
     const tongDinhPhi = dinhPhiTheoThang.get(thangKey) ?? 0;
     const soLo = soLoTheoThang.get(thangKey) ?? 0;
     const dinhPhi = soLo > 0 ? tongDinhPhi / soLo : 0;
-    return sell - buy - thueNgoaiBuy - dinhPhi;
+    return sell - chiPhiThuc - thueNgoaiBuy - giaoNhan - dinhPhi;
   }
 
   const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
@@ -217,7 +227,10 @@ export default function BangLuongView({
   const tongLuong = bangLuong.reduce((s, r) => s + r.tongThuNhap, 0);
   const tongBhxhCt = bangLuong.reduce((s, r) => s + r.bhxhCt, 0);
   const tongKpcd = bangLuong.reduce((s, r) => s + r.chiTietBhxh.ctKpcd, 0);
-  const tongChiPhiNhanSu = tongLuong + tongBhxhCt + tongKpcd;
+  // Hoa hong Sale va COMMS Chung tu/Hien truong da duoc tru theo lo;
+  // chi phan bo phan luong co dinh va khoan cong ty dong.
+  const tongLuongCoDinh = bangLuong.reduce((s, r) => s + r.luongCoDinh, 0);
+  const tongChiPhiNhanSu = tongLuongCoDinh + tongBhxhCt + tongKpcd;
 
   function daTraCuaThang(nhanVienId: string) {
     return daTraList.find((d) => d.nhan_vien_id === nhanVienId && d.thang_luong === thangLuong) ?? null;
@@ -226,7 +239,7 @@ export default function BangLuongView({
   function moFormTra(nhanVienId: string, thucLanh: number) {
     setTraForm({ nhanVienId, soTien: Math.round(thucLanh).toString() });
     setTraPhuongThuc("Tài khoản công ty");
-    setTraNgay(new Date().toISOString().slice(0, 10));
+    setTraNgay(ngayHienTaiVietNam());
   }
 
   async function xacNhanTra() {
@@ -264,15 +277,26 @@ export default function BangLuongView({
   async function themVaoDinhPhi() {
     setSaving(true);
     setSavedMsg(null);
+    const khoanMuc = `Lương + BHXH công ty tháng ${thangLuong}`;
+    const { data: daCo, error: lookupError } = await supabase.from("hoa_don_dau_vao")
+      .select("id").eq("thang_phan_bo", thangLuong).eq("khoan_muc", khoanMuc).limit(1);
+    if (lookupError || (daCo?.length ?? 0) > 0) {
+      setSaving(false);
+      setSavedMsg(lookupError ? `Lỗi kiểm tra khoản đã ghi: ${lookupError.message}` : "Khoản chi phí nhân sự tháng này đã được ghi; kiểm tra số trước khi ghi thêm.");
+      return;
+    }
     const { error } = await supabase.from("hoa_don_dau_vao").insert({
       thang_phan_bo: thangLuong,
-      khoan_muc: `Lương + BHXH công ty tháng ${thangLuong}`,
+      khoan_muc: khoanMuc,
       loai_chi_phi: "Định phí cố định",
-      ngay_hoa_don: new Date().toISOString().slice(0, 10),
+      ngay_hoa_don: ngayHienTaiVietNam(),
       tong_tien_hang: Math.round(tongChiPhiNhanSu),
+      tien_thue_gtgt: 0,
+      dieu_kien_khau_tru: "Không đủ điều kiện",
+      ghi_chu: "Chi phí nhân sự nội bộ, không phải hóa đơn mua vào; không kê khai VAT.",
     });
     setSaving(false);
-    setSavedMsg(error ? `Lỗi: ${error.message}` : "Đã thêm vào Hóa đơn đầu vào (định phí cố định).");
+    setSavedMsg(error ? `Lỗi: ${error.message}` : "Đã ghi chi phí nhân sự nội bộ để phân bổ. Khoản này không kê khai VAT.");
   }
 
   async function handleExportExcel() {
@@ -400,16 +424,25 @@ export default function BangLuongView({
                 <td className="px-3 py-2 font-semibold text-slate-900">{fmt(r.thucLanh)}</td>
                 <td className="px-3 py-2">
                   {daTraCuaThang(r.nv.id) ? (
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      Đã trả · {daTraCuaThang(r.nv.id)!.phuong_thuc} · {daTraCuaThang(r.nv.id)!.ngay_tra}
-                    </span>
-                  ) : (
+                    <div className="space-y-1">
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                        Đã trả {fmt(daTraCuaThang(r.nv.id)!.so_tien)} · {daTraCuaThang(r.nv.id)!.phuong_thuc} · {daTraCuaThang(r.nv.id)!.ngay_tra}
+                      </span>
+                      {Math.abs(daTraCuaThang(r.nv.id)!.so_tien - Math.round(r.thucLanh)) >= 1 && (
+                        <p className="text-xs font-medium text-amber-700">
+                          Chênh so với thực lãnh hiện tính: {fmt(daTraCuaThang(r.nv.id)!.so_tien - Math.round(r.thucLanh))}. Cần đối chiếu trước khi chốt lương.
+                        </p>
+                      )}
+                    </div>
+                  ) : r.thucLanh > 0 ? (
                     <button
                       onClick={() => moFormTra(r.nv.id, r.thucLanh)}
                       className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700"
                     >
                       Đánh dấu đã trả
                     </button>
+                  ) : (
+                    <span className="text-xs text-slate-500">Không phát sinh lương</span>
                   )}
                 </td>
               </tr>
@@ -441,15 +474,16 @@ export default function BangLuongView({
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
         <p className="mb-2 text-sm text-slate-700">
-          Tổng chi phí nhân sự tháng {thangLuong} (lương + BHXH/BHYT/BHTN công ty đóng + KPCĐ 2%): <strong>{fmt(tongChiPhiNhanSu)}</strong>
+          Định phí nhân sự tháng {thangLuong} (lương cố định + BHXH/BHYT/BHTN công ty đóng + KPCĐ 2%): <strong>{fmt(tongChiPhiNhanSu)}</strong>. Hoa hồng và COMMS theo lô đã tính riêng, không phân bổ thêm.
         </p>
         <button
           onClick={themVaoDinhPhi}
           disabled={saving}
           className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
         >
-          {saving ? "Đang thêm..." : `Thêm vào Hóa đơn đầu vào (${thangLuong})`}
+          {saving ? "Đang thêm..." : `Ghi chi phí nhân sự nội bộ (${thangLuong})`}
         </button>
+        <p className="mt-2 text-xs text-amber-700">Khoản này đang lưu trong danh sách chi phí chung để phân bổ; không phải hóa đơn đầu vào và không được kê khai VAT.</p>
         {savedMsg && <p className="mt-2 text-xs text-slate-500">{savedMsg}</p>}
       </div>
 

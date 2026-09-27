@@ -17,7 +17,6 @@ export default async function LuongCuaToiPage() {
 
   const [
     { data: nvCoBan },
-    { data: chiPhiGiaoNhanList },
     { data: donHangCuaToi },
     { data: soLoRaw },
     { data: luongDaTraList },
@@ -29,8 +28,7 @@ export default async function LuongCuaToiPage() {
       .select("id, ho_ten, so_nguoi_phu_thuoc, loai_nhan_su, ngay_vao_lam, phong_ban:phong_ban_id(ten)")
       .eq("id", user.id)
       .single(),
-    supabase.from("chi_phi_giao_nhan").select("nhan_vien_id, thanh_tien, created_at").eq("nhan_vien_id", user.id),
-    supabase.from("don_hang").select("id, ngay_len_don, sale_phu_trach_id").eq("sale_phu_trach_id", user.id),
+    supabase.from("don_hang").select("id, gia, ngay_len_don, sale_phu_trach_id").eq("sale_phu_trach_id", user.id),
     supabase.from("don_hang").select("ngay_len_don"),
     supabase.from("luong_da_tra").select("*").eq("nhan_vien_id", user.id).order("thang_luong", { ascending: false }),
     supabase.from("cham_cong").select("ngay, trang_thai").eq("nhan_vien_id", user.id),
@@ -49,12 +47,15 @@ export default async function LuongCuaToiPage() {
   const { data: dinhPhiList } = await supabase.rpc("tong_dinh_phi_theo_thang");
 
   const donHangIds = (donHangCuaToi ?? []).map((d) => d.id);
+  const { data: chiPhiGiaoNhanList } = user.phong_ban === "Sale" && donHangIds.length > 0
+    ? await supabase.from("chi_phi_giao_nhan").select("don_hang_id, nhan_vien_id, thanh_tien, created_at").in("don_hang_id", donHangIds)
+    : await supabase.from("chi_phi_giao_nhan").select("don_hang_id, nhan_vien_id, thanh_tien, created_at").eq("nhan_vien_id", user.id);
   const [{ data: chiPhiList }, { data: phuThuList }, { data: thueNgoaiList }] =
     donHangIds.length > 0
       ? await Promise.all([
-          supabase.from("phat_sinh_chi_phi").select("id, don_hang_id, so_tien_da_chi, noi_bo, trang_thai").in("don_hang_id", donHangIds),
+          supabase.from("phat_sinh_chi_phi").select("id, don_hang_id, so_tien_da_chi, noi_bo, chi_ho, trang_thai").in("don_hang_id", donHangIds),
           supabase.from("phu_thu").select("don_hang_id, thanh_tien").in("don_hang_id", donHangIds),
-          supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi").in("don_hang_id", donHangIds),
+          supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi, chi_ho, trang_thai").in("don_hang_id", donHangIds),
         ])
       : [{ data: [] }, { data: [] }, { data: [] }];
 
