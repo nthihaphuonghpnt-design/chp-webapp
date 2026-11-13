@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canManageDonHang } from "@/lib/permissions";
 import DonHangList from "@/components/don-hang/DonHangList";
 import DonHangExcelTools from "@/components/don-hang/DonHangExcelTools";
+import ChiPhiPhatSinhBulkExcelTools from "@/components/don-hang/ChiPhiPhatSinhBulkExcelTools";
 
 export default async function DonHangPage() {
   const supabase = await createClient();
@@ -24,6 +25,7 @@ export default async function DonHangPage() {
     { data: saleList },
     { data: hienTruongList },
     { data: chungTuList },
+    { data: loaiChiPhi },
   ] = await Promise.all([
     supabase
       .from("don_hang")
@@ -53,6 +55,7 @@ export default async function DonHangPage() {
       .eq("phong_ban_id", phongBanChungTu?.id ?? "")
       .eq("dang_lam_viec", true)
       .order("ho_ten"),
+    supabase.from("loai_chi_phi").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
   ]);
 
   const canCreate = canManageDonHang(user?.phong_ban);
@@ -101,6 +104,12 @@ export default async function DonHangPage() {
           chungTuList: chungTuList ?? [],
         }}
         canImport={canCreate}
+      />
+
+      <ChiPhiPhatSinhBulkExcelTools
+        donHangList={(rows ?? []).map((r) => ({ id: r.id, so_don_hang: r.so_don_hang, ngay_len_don: r.ngay_len_don }))}
+        loaiChiPhiList={loaiChiPhi ?? []}
+        canImport={user?.phong_ban === "Kế toán" || user?.phong_ban === "Giám đốc"}
       />
 
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

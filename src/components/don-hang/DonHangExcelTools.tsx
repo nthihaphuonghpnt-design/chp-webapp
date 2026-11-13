@@ -26,6 +26,7 @@ const DVT = ["Cont", "Chuyến", "Kiện", "Khối", "Tấn", "Kg", "2x20"];
 
 // Cac cot co the nhap/xuat, theo dung thu tu B1
 const IMPORT_COLUMNS = [
+  { header: "Số đơn hàng (để trống sẽ tự đặt số)", key: "so_don_hang", kind: "text" },
   { header: "Khách hàng *", key: "khach_hang_id", kind: "khachHang", required: true },
   { header: "Sale phụ trách", key: "sale_phu_trach_id", kind: "nhanVien", listKey: "saleList" },
   { header: "Hiện trường phụ trách", key: "hien_truong_phu_trach_id", kind: "nhanVien", listKey: "hienTruongList" },
@@ -89,6 +90,7 @@ export default function DonHangExcelTools({
     guideRows.push(["Nơi lấy/đóng/hạ", masterData.diaDiem.map((o) => o.ten).join(", ")]);
     guideRows.push(["Ngày tháng", "Gõ theo định dạng yyyy-mm-dd, ví dụ 2026-08-25"]);
     guideRows.push(["Số container", "Nếu có nhiều container, gõ cách nhau bởi dấu phẩy, ví dụ: SEGU1234567, MSKU7654321"]);
+    guideRows.push(["Số đơn hàng", "Để trống thì hệ thống tự đặt số theo đúng Ngày lên đơn. Nếu lô cũ đã có sẵn số quen thuộc (VD CHPNK2607008), gõ đúng số đó vào đây để giữ nguyên — và dùng đúng số này khi nhập file chi phí ở bước sau."]);
     const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
     XLSX.utils.book_append_sheet(wb, wsGuide, "Hướng dẫn");
 
@@ -99,7 +101,7 @@ export default function DonHangExcelTools({
     const columns: ExcelColumn[] = [
       { header: "Số đơn hàng", key: "soDonHang", width: 14 },
       { header: "Số container", key: "soCont", width: 16 },
-      ...IMPORT_COLUMNS.filter((col) => col.kind !== "containerList").map((col) => ({
+      ...IMPORT_COLUMNS.filter((col) => col.kind !== "containerList" && col.key !== "so_don_hang").map((col) => ({
         header: col.header.replace(/\s*\*.*$/, "").replace(/\s*\(.*\)$/, ""),
         key: col.key,
         width: 16,
@@ -112,7 +114,7 @@ export default function DonHangExcelTools({
     const exportRows = rows.map((row) => [
       v(row.so_don_hang),
       v(row.so_cont_label ?? ""),
-      ...IMPORT_COLUMNS.filter((col) => col.kind !== "containerList").map((col) => v(row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "")),
+      ...IMPORT_COLUMNS.filter((col) => col.kind !== "containerList" && col.key !== "so_don_hang").map((col) => v(row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "")),
       v(row.trang_thai),
       row.ops_xac_nhan ? "Có" : "Không",
       row.cs_xac_nhan ? "Có" : "Không",
