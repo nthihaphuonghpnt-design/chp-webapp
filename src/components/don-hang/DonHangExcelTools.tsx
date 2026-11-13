@@ -35,7 +35,7 @@ const IMPORT_COLUMNS = [
   { header: "Đơn vị tính", key: "dvt", kind: "fixed", options: DVT },
   { header: "Số lượng", key: "so_luong", kind: "number" },
   { header: "Số vận đơn/booking", key: "so_bl_bk", kind: "text" },
-  { header: "Số lô", key: "so_lo", kind: "text" },
+  { header: "Số container", key: "so_cont_ban_dau", kind: "containerList" },
   { header: "Hàng hóa", key: "hang_hoa_id", kind: "hangHoa" },
   { header: "Kích thước", key: "kich_thuoc", kind: "text" },
   { header: "Nơi lấy cont/hàng", key: "noi_lay_cont_hang_id", kind: "diaDiem" },
@@ -88,7 +88,7 @@ export default function DonHangExcelTools({
     guideRows.push(["Hàng hóa", masterData.hangHoa.map((o) => o.ten).join(", ")]);
     guideRows.push(["Nơi lấy/đóng/hạ", masterData.diaDiem.map((o) => o.ten).join(", ")]);
     guideRows.push(["Ngày tháng", "Gõ theo định dạng yyyy-mm-dd, ví dụ 2026-08-25"]);
-    guideRows.push(["Container/số ký", "Nhập sau ở trang chi tiết đơn hàng (một lô có thể có nhiều container)."]);
+    guideRows.push(["Số container", "Nếu có nhiều container, gõ cách nhau bởi dấu phẩy, ví dụ: SEGU1234567, MSKU7654321"]);
     const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
     XLSX.utils.book_append_sheet(wb, wsGuide, "Hướng dẫn");
 
@@ -99,7 +99,7 @@ export default function DonHangExcelTools({
     const columns: ExcelColumn[] = [
       { header: "Số đơn hàng", key: "soDonHang", width: 14 },
       { header: "Số container", key: "soCont", width: 16 },
-      ...IMPORT_COLUMNS.map((col) => ({
+      ...IMPORT_COLUMNS.filter((col) => col.kind !== "containerList").map((col) => ({
         header: col.header.replace(/\s*\*.*$/, "").replace(/\s*\(.*\)$/, ""),
         key: col.key,
         width: 16,
@@ -112,7 +112,7 @@ export default function DonHangExcelTools({
     const exportRows = rows.map((row) => [
       v(row.so_don_hang),
       v(row.so_cont_label ?? ""),
-      ...IMPORT_COLUMNS.map((col) => v(row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "")),
+      ...IMPORT_COLUMNS.filter((col) => col.kind !== "containerList").map((col) => v(row[col.key.replace("_id", "_label")] ?? row[col.key] ?? "")),
       v(row.trang_thai),
       row.ops_xac_nhan ? "Có" : "Không",
       row.cs_xac_nhan ? "Có" : "Không",
@@ -142,6 +142,7 @@ export default function DonHangExcelTools({
     const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
 
     const records: Record<string, unknown>[] = [];
+    const containerListsByRecord: string[][] = [];
     const errors: string[] = [];
 
     raw.forEach((rawRow, idx) => {
@@ -152,6 +153,7 @@ export default function DonHangExcelTools({
       }
 
       const record: Record<string, unknown> = { nguoi_tao_id: nv?.id };
+      let containerList: string[] = [];
       let hasError = false;
 
       for (const col of IMPORT_COLUMNS) {
@@ -159,7 +161,13 @@ export default function DonHangExcelTools({
         const rawValue = normalized[normHeader];
         const value = typeof rawValue === "string" ? rawValue.trim() : rawValue;
 
-        if (col.kind === "khachHang") {
+        if (col.kind === "containerList") {
+          if (!value) continue;
+          containerList = String(value)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        } else if (col.kind === "khachHang") {
           if (!value) {
             if (col.required) { errors.push(`Dòng ${rowNum}: thiếu Khách hàng.`); hasError = true; }
             continue;
@@ -201,7 +209,10 @@ export default function DonHangExcelTools({
         }
       }
 
-      if (!hasError) records.push(record);
+      if (!hasError) {
+        records.push(record);
+        containerListsByRecord.push(containerList);
+      }
     });
 
     if (records.length === 0) {
@@ -211,13 +222,26 @@ export default function DonHangExcelTools({
     }
 
     const { data, error: err } = await supabase.from("don_hang").insert(records).select();
-    setImporting(false);
 
     if (err) {
+      setImporting(false);
       setSummary({ success: 0, errors: [...errors, `Lỗi khi lưu: ${err.message}`] });
       return;
     }
 
+    // Moi don hang vua tao, kem theo dung danh sach container cua dong Excel
+    // tuong ung (cung thu tu voi records/containerListsByRecord) — tach moi
+    // so container thanh 1 dong rieng trong don_hang_container, giong het
+    // cach lam o form tao 1 don hang.
+    const containerRows = (data ?? []).flatMap((row, i) =>
+      (containerListsByRecord[i] ?? []).map((so_cont) => ({ don_hang_id: row.id, so_cont }))
+    );
+    if (containerRows.length > 0) {
+      const { error: contErr } = await supabase.from("don_hang_container").insert(containerRows);
+      if (contErr) errors.push(`Lỗi khi lưu số container: ${contErr.message}`);
+    }
+
+    setImporting(false);
     setSummary({ success: data?.length ?? 0, errors });
     if (data && data.length > 0) {
       setTimeout(() => window.location.reload(), 1500);
