@@ -7,25 +7,17 @@
 // khong phai Thong tu 200 — vi CHP la doanh nghiep nho, va TT133 dung ma
 // TK don gian hon (111/112, khong chia nho 1111/1121 nhu TT200; gop chung
 // "Chi phi ban hang" + "Chi phi quan ly doanh nghiep" thanh 1 TK 642 "Chi
-// phi quan ly kinh doanh").
+// phi quan ly kinh doanh"). Da xac nhan voi chu doanh nghiep: ap dung dung
+// TT133 (khong doi sang TT99/2025, du TT99 cho phep DNNVV tuy chon).
 //
-// LUU Y QUAN TRONG: tu 01/01/2026 con co them Thong tu 99/2025/TT-BTC (ban
-// hanh 27/10/2025) THAY THE Thong tu 200 cho doanh nghiep thong thuong, va
-// DNNVV duoc QUYEN CHON ap dung theo huong nay thay vi TT133 neu muon. TT99
-// tai cau truc lai he thong tai khoan khac han TT200/TT133 cu — nhung
-// KHONG co du du lieu de biet chinh xac bang ma TK moi cua TT99 (chi co
-// thong tin tong quan qua tra cuu, chua co bang chi tiet tung so TK), nen
-// CHUA the cap nhat dung theo TT99 duoc. Neu Ke toan/phan mem ke toan cua
-// CHP dang dung TT99 (khong phai TT133), can sua lai file nay cho khop —
-// hoi ke toan/don vi lam so sach de xac nhan dang dung che do nao truoc khi
-// tin theo cac ma duoi day.
 // BHXH_PHAI_NOP (338) van giu la ma "cha" dung cho cac cho khac trong app
 // chi can dinh khoan gop (vd Tam ung/Giai chi neu sau nay dung toi). Rieng
-// Bang luong (luong.ts co ham tinhBhxhChiTiet) tach ro tung tieu khoan theo
-// quy uoc tu Thong tu 200/2014/TT-BTC (3382 KPCD, 3383 BHXH, 3384 BHYT, 3386
-// BHTN) — quy uoc nay van duoc dung pho bien trong thuc te du TT133 khong
-// bat buoc phai chia nho 338. KPCD (2% cong ty dong, neu co) chua duoc app
-// tinh — chi co BHXH/BHYT/BHTN.
+// Bang luong (luong.ts co ham tinhBhxhChiTiet) tach ro tung tieu khoan CAP 2
+// CUA TK 338 DUNG THEO TT133 (da doi chieu voi van ban: 3382 KPCD, 3383
+// BHXH, 3384 BHYT, 3385 BHTN — LUU Y so BHTN cua TT133 la 3385, KHAC voi
+// quy uoc 3386 cua Thong tu 200/2014/TT-BTC ma nhieu tai lieu tren mang hay
+// nham lan, vi 3386 trong TT133 la "Nhan ky quy, ky cuoc", khong phai BHTN).
+// KPCD (2% cong ty dong) da duoc tinh tu Bang luong, cung dung ma 3382.
 export const TK = {
   TIEN_MAT: "111",
   NGAN_HANG: "112",
@@ -37,7 +29,7 @@ export const TK = {
   BHXH_PHAI_NOP: "338",
   BHXH_PHAI_NOP_CHI_TIET: "3383",
   BHYT_PHAI_NOP_CHI_TIET: "3384",
-  BHTN_PHAI_NOP_CHI_TIET: "3386",
+  BHTN_PHAI_NOP_CHI_TIET: "3385",
   KPCD_PHAI_NOP: "3382",
   THUE_GTGT_DAU_RA: "3331",
   THUE_TNCN_PHAI_NOP: "3335",
@@ -73,4 +65,4 @@ export function tkTheoPhuongThuc(pt: "Tiền mặt" | "Tài khoản công ty" | 
 
 /** Ghi chu chuan de dan vao dau file Excel co cot dinh khoan goi y. */
 export const GHI_CHU_DINH_KHOAN_GOI_Y =
-  "Cột định khoản (TK Nợ/TK Có) là gợi ý theo Thông tư 133/2016/TT-BTC (chế độ kế toán DNNVV, sửa đổi bởi TT46/2025) để đối chiếu khi nhập lại vào phần mềm kế toán — không phải bút toán chính thức. Nếu công ty đang áp dụng Thông tư 99/2025/TT-BTC (thay thế TT200, có hiệu lực từ 01/01/2026) thay vì TT133, cần đối chiếu lại mã tài khoản với kế toán trước khi dùng.";
+  "Cột định khoản (TK Nợ/TK Có) là gợi ý theo Thông tư 133/2016/TT-BTC (chế độ kế toán DNNVV, sửa đổi bởi TT46/2025) để đối chiếu khi nhập lại vào phần mềm kế toán — không phải bút toán chính thức.";
