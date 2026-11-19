@@ -63,12 +63,16 @@ export default function SoQuyView({
   donHangMap = {},
   tkNoMap = {},
   canEdit = false,
+  nhanVienList = [],
+  donHangOptions = [],
 }: {
   initialRows: SoQuy[];
   tamUngDetailMap?: Record<string, string>;
   donHangMap?: Record<string, { id: string; so_don_hang: string }>;
   tkNoMap?: Record<string, string>;
   canEdit?: boolean;
+  nhanVienList?: { id: string; ho_ten: string }[];
+  donHangOptions?: { id: string; so_don_hang: string }[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -201,7 +205,14 @@ export default function SoQuyView({
         </div>
       </div>
 
-      {showDoiChieu && <DoiChieuSaoKeView loaiSo={loaiSo} onXong={() => setShowDoiChieu(false)} />}
+      {showDoiChieu && (
+        <DoiChieuSaoKeView
+          loaiSo={loaiSo}
+          onXong={() => setShowDoiChieu(false)}
+          nhanVienList={nhanVienList}
+          donHangList={donHangOptions}
+        />
+      )}
 
       {showChuyenQuy && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">

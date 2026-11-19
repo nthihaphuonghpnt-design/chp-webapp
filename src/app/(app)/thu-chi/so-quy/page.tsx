@@ -15,7 +15,11 @@ export default async function SoQuyPage() {
     );
   }
 
-  const { data: rows } = await supabase.from("so_quy").select("*").order("ngay", { ascending: false });
+  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }] = await Promise.all([
+    supabase.from("so_quy").select("*").order("ngay", { ascending: false }),
+    supabase.from("nhan_vien").select("id, ho_ten").eq("dang_lam_viec", true).order("ho_ten"),
+    supabase.from("don_hang").select("id, so_don_hang").order("created_at", { ascending: false }).limit(300),
+  ]);
 
   // Rieng giao dich xuat phat tu Tam ung & Giai chi: lay them thong tin doi
   // tuong de hien ngay trong bang, khong bat Ke toan phai doan qua "Noi dung".
@@ -92,6 +96,8 @@ export default async function SoQuyPage() {
       donHangMap={donHangMap}
       tkNoMap={tkNoMap}
       canEdit={user.phong_ban === "Kế toán"}
+      nhanVienList={nhanVienList ?? []}
+      donHangOptions={donHangList ?? []}
     />
   );
 }

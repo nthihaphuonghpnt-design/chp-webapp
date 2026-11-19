@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import SearchableSelect from "@/components/common/SearchableSelect";
 
 interface UngVien {
   bang: "phat_sinh_chi_phi" | "don_thue_ngoai" | "hoa_don_dau_vao" | "hoa_don_xuat";
@@ -19,12 +20,24 @@ interface DongSaoKe {
   loaiGiaoDich: "Thu" | "Chi";
   soTien: number;
   ungVien: UngVien[];
-  daChon: string; // "bang:id" hoac "" (bo qua)
+  daChon: string; // "bang:id" hoac "tam_ung_moi" hoac "" (bo qua)
+  tamUngNhanVienId: string;
+  tamUngDonHangId: string;
 }
 
 const TEMPLATE_COLUMNS = ["Ngày (yyyy-mm-dd)", "Nội dung", "Loại (Thu/Chi)", "Số tiền"];
 
-export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền mặt" | "Tài khoản công ty"; onXong: () => void }) {
+export default function DoiChieuSaoKeView({
+  loaiSo,
+  onXong,
+  nhanVienList,
+  donHangList,
+}: {
+  loaiSo: "Tiền mặt" | "Tài khoản công ty";
+  onXong: () => void;
+  nhanVienList: { id: string; ho_ten: string }[];
+  donHangList: { id: string; so_don_hang: string }[];
+}) {
   const router = useRouter();
   const supabase = createClient();
   const [dongList, setDongList] = useState<DongSaoKe[]>([]);
@@ -143,6 +156,8 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
         soTien,
         ungVien,
         daChon: ungVien.length === 1 ? `${ungVien[0].bang}:${ungVien[0].id}` : "",
+        tamUngNhanVienId: "",
+        tamUngDonHangId: "",
       });
     }
     setDongList(dong);
@@ -151,6 +166,14 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
 
   function chonUngVien(stt: number, value: string) {
     setDongList((prev) => prev.map((d) => (d.stt === stt ? { ...d, daChon: value } : d)));
+  }
+
+  function chonTamUngNhanVien(stt: number, nhanVienId: string) {
+    setDongList((prev) => prev.map((d) => (d.stt === stt ? { ...d, tamUngNhanVienId: nhanVienId } : d)));
+  }
+
+  function chonTamUngDonHang(stt: number, donHangId: string) {
+    setDongList((prev) => prev.map((d) => (d.stt === stt ? { ...d, tamUngDonHangId: donHangId } : d)));
   }
 
   async function xacNhanTatCa() {
@@ -168,6 +191,37 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
 
     for (const d of dongList) {
       if (!d.daChon) continue;
+
+      if (d.daChon === "tam_ung_moi") {
+        if (!d.tamUngNhanVienId) {
+          loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): chưa chọn nhân viên nhận tạm ứng.`);
+          continue;
+        }
+        // Giao dich ngan hang nay la 1 lan ung tien MOI (khong phai tra no cu)
+        // — ghi thang "Đã duyệt" vi Ke toan dang xac nhan giao dich co that,
+        // trigger sync_so_quy_tam_ung co san se tu dong tao dong So quy tuong
+        // ung, khong can tu tay insert so_quy o day.
+        const { error: err } = await supabase.from("tam_ung_giai_chi").insert({
+          loai: "Tạm ứng",
+          doi_tuong: "Nhân viên",
+          nhan_vien_id: d.tamUngNhanVienId,
+          don_hang_id: d.tamUngDonHangId || null,
+          so_tien: d.soTien,
+          ngay_thuc_hien: d.ngay,
+          phuong_thuc: phuongThuc,
+          ghi_chu: d.noiDung || null,
+          nguoi_de_nghi_id: d.tamUngNhanVienId,
+          trang_thai: "Đã duyệt",
+        });
+        if (err) {
+          loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+        } else {
+          thanhCong++;
+          daXongStt.add(d.stt);
+        }
+        continue;
+      }
+
       const [bang, id] = d.daChon.split(":");
       const ungVien = d.ungVien.find((u) => u.bang === bang && u.id === id);
       if (!ungVien) continue;
@@ -344,8 +398,35 @@ export default function DoiChieuSaoKeView({ loaiSo, onXong }: { loaiSo: "Tiền 
                             {u.nhan} (còn {Math.round(u.conLai).toLocaleString("en-US")})
                           </option>
                         ))}
+                        {/* Giao dich Chi khong khop khoan no nao co the chinh la 1 lan
+                            ung tien MOI cho nhan vien — xem ghi chu o xacNhanTatCa(). */}
+                        {d.loaiGiaoDich === "Chi" && <option value="tam_ung_moi">+ Tạo tạm ứng mới cho nhân viên...</option>}
                       </select>
-                      {d.ungVien.length === 0 && <p className="mt-0.5 text-xs text-amber-600">Không tìm thấy khoản nào còn lại đúng số tiền này.</p>}
+                      {d.ungVien.length === 0 && d.daChon !== "tam_ung_moi" && (
+                        <p className="mt-0.5 text-xs text-amber-600">Không tìm thấy khoản nào còn lại đúng số tiền này.</p>
+                      )}
+                      {d.daChon === "tam_ung_moi" && (
+                        <div className="mt-1 flex flex-col gap-1">
+                          <select
+                            value={d.tamUngNhanVienId}
+                            onChange={(e) => chonTamUngNhanVien(d.stt, e.target.value)}
+                            className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                          >
+                            <option value="">— Chọn nhân viên nhận tạm ứng * —</option>
+                            {nhanVienList.map((nv) => (
+                              <option key={nv.id} value={nv.id}>
+                                {nv.ho_ten}
+                              </option>
+                            ))}
+                          </select>
+                          <SearchableSelect
+                            options={donHangList.map((dh) => ({ value: dh.id, label: dh.so_don_hang }))}
+                            value={d.tamUngDonHangId}
+                            onChange={(v) => chonTamUngDonHang(d.stt, v)}
+                            placeholder="Đơn hàng liên quan (tùy chọn)..."
+                          />
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
