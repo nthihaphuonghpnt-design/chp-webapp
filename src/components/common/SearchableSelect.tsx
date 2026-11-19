@@ -14,6 +14,7 @@ export default function SearchableSelect({
   options,
   value,
   onChange,
+  onQueryChange,
   placeholder = "-- Chọn --",
   className = "",
   disabled = false,
@@ -21,6 +22,9 @@ export default function SearchableSelect({
   options: SearchableOption[];
   value: string;
   onChange: (value: string) => void;
+  /** Bao cho component cha biet nguoi dung dang go gi (vd de nut "+" ben canh
+   * dien san vao form them moi, khoi phai go lai tu dau). */
+  onQueryChange?: (query: string) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -88,7 +92,10 @@ export default function SearchableSelect({
     <div ref={rootRef} className={`relative ${className}`}>
       <input
         value={open ? query : selected ? `${selected.code ? `${selected.code} — ` : ""}${selected.label}` : ""}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          onQueryChange?.(e.target.value);
+        }}
         onFocus={() => {
           if (disabled) return;
           setOpen(true);

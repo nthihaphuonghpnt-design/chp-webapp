@@ -43,6 +43,7 @@ export default function QuickAddKhachHang({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typedQuery, setTypedQuery] = useState("");
 
   const selectOptions = options.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
 
@@ -98,7 +99,15 @@ export default function QuickAddKhachHang({
 
   return (
     <div className="flex gap-2">
-      <SearchableSelect options={selectOptions} value={value} onChange={onChange} placeholder={placeholder} className="flex-1" disabled={disabled} />
+      <SearchableSelect
+        options={selectOptions}
+        value={value}
+        onChange={onChange}
+        onQueryChange={setTypedQuery}
+        placeholder={placeholder}
+        className="flex-1"
+        disabled={disabled}
+      />
       {!disabled && (
         <button
           type="button"
@@ -114,6 +123,7 @@ export default function QuickAddKhachHang({
         <FormModal
           fields={fields}
           initial={null}
+          prefill={typedQuery.trim() ? { ten_day_du: typedQuery.trim() } : undefined}
           saving={saving}
           error={error}
           taxLookup={{ taxField: "ma_so_thue", nameField: "ten_day_du", addressField: "dia_chi" }}

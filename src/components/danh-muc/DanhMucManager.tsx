@@ -535,6 +535,7 @@ export default function DanhMucManager({
 export function FormModal({
   fields,
   initial,
+  prefill,
   saving,
   error,
   taxLookup,
@@ -543,6 +544,10 @@ export function FormModal({
 }: {
   fields: FieldConfig[];
   initial: Row | null;
+  /** Dien san 1 vai truong luc TAO MOI (vd chu nguoi dung da go o o tim kiem
+   * ben ngoai truoc khi bam "+") — khac voi `initial`, khong lam doi tieu de
+   * modal thanh "Sửa thông tin". */
+  prefill?: Record<string, string>;
   saving: boolean;
   error: string | null;
   taxLookup?: TaxLookupConfig;
@@ -552,7 +557,7 @@ export function FormModal({
   const [values, setValues] = useState<Record<string, string>>(() => {
     const v: Record<string, string> = {};
     for (const f of fields) {
-      v[f.key] = initial ? String(initial[f.key] ?? "") : "";
+      v[f.key] = initial ? String(initial[f.key] ?? "") : (prefill?.[f.key] ?? "");
     }
     return v;
   });
