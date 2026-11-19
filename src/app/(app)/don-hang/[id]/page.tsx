@@ -292,6 +292,12 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <Info label="Loại kích cỡ" value={order.loai_kich_co} />
         <Info label="Đơn vị tính" value={order.dvt} />
         <Info label="Số lượng" value={order.so_luong} />
+        {order.loai_kich_co === "Hàng lẻ" && (
+          <>
+            <Info label="Số kiện" value={order.so_kien} />
+            <Info label="Số kg" value={order.so_kg} />
+          </>
+        )}
         <Info label="Số vận đơn / booking" value={order.so_bl_bk} />
         <ContainerSection
           donHangId={order.id}

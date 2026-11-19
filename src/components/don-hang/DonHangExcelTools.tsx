@@ -35,6 +35,8 @@ const IMPORT_COLUMNS = [
   { header: "Loại kích cỡ", key: "loai_kich_co", kind: "fixed", options: LOAI_KICH_CO },
   { header: "Đơn vị tính", key: "dvt", kind: "fixed", options: DVT },
   { header: "Số lượng", key: "so_luong", kind: "number" },
+  { header: "Số kiện (hàng lẻ)", key: "so_kien", kind: "number" },
+  { header: "Số kg (hàng lẻ)", key: "so_kg", kind: "number" },
   { header: "Số vận đơn/booking", key: "so_bl_bk", kind: "text" },
   { header: "Số container", key: "so_cont_ban_dau", kind: "containerList" },
   { header: "Hàng hóa", key: "hang_hoa_id", kind: "hangHoa" },

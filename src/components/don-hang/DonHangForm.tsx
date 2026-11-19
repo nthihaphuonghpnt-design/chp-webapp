@@ -63,6 +63,8 @@ export default function DonHangForm({
     loai_cont_hang_id: initial?.loai_cont_hang_id ?? "",
     dvt: initial?.dvt ?? "",
     so_luong: initial?.so_luong?.toString() ?? "",
+    so_kien: initial?.so_kien?.toString() ?? "",
+    so_kg: initial?.so_kg?.toString() ?? "",
     so_bl_bk: initial?.so_bl_bk ?? "",
     hang_hoa_id: initial?.hang_hoa_id ?? "",
     kich_thuoc: initial?.kich_thuoc ?? "",
@@ -110,6 +112,8 @@ export default function DonHangForm({
     }
     if (payload.gia) payload.gia = Number(payload.gia);
     if (payload.so_luong) payload.so_luong = Number(payload.so_luong);
+    if (payload.so_kien) payload.so_kien = Number(payload.so_kien);
+    if (payload.so_kg) payload.so_kg = Number(payload.so_kg);
 
     if (initial) {
       const { error: err } = await supabase.from("don_hang").update(payload).eq("id", initial.id);
@@ -280,6 +284,24 @@ export default function DonHangForm({
             step="any"
             value={values.so_luong}
             onChange={(e) => set("so_luong", e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Số kiện" hint="Hàng lẻ (LCL) — số kiện hàng">
+          <input
+            type="number"
+            step="1"
+            value={values.so_kien}
+            onChange={(e) => set("so_kien", e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Số kg" hint="Hàng lẻ (LCL) — khối lượng">
+          <input
+            type="number"
+            step="any"
+            value={values.so_kg}
+            onChange={(e) => set("so_kg", e.target.value)}
             className={inputClass}
           />
         </Field>

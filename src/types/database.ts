@@ -155,6 +155,8 @@ export interface DonHang {
   loai_cont_hang_id: string | null;
   dvt: Dvt | null;
   so_luong: number | null;
+  so_kien: number | null;
+  so_kg: number | null;
   so_bl_bk: string | null;
   so_lo: string | null;
   hang_hoa_id: string | null;
