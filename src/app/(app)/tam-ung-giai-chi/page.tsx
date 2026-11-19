@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import TamUngGiaiChiView from "@/components/tam-ung-giai-chi/TamUngGiaiChiView";
+import TamUngGiaiChiBulkExcelTools from "@/components/tam-ung-giai-chi/TamUngGiaiChiBulkExcelTools";
 
 export default async function TamUngGiaiChiPage({
   searchParams,
@@ -42,21 +43,30 @@ export default async function TamUngGiaiChiPage({
     daChiTheoNguoiVaLo[key] = (daChiTheoNguoiVaLo[key] ?? 0) + (r.so_tien_da_chi ?? 0);
   }
 
+  const laKeToanHoacGiamDoc = user?.phong_ban === "Kế toán" || user?.phong_ban === "Giám đốc";
+
   return (
-    <TamUngGiaiChiView
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      initialRows={(rows ?? []) as any[]}
-      nhanVienList={nhanVienList ?? []}
-      donHangList={donHangList ?? []}
-      khachHangList={(khachHangList ?? []).map((k) => {
-        const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
-        return { id: k.id, ten_day_du: k.ten_day_du, nhom_khach_hang_ten: nhom?.ten ?? null };
-      })}
-      daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
-      soQuyList={soQuyRows ?? []}
-      currentUserId={user?.id}
-      currentPhongBan={user?.phong_ban ?? ""}
-      autoProposeDonHangId={autoProposeDonHangId}
-    />
+    <div className="mx-auto max-w-6xl px-4 pt-6">
+      <TamUngGiaiChiBulkExcelTools
+        donHangList={donHangList ?? []}
+        nhanVienList={nhanVienList ?? []}
+        canImport={laKeToanHoacGiamDoc}
+      />
+      <TamUngGiaiChiView
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        initialRows={(rows ?? []) as any[]}
+        nhanVienList={nhanVienList ?? []}
+        donHangList={donHangList ?? []}
+        khachHangList={(khachHangList ?? []).map((k) => {
+          const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
+          return { id: k.id, ten_day_du: k.ten_day_du, nhom_khach_hang_ten: nhom?.ten ?? null };
+        })}
+        daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
+        soQuyList={soQuyRows ?? []}
+        currentUserId={user?.id}
+        currentPhongBan={user?.phong_ban ?? ""}
+        autoProposeDonHangId={autoProposeDonHangId}
+      />
+    </div>
   );
 }
