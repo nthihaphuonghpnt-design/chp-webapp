@@ -314,6 +314,9 @@ export interface PhatSinhChiPhi {
   tinh_trang_thanh_toan: TinhTrangThanhToan;
   so_tien_da_thanh_toan: number | null;
   ghi_chu: string | null;
+  /** So hoa don/chung tu GOC cua nha cung cap/ben thu 3 — chi co y nghia khi
+   * chi_ho=true. Khac hoa_don_id (hoa don CHP tu xuat cho KHACH). */
+  so_chung_tu_goc: string | null;
   created_at: string;
   updated_at: string;
 }

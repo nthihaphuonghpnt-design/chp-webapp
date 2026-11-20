@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
@@ -52,6 +53,7 @@ interface ChiPhiRow {
   gia_ban_sell: number | null;
   vat_percent: number | null;
   chi_ho: boolean;
+  so_chung_tu_goc: string | null;
   trang_thai: string;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
   loai_chi_phi: { ten: string } | { ten: string }[] | null;
@@ -469,7 +471,12 @@ export default function BangKeView({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Bảng kê chi phí khách hàng</h1>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold text-slate-900">Bảng kê chi phí khách hàng</h1>
+        <Link href="/bao-cao#cong-no-theo-lo" className="text-sm font-medium text-blue-600 hover:underline">
+          Xem bảng công nợ theo lô (dịch vụ + chi hộ + đã thu) →
+        </Link>
+      </div>
 
       <div className="mb-6 flex flex-wrap gap-4">
         <div className="w-full sm:w-80">
@@ -588,7 +595,7 @@ export default function BangKeView({
                 key={r.id}
                 checked={chonChiPhi.has(r.id)}
                 onToggleCheck={() => toggle(chonChiPhi, r.id, setChonChiPhi)}
-                label={`${one(r.loai_chi_phi)?.ten ?? "—"} · Đơn ${one(r.don_hang)?.so_don_hang ?? "—"}`}
+                label={`${one(r.loai_chi_phi)?.ten ?? "—"} · Đơn ${one(r.don_hang)?.so_don_hang ?? "—"}${r.so_chung_tu_goc ? ` · CT gốc: ${r.so_chung_tu_goc}` : ""}`}
                 amount={r.so_tien_da_chi ?? 0}
                 actionLabel="Chuyển sang Giá bán"
                 onAction={() => toggleChiHo(r)}

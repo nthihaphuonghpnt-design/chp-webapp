@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect, { type SearchableOption } from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
@@ -50,6 +50,9 @@ interface RowView {
   trangThai: string | null; // null = khong co workflow duyet (phu thu)
   nguoiNhapId: string | null;
   nguonThanhToan: string | null; // null = khong ap dung (phu thu)
+  /** So hoa don/chung tu goc cua ben thu 3 — chi co o dong Chi phi (khac
+   * ghi_chu, khac hoa_don_id la hoa don CHP tu xuat cho khach). */
+  soChungTuGoc: string | null;
 }
 
 interface NewRowValues {
@@ -67,6 +70,7 @@ interface NewRowValues {
   noi_bo: boolean;
   chi_ho: boolean;
   ghi_chu: string;
+  so_chung_tu_goc: string;
   nguon_thanh_toan: string;
   tam_ung_id: string;
   // Chi dung khi Ke toan tao dong moi + chon "Tam ung nhan vien": nhan vien
@@ -94,6 +98,7 @@ function blankNewRow(loaiMacDinh: Loai, soLuongMacDinh?: number | null): NewRowV
     noi_bo: true,
     chi_ho: false,
     ghi_chu: "",
+    so_chung_tu_goc: "",
     nguon_thanh_toan: "",
     tam_ung_id: "",
     nhan_vien_tam_ung_id: "",
@@ -139,6 +144,8 @@ export default function ChiPhiGopSection({
   nhanVienThueNgoaiTamUngOptions,
   congViecMap,
   donHangSoLuong,
+  prefillChiTietVanChuyenId,
+  onPrefillConsumed,
 }: {
   donHangId: string;
   initialChiPhiRows: PhatSinhChiPhi[];
@@ -155,6 +162,10 @@ export default function ChiPhiGopSection({
   congViecMap: Record<string, string>;
   /** So luong cua don hang (vd 2 Cont) — dien san vao "So luong" luc them dong moi. */
   donHangSoLuong?: number | null;
+  /** Khi doi gia tri (khac null), tu mo 1 dong "them moi" voi chang nay da
+   * chon san — dung cho nut "+ Thêm chi phí cho chặng này" o ChiTietVanChuyenSection. */
+  prefillChiTietVanChuyenId?: string | null;
+  onPrefillConsumed?: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [chiPhiRows, setChiPhiRows] = useState<PhatSinhChiPhi[]>(initialChiPhiRows);
@@ -249,6 +260,7 @@ export default function ChiPhiGopSection({
         trangThai: r.trang_thai,
         nguoiNhapId: r.nguoi_nhap_id,
         nguonThanhToan: r.nguon_thanh_toan,
+        soChungTuGoc: r.so_chung_tu_goc,
       });
     }
     for (const r of thueNgoaiRows) {
@@ -269,6 +281,7 @@ export default function ChiPhiGopSection({
         trangThai: r.trang_thai,
         nguoiNhapId: r.nguoi_nhap_id,
         nguonThanhToan: r.nguon_thanh_toan,
+        soChungTuGoc: null,
       });
     }
     if (chiPhuThu) {
@@ -289,6 +302,7 @@ export default function ChiPhiGopSection({
           trangThai: null,
           nguoiNhapId: null,
           nguonThanhToan: null,
+          soChungTuGoc: null,
         });
       }
     }
@@ -320,6 +334,26 @@ export default function ChiPhiGopSection({
     setAddingRows((prev) => [...prev, { key: nextKey, ...blankNewRow(loaiChoPhepThem[0], donHangSoLuong) }]);
     setNextKey((k) => k + 1);
   }
+
+  // Nhan tin hieu "+ Thêm chi phí cho chặng này" tu ChiTietVanChuyenSection —
+  // tu dong mo 1 dong them moi (loai chi_phi) voi chang da chon san, roi bao
+  // lai cho component cha biet da xu ly xong (onPrefillConsumed) de lan sau
+  // bam lai chang khac van kich hoat duoc (gia tri doi moi thi effect moi chay).
+  useEffect(() => {
+    if (!prefillChiTietVanChuyenId) return;
+    // Day la dong bo voi 1 tin hieu tu ben ngoai component (nut "+ Thêm chi
+    // phí cho chặng này" o ChiTietVanChuyenSection, qua component cha
+    // DonHangTabsClient) — dung voi mo ta chinh thuc cua rule nay ve truong
+    // hop duoc phep setState trong effect, nen tat rule cho dong nay.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAddingRows((prev) => [
+      ...prev,
+      { key: nextKey, ...blankNewRow("chi_phi", donHangSoLuong), chi_tiet_van_chuyen_id: prefillChiTietVanChuyenId },
+    ]);
+    setNextKey((k) => k + 1);
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillChiTietVanChuyenId]);
   function capNhatDongMoi(key: number, patch: Partial<NewRowValues>) {
     setAddingRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
@@ -367,6 +401,7 @@ export default function ChiPhiGopSection({
           noi_bo: row.noi_bo,
           chi_ho: row.chi_ho,
           ghi_chu: row.ghi_chu || null,
+          so_chung_tu_goc: row.so_chung_tu_goc || null,
           nguoi_nhap_id: nhanVienId,
           // Ke toan tu nhap thi khong can ai duyet lai (chinh ho la nguoi
           // duyet) — vao thang "Da duyet" luon, khoi phai tu tay duyet lai
@@ -461,6 +496,7 @@ export default function ChiPhiGopSection({
         noi_bo: r.noi_bo,
         chi_ho: r.chi_ho,
         ghi_chu: r.ghi_chu ?? "",
+        so_chung_tu_goc: r.so_chung_tu_goc ?? "",
         nguon_thanh_toan: r.nguon_thanh_toan ?? "",
         tam_ung_id: r.tam_ung_id ?? "",
         nhan_vien_tam_ung_id: "",
@@ -485,6 +521,7 @@ export default function ChiPhiGopSection({
         noi_bo: false,
         chi_ho: r.chi_ho,
         ghi_chu: r.noi_dung ?? "",
+        so_chung_tu_goc: "",
         nguon_thanh_toan: r.nguon_thanh_toan ?? "",
         tam_ung_id: r.tam_ung_id ?? "",
         nhan_vien_tam_ung_id: "",
@@ -509,6 +546,7 @@ export default function ChiPhiGopSection({
         noi_bo: false,
         chi_ho: false,
         ghi_chu: r.ghi_chu ?? "",
+        so_chung_tu_goc: "",
         nguon_thanh_toan: "",
         tam_ung_id: "",
         nhan_vien_tam_ung_id: "",
@@ -558,6 +596,7 @@ export default function ChiPhiGopSection({
           noi_bo: editValues.noi_bo,
           chi_ho: editValues.chi_ho,
           ghi_chu: editValues.ghi_chu || null,
+          so_chung_tu_goc: editValues.so_chung_tu_goc || null,
           ...(canChonNguonThanhToan
             ? { nguon_thanh_toan: editValues.nguon_thanh_toan || null, tam_ung_id: editValues.tam_ung_id || null }
             : {}),
@@ -725,6 +764,10 @@ export default function ChiPhiGopSection({
       else if (lockedNhanVienId) taiKhoanTamUng(stateKey, lockedNhanVienId);
     }
 
+    const tamUngDaChon = tamUngOptions.find((t) => t.id === values.tam_ung_id);
+    const soTienDaChi = Number(values.buy) || 0;
+    const vuotMuc = tamUngDaChon && soTienDaChi > tamUngDaChon.so_tien;
+
     return (
       <div className="flex flex-col gap-1">
         <select value={values.nguon_thanh_toan} onChange={(e) => chonNguonThanhToan(e.target.value)} className={cls}>
@@ -755,6 +798,11 @@ export default function ChiPhiGopSection({
                 </option>
               ))}
             </select>
+            {vuotMuc && (
+              <p className="text-xs font-medium text-amber-600">
+                ⚠ Số đã chi ({fmt(soTienDaChi)}) vượt số tiền phiếu tạm ứng này ({fmt(tamUngDaChon.so_tien)}).
+              </p>
+            )}
           </>
         )}
       </div>
@@ -844,7 +892,7 @@ export default function ChiPhiGopSection({
         )}
         <td className="px-2 py-1.5">
           {loai === "chi_phi" ? (
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <label className="flex items-center gap-1">
                 <input disabled={disabledKhac} type="checkbox" checked={values.noi_bo} onChange={(e) => set({ noi_bo: e.target.checked, chi_ho: e.target.checked ? false : values.chi_ho })} />
                 Nội bộ
@@ -853,6 +901,15 @@ export default function ChiPhiGopSection({
                 <input disabled={disabledKhac} type="checkbox" checked={values.chi_ho} onChange={(e) => set({ chi_ho: e.target.checked, noi_bo: e.target.checked ? false : values.noi_bo })} />
                 Chi hộ
               </label>
+              {values.chi_ho && (
+                <input
+                  disabled={disabledKhac}
+                  value={values.so_chung_tu_goc}
+                  onChange={(e) => set({ so_chung_tu_goc: e.target.value })}
+                  className={`${cls} mt-1`}
+                  placeholder="Số chứng từ gốc NCC"
+                />
+              )}
             </div>
           ) : loai === "thue_ngoai" ? (
             <label className="flex items-center gap-1 text-xs">
@@ -886,6 +943,159 @@ export default function ChiPhiGopSection({
           </button>
         )}
       </div>
+
+      {/* ---- Dong dang them moi: luon dung dang the co nhan, khong gom vao
+      bang day dac — de tren CA mobile lan desktop, vi day la noi nguoi dung
+      nhap du lieu nhieu nhat (khac voi bang xem/sua ben duoi van giu nguyen). ---- */}
+      {addingRows.length > 0 && (
+        <div className="mb-3 flex flex-col gap-2">
+          {addingRows.map((r) => (
+            <div key={r.key} className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 text-sm">
+              <label className="mb-1 block text-xs text-slate-500">Loại dòng</label>
+              <select value={r.loai} onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai, donHangSoLuong))} className={`${cls} mb-2`}>
+                {loaiChoPhepThem.map((l) => (
+                  <option key={l} value={l}>
+                    {LOAI_LABEL[l]}
+                  </option>
+                ))}
+              </select>
+              {r.loai === "chi_phi" && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Loại chi phí</label>
+                  <SearchableSelect options={loaiChiPhiOptions} value={r.loai_chi_phi_id} onChange={(v) => capNhatDongMoi(r.key, { loai_chi_phi_id: v })} />
+                </div>
+              )}
+              {r.loai === "chi_phi" && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">NCC / Đối tác</label>
+                  <SearchableSelect
+                    options={doiTacOptions}
+                    value={r.nha_cung_cap_id ? `ncc:${r.nha_cung_cap_id}` : r.doi_tac_thue_ngoai_id ? `doitac:${r.doi_tac_thue_ngoai_id}` : ""}
+                    onChange={(v) => {
+                      if (v.startsWith("ncc:")) capNhatDongMoi(r.key, { nha_cung_cap_id: v.slice(4), doi_tac_thue_ngoai_id: null });
+                      else if (v.startsWith("doitac:")) capNhatDongMoi(r.key, { doi_tac_thue_ngoai_id: v.slice(7), nha_cung_cap_id: null });
+                      else capNhatDongMoi(r.key, { nha_cung_cap_id: null, doi_tac_thue_ngoai_id: null });
+                    }}
+                  />
+                </div>
+              )}
+              {r.loai === "thue_ngoai" && (
+                <>
+                  <div className="mb-2">
+                    <label className="mb-1 block text-xs text-slate-500">Loại dịch vụ</label>
+                    <select value={r.loai_dich_vu_thue} onChange={(e) => capNhatDongMoi(r.key, { loai_dich_vu_thue: e.target.value })} className={cls}>
+                      <option value="">-- Chọn --</option>
+                      {LOAI_DICH_VU_THUE.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mb-2">
+                    <label className="mb-1 block text-xs text-slate-500">Đối tác thuê ngoài</label>
+                    <SearchableSelect options={doiTacThueNgoaiOptions} value={r.doi_tac_thue_ngoai_id ?? ""} onChange={(v) => capNhatDongMoi(r.key, { doi_tac_thue_ngoai_id: v || null })} />
+                  </div>
+                </>
+              )}
+              {r.loai === "phu_thu" && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Loại phụ thu</label>
+                  <input value={r.loai_phu_thu} onChange={(e) => capNhatDongMoi(r.key, { loai_phu_thu: e.target.value })} className={cls} placeholder="VD: Phí lưu kho" />
+                </div>
+              )}
+              {r.loai !== "phu_thu" && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Chặng vận chuyển</label>
+                  <SearchableSelect
+                    options={changOptions}
+                    value={r.chi_tiet_van_chuyen_id ?? ""}
+                    onChange={(v) => capNhatDongMoi(r.key, { chi_tiet_van_chuyen_id: v || null })}
+                    placeholder="-- Không gắn --"
+                  />
+                </div>
+              )}
+              {r.loai !== "phu_thu" && (
+                <div className="mb-2 flex gap-2">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs text-slate-500">Số lượng</label>
+                    <input value={r.so_luong} onChange={(e) => capNhatDongMoi(r.key, tinhLaiSoTienDaChi(r, { so_luong: e.target.value }))} className={cls} placeholder="SL" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs text-slate-500">Đơn giá</label>
+                    <MoneyInput value={r.don_gia} onChange={(v) => capNhatDongMoi(r.key, tinhLaiSoTienDaChi(r, { don_gia: v }))} className={cls} />
+                  </div>
+                </div>
+              )}
+              {r.loai !== "phu_thu" && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Số tiền đã chi</label>
+                  <MoneyInput value={r.buy} onChange={(v) => capNhatDongMoi(r.key, { buy: v })} className={cls} />
+                </div>
+              )}
+              {canSeeSell && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Giá bán / Thành tiền</label>
+                  <MoneyInput value={r.sell} onChange={(v) => capNhatDongMoi(r.key, { sell: v })} className={cls} />
+                </div>
+              )}
+              {r.loai === "chi_phi" && (
+                <div className="mb-2 flex items-center gap-3 text-xs">
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={r.noi_bo} onChange={(e) => capNhatDongMoi(r.key, { noi_bo: e.target.checked, chi_ho: e.target.checked ? false : r.chi_ho })} />
+                    Nội bộ
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={r.chi_ho} onChange={(e) => capNhatDongMoi(r.key, { chi_ho: e.target.checked, noi_bo: e.target.checked ? false : r.noi_bo })} />
+                    Chi hộ
+                  </label>
+                </div>
+              )}
+              {r.loai === "chi_phi" && r.chi_ho && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Số hóa đơn/chứng từ gốc (của NCC)</label>
+                  <input
+                    value={r.so_chung_tu_goc}
+                    onChange={(e) => capNhatDongMoi(r.key, { so_chung_tu_goc: e.target.value })}
+                    className={cls}
+                    placeholder="VD: 0021693"
+                  />
+                </div>
+              )}
+              {r.loai === "thue_ngoai" && (
+                <div className="mb-2 flex items-center gap-3 text-xs">
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={r.chi_ho} onChange={(e) => capNhatDongMoi(r.key, { chi_ho: e.target.checked })} />
+                    Chi hộ
+                  </label>
+                </div>
+              )}
+              {r.loai !== "phu_thu" && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">Nguồn thanh toán</label>
+                  {renderNguonThanhToanControls(r.loai, r, (patch) => capNhatDongMoi(r.key, patch), `add:${r.key}`, undefined, false)}
+                </div>
+              )}
+              <div className="mb-2">
+                <label className="mb-1 block text-xs text-slate-500">Ghi chú</label>
+                <input value={r.ghi_chu} onChange={(e) => capNhatDongMoi(r.key, { ghi_chu: e.target.value })} className={cls} />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => luuDongMoi(r)}
+                  disabled={savingRowKeys.has(r.key)}
+                  className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                >
+                  {savingRowKeys.has(r.key) ? "Đang lưu..." : "Lưu"}
+                </button>
+                <button onClick={() => huyDongMoi(r.key)} className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700">
+                  Hủy
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ---- Desktop: bang inline ---- */}
       <div className="hidden overflow-x-auto sm:block">
@@ -972,7 +1182,10 @@ export default function ChiPhiGopSection({
                       <td className="px-2 py-2 text-slate-500">{rv.donGia !== null ? fmt(rv.donGia) : "—"}</td>
                       <td className="px-2 py-2 text-slate-700">{rv.buy !== null ? fmt(rv.buy) : "—"}</td>
                       {canSeeSell && <td className="px-2 py-2 text-slate-700">{rv.sell !== null ? fmt(rv.sell) : "—"}</td>}
-                      <td className="px-2 py-2 text-slate-500">{rv.chiHo ? "Chi hộ" : rv.noiBo === null ? "—" : rv.noiBo ? "Nội bộ" : "—"}</td>
+                      <td className="px-2 py-2 text-slate-500">
+                        {rv.chiHo ? "Chi hộ" : rv.noiBo === null ? "—" : rv.noiBo ? "Nội bộ" : "—"}
+                        {rv.chiHo && rv.soChungTuGoc && <p className="text-xs text-slate-400">CT gốc: {rv.soChungTuGoc}</p>}
+                      </td>
                       <td className="px-2 py-2 text-slate-500">{rv.nguonThanhToan ?? "—"}</td>
                       {canSeeSell && <td className="px-2 py-2 font-medium text-slate-700">{loiNhuan !== null ? fmt(loiNhuan) : "—"}</td>}
                       <td className="px-2 py-2">
@@ -1011,40 +1224,6 @@ export default function ChiPhiGopSection({
               );
             })}
 
-            {addingRows.map((r) => (
-              <tr key={r.key} className="border-t border-slate-100 bg-blue-50/30 align-top">
-                <td className="px-2 py-1.5">
-                  <select
-                    value={r.loai}
-                    onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai, donHangSoLuong))}
-                    className={cls}
-                  >
-                    {loaiChoPhepThem.map((l) => (
-                      <option key={l} value={l}>
-                        {LOAI_LABEL[l]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                {renderEditCells(r.loai, r, (patch) => capNhatDongMoi(r.key, patch), false, `add:${r.key}`, undefined)}
-                <td className="px-2 py-1.5 text-slate-300">—</td>
-                <td className="px-2 py-1.5">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => luuDongMoi(r)}
-                      disabled={savingRowKeys.has(r.key)}
-                      className="text-xs font-medium text-green-600 disabled:opacity-60"
-                    >
-                      {savingRowKeys.has(r.key) ? "Đang lưu..." : "Lưu"}
-                    </button>
-                    <button onClick={() => huyDongMoi(r.key)} className="text-xs font-medium text-slate-500">
-                      Hủy
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-
             {rows.length === 0 && addingRows.length === 0 && (
               <tr>
                 <td colSpan={13} className="px-2 py-6 text-center text-slate-400">
@@ -1076,6 +1255,7 @@ export default function ChiPhiGopSection({
                 {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}`}
                 {rv.chiHo ? " · Chi hộ" : rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : "—"}`}
                 {rv.nguonThanhToan && ` · Nguồn: ${rv.nguonThanhToan}`}
+                {rv.chiHo && rv.soChungTuGoc && ` · CT gốc: ${rv.soChungTuGoc}`}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 {coTheSua(rv) && !traLoiKhoa(rv) && (
@@ -1148,6 +1328,16 @@ export default function ChiPhiGopSection({
                       )}
                     </div>
                   )}
+                  {rv.loai === "chi_phi" && editValues.chi_ho && (
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">Số hóa đơn/chứng từ gốc (của NCC)</label>
+                      <input
+                        value={editValues.so_chung_tu_goc}
+                        onChange={(e) => setEditValues((p) => (p ? { ...p, so_chung_tu_goc: e.target.value } : p))}
+                        className={cls}
+                      />
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button onClick={() => luuSua(rv)} className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
                       Lưu
@@ -1167,110 +1357,6 @@ export default function ChiPhiGopSection({
             </div>
           );
         })}
-
-        {addingRows.map((r) => (
-          <div key={r.key} className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 text-sm">
-            <label className="mb-1 block text-xs text-slate-500">Loại dòng</label>
-            <select value={r.loai} onChange={(e) => capNhatDongMoi(r.key, blankNewRow(e.target.value as Loai, donHangSoLuong))} className={`${cls} mb-2`}>
-              {loaiChoPhepThem.map((l) => (
-                <option key={l} value={l}>
-                  {LOAI_LABEL[l]}
-                </option>
-              ))}
-            </select>
-            {r.loai === "chi_phi" && (
-              <div className="mb-2">
-                <label className="mb-1 block text-xs text-slate-500">Loại chi phí</label>
-                <SearchableSelect options={loaiChiPhiOptions} value={r.loai_chi_phi_id} onChange={(v) => capNhatDongMoi(r.key, { loai_chi_phi_id: v })} />
-              </div>
-            )}
-            {r.loai === "thue_ngoai" && (
-              <>
-                <div className="mb-2">
-                  <label className="mb-1 block text-xs text-slate-500">Loại dịch vụ</label>
-                  <select value={r.loai_dich_vu_thue} onChange={(e) => capNhatDongMoi(r.key, { loai_dich_vu_thue: e.target.value })} className={cls}>
-                    <option value="">-- Chọn --</option>
-                    {LOAI_DICH_VU_THUE.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mb-2">
-                  <label className="mb-1 block text-xs text-slate-500">Đối tác thuê ngoài</label>
-                  <SearchableSelect options={doiTacThueNgoaiOptions} value={r.doi_tac_thue_ngoai_id ?? ""} onChange={(v) => capNhatDongMoi(r.key, { doi_tac_thue_ngoai_id: v || null })} />
-                </div>
-              </>
-            )}
-            {r.loai === "phu_thu" && (
-              <div className="mb-2">
-                <label className="mb-1 block text-xs text-slate-500">Loại phụ thu</label>
-                <input value={r.loai_phu_thu} onChange={(e) => capNhatDongMoi(r.key, { loai_phu_thu: e.target.value })} className={cls} placeholder="VD: Phí lưu kho" />
-              </div>
-            )}
-            {r.loai !== "phu_thu" && (
-              <div className="mb-2 flex gap-2">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-slate-500">Số lượng</label>
-                  <input value={r.so_luong} onChange={(e) => capNhatDongMoi(r.key, tinhLaiSoTienDaChi(r, { so_luong: e.target.value }))} className={cls} placeholder="SL" />
-                </div>
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-slate-500">Đơn giá</label>
-                  <MoneyInput value={r.don_gia} onChange={(v) => capNhatDongMoi(r.key, tinhLaiSoTienDaChi(r, { don_gia: v }))} className={cls} />
-                </div>
-              </div>
-            )}
-            {r.loai !== "phu_thu" && (
-              <div className="mb-2">
-                <label className="mb-1 block text-xs text-slate-500">Số tiền đã chi</label>
-                <MoneyInput value={r.buy} onChange={(v) => capNhatDongMoi(r.key, { buy: v })} className={cls} />
-              </div>
-            )}
-            <div className="mb-2">
-              <label className="mb-1 block text-xs text-slate-500">Giá bán / Thành tiền</label>
-              <MoneyInput value={r.sell} onChange={(v) => capNhatDongMoi(r.key, { sell: v })} className={cls} />
-            </div>
-            {r.loai !== "phu_thu" && (
-              <div className="mb-2">
-                <label className="mb-1 block text-xs text-slate-500">Nguồn thanh toán</label>
-                {renderNguonThanhToanControls(r.loai, r, (patch) => capNhatDongMoi(r.key, patch), `add:${r.key}`, undefined, false)}
-              </div>
-            )}
-            {r.loai === "chi_phi" && (
-              <div className="mb-2 flex items-center gap-3 text-xs">
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={r.noi_bo} onChange={(e) => capNhatDongMoi(r.key, { noi_bo: e.target.checked, chi_ho: e.target.checked ? false : r.chi_ho })} />
-                  Nội bộ
-                </label>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={r.chi_ho} onChange={(e) => capNhatDongMoi(r.key, { chi_ho: e.target.checked, noi_bo: e.target.checked ? false : r.noi_bo })} />
-                  Chi hộ
-                </label>
-              </div>
-            )}
-            {r.loai === "thue_ngoai" && (
-              <div className="mb-2 flex items-center gap-3 text-xs">
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={r.chi_ho} onChange={(e) => capNhatDongMoi(r.key, { chi_ho: e.target.checked })} />
-                  Chi hộ
-                </label>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={() => luuDongMoi(r)}
-                disabled={savingRowKeys.has(r.key)}
-                className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
-              >
-                {savingRowKeys.has(r.key) ? "Đang lưu..." : "Lưu"}
-              </button>
-              <button onClick={() => huyDongMoi(r.key)} className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700">
-                Hủy
-              </button>
-            </div>
-          </div>
-        ))}
 
         {rows.length === 0 && addingRows.length === 0 && <p className="text-sm text-slate-400">Chưa có dòng nào.</p>}
       </div>

@@ -82,6 +82,7 @@ export default function SoQuyView({
   const [denNgay, setDenNgay] = useState(defaultRange.end);
   const [showChuyenQuy, setShowChuyenQuy] = useState(false);
   const [showDoiChieu, setShowDoiChieu] = useState(false);
+  const [chiXemAm, setChiXemAm] = useState(false);
   const [chieuChuyen, setChieuChuyen] = useState<"Ngân hàng → Tiền mặt" | "Tiền mặt → Ngân hàng">("Ngân hàng → Tiền mặt");
   const [soTienChuyen, setSoTienChuyen] = useState("");
   const [ghiChuChuyen, setGhiChuChuyen] = useState("");
@@ -298,9 +299,23 @@ export default function SoQuyView({
       </div>
 
       {tonCuoiKy < 0 && (
-        <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <button
+          type="button"
+          onClick={() => setChiXemAm((v) => !v)}
+          role="alert"
+          className="mb-4 w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900 hover:bg-amber-100"
+        >
           Số dư {loaiSo.toLowerCase()} đang âm {fmt(Math.abs(tonCuoiKy))}. Kiểm tra số dư đầu kỳ, khoản thu/chi chưa ghi và phương thức thanh toán trước khi chốt sổ.
-        </div>
+          <span className="ml-1 font-medium underline">
+            {chiXemAm ? "— đang lọc, bấm để xem lại tất cả" : "— bấm để xem các dòng gây âm quỹ"}
+          </span>
+        </button>
+      )}
+      {chiXemAm && tonCuoiKy < 0 && (
+        <p className="-mt-2 mb-3 text-xs text-slate-400">
+          Đang chỉ hiện các giao dịch mà SAU đó số dư đã âm (trong khoảng thời gian đang chọn) — đây là nơi bắt đầu
+          phát sinh âm quỹ, kiểm tra nguồn gốc và phương thức thanh toán của các dòng này trước.
+        </p>
       )}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -315,7 +330,7 @@ export default function SoQuyView({
             </tr>
           </thead>
           <tbody>
-            {rowsWithRunning.map((r) => (
+            {(chiXemAm ? rowsWithRunning.filter((r) => r.tonSauGiaoDich < 0) : rowsWithRunning).map((r) => (
               <tr key={r.id} className="border-t border-slate-100">
                 <td className="px-3 py-2">{r.ngay}</td>
                 <td className="px-3 py-2">
@@ -345,10 +360,10 @@ export default function SoQuyView({
                 <td className="px-3 py-2 font-medium">{fmt(r.tonSauGiaoDich)}</td>
               </tr>
             ))}
-            {rowsWithRunning.length === 0 && (
+            {(chiXemAm ? rowsWithRunning.filter((r) => r.tonSauGiaoDich < 0) : rowsWithRunning).length === 0 && (
               <tr>
                 <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
-                  Không có giao dịch trong khoảng thời gian này.
+                  {chiXemAm ? "Không có dòng nào gây âm quỹ trong khoảng thời gian này." : "Không có giao dịch trong khoảng thời gian này."}
                 </td>
               </tr>
             )}

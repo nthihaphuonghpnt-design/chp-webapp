@@ -15,7 +15,9 @@ interface DiaDiemOption {
 }
 
 const DIEU_DONG = ["Công ty (tự thực hiện)", "Thuê ngoài"];
-const TRANG_THAI = ["Đã duyệt lệnh", "Đã xuất phát", "Đã điều động", "Đã xác nhận", "Đã hoàn thành"];
+// Thu tu dung quy trinh dieu dong thuc te: duyet lenh -> dieu dong xe/tai xe
+// -> xe xuat phat -> xac nhan da den/giao xong -> hoan thanh ho so.
+const TRANG_THAI = ["Đã duyệt lệnh", "Đã điều động", "Đã xuất phát", "Đã xác nhận", "Đã hoàn thành"];
 
 function diaDiemName(list: DiaDiemOption[], id: string | null) {
   return list.find((d) => d.id === id)?.ten ?? "—";
@@ -27,12 +29,17 @@ export default function ChiTietVanChuyenSection({
   diaDiemList,
   canEdit,
   goiYDiem,
+  onAddChiPhiForLeg,
 }: {
   donHangId: string;
   initialRows: ChiTietVanChuyen[];
   diaDiemList: DiaDiemOption[];
   canEdit: boolean;
   goiYDiem?: { diem_1_id: string | null; diem_2_id: string | null; diem_3_id: string | null };
+  /** Khi co, hien them nut "+ Thêm chi phí cho chặng này" — bam vao se chuyen
+   * sang tab Chi phí và mở sẵn dòng thêm mới với chặng này đã chọn trước,
+   * thay vì phải tự tìm lại đúng chặng trong dropdown của form chi phí. */
+  onAddChiPhiForLeg?: (legId: string) => void;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -120,13 +127,18 @@ export default function ChiTietVanChuyenSection({
               {diaDiemName(diaDiemList, row.diem_1_id)} → {diaDiemName(diaDiemList, row.diem_2_id)} → {diaDiemName(diaDiemList, row.diem_3_id)}
             </p>
             {canEdit && (
-              <div className="mt-2 flex gap-3">
+              <div className="mt-2 flex flex-wrap gap-3">
                 <button onClick={() => openEdit(row)} className="text-xs font-medium text-blue-600">
                   Sửa
                 </button>
                 <button onClick={() => handleDelete(row)} className="text-xs font-medium text-red-600">
                   Xóa
                 </button>
+                {onAddChiPhiForLeg && (
+                  <button onClick={() => onAddChiPhiForLeg(row.id)} className="text-xs font-medium text-green-600">
+                    + Thêm chi phí cho chặng này
+                  </button>
+                )}
               </div>
             )}
           </div>

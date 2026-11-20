@@ -7,10 +7,9 @@ import StatusBadge from "@/components/don-hang/StatusBadge";
 import ConfirmButtons from "@/components/don-hang/ConfirmButtons";
 import ContainerSection from "@/components/don-hang/ContainerSection";
 import ToKhaiSection from "@/components/don-hang/ToKhaiSection";
-import ChiTietVanChuyenSection from "@/components/don-hang/ChiTietVanChuyenSection";
 import DinhKemSection from "@/components/don-hang/DinhKemSection";
 import LineItemsSection from "@/components/don-hang/LineItemsSection";
-import ChiPhiGopSection from "@/components/don-hang/ChiPhiGopSection";
+import DonHangTabsClient from "@/components/don-hang/DonHangTabsClient";
 import CongViecHoanThanhSection, { type CongViecEntry } from "@/components/don-hang/CongViecHoanThanhSection";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 import { tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
@@ -284,160 +283,167 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         currentPhongBan={user?.phong_ban ?? ""}
       />
 
-      <div className="mb-4 grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
-        <Info label="Sale phụ trách" value={salePhuTrach?.ho_ten} />
-        <Info label="Hiện trường phụ trách" value={hienTruongPhuTrach?.ho_ten} />
-        <Info label="Chứng từ phụ trách" value={chungTuPhuTrach?.ho_ten} />
-        <Info label="Loại đơn hàng" value={order.loai_don_hang} />
-        <Info label="Loại kích cỡ" value={order.loai_kich_co} />
-        <Info label="Đơn vị tính" value={order.dvt} />
-        <Info label="Số lượng" value={order.so_luong} />
-        {order.loai_kich_co === "Hàng lẻ" && (
-          <>
-            <Info label="Số kiện" value={order.so_kien} />
-            <Info label="Số kg" value={order.so_kg} />
-          </>
-        )}
-        <Info label="Số vận đơn / booking" value={order.so_bl_bk} />
-        <ContainerSection
-          donHangId={order.id}
-          initialRows={containerRows ?? []}
-          loaiContainerList={loaiContainerList ?? []}
-          canEdit={canEditContainer}
-        />
-        <Info label="Hàng hóa" value={hangHoa?.ten} />
-        <Info label="Kích thước" value={order.kich_thuoc} />
-        <Info label="Nơi lấy cont/hàng" value={noiLay?.ten} />
-        <Info label="Nơi đóng/giao" value={noiDong?.ten} />
-        <Info label="Nơi hạ/trả rỗng" value={noiHa?.ten} />
-        <Info label="Ngày lên đơn" value={order.ngay_len_don} />
-        <Info label="Ngày vận chuyển" value={order.ngay_van_chuyen} />
-        <Info label="Hạn lệnh" value={order.han_lenh_ngay ? `${order.han_lenh_ngay} ${order.han_lenh_gio ?? ""}` : null} />
-        <Info label="Giá bán" value={order.gia} />
-        <Info label="Người tạo" value={nguoiTao?.ho_ten} />
-        {order.ghi_chu_van_chuyen && (
-          <div className="sm:col-span-2">
-            <p className="text-slate-500">Ghi chú vận chuyển</p>
-            <p className="font-medium text-slate-900">{order.ghi_chu_van_chuyen}</p>
+      <DonHangTabsClient
+        thongTinLo={
+          <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
+            <Info label="Sale phụ trách" value={salePhuTrach?.ho_ten} />
+            <Info label="Hiện trường phụ trách" value={hienTruongPhuTrach?.ho_ten} />
+            <Info label="Chứng từ phụ trách" value={chungTuPhuTrach?.ho_ten} />
+            <Info label="Loại đơn hàng" value={order.loai_don_hang} />
+            <Info label="Loại kích cỡ" value={order.loai_kich_co} />
+            <Info label="Nơi lấy cont/hàng" value={noiLay?.ten} />
+            <Info label="Nơi đóng/giao" value={noiDong?.ten} />
+            <Info label="Nơi hạ/trả rỗng" value={noiHa?.ten} />
+            <Info label="Ngày lên đơn" value={order.ngay_len_don} />
+            <Info label="Ngày vận chuyển" value={order.ngay_van_chuyen} />
+            <Info label="Hạn lệnh" value={order.han_lenh_ngay ? `${order.han_lenh_ngay} ${order.han_lenh_gio ?? ""}` : null} />
+            <Info label="Giá bán" value={order.gia} />
+            <Info label="Người tạo" value={nguoiTao?.ho_ten} />
+            {order.ghi_chu_van_chuyen && (
+              <div className="sm:col-span-2">
+                <p className="text-slate-500">Ghi chú vận chuyển</p>
+                <p className="font-medium text-slate-900">{order.ghi_chu_van_chuyen}</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <ToKhaiSection donHangId={order.id} initialRows={toKhaiRows ?? []} canEdit={canEditToKhai} />
-      </div>
-
-      <div className="mb-4">
-        <ChiTietVanChuyenSection
-          donHangId={order.id}
-          initialRows={chiTietRows ?? []}
-          diaDiemList={diaDiemList ?? []}
-          canEdit={canEditVanChuyen}
-          goiYDiem={{
+        }
+        containerHangHoa={
+          <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
+            <Info label="Đơn vị tính" value={order.dvt} />
+            <Info label="Số lượng" value={order.so_luong} />
+            {order.loai_kich_co === "Hàng lẻ" && (
+              <>
+                <Info label="Số kiện" value={order.so_kien} />
+                <Info label="Số kg" value={order.so_kg} />
+              </>
+            )}
+            <Info label="Số vận đơn / booking" value={order.so_bl_bk} />
+            <ContainerSection
+              donHangId={order.id}
+              initialRows={containerRows ?? []}
+              loaiContainerList={loaiContainerList ?? []}
+              canEdit={canEditContainer}
+            />
+            <Info label="Hàng hóa" value={hangHoa?.ten} />
+            <Info label="Kích thước" value={order.kich_thuoc} />
+          </div>
+        }
+        toKhai={<ToKhaiSection donHangId={order.id} initialRows={toKhaiRows ?? []} canEdit={canEditToKhai} />}
+        chiTietVanChuyenProps={{
+          donHangId: order.id,
+          initialRows: chiTietRows ?? [],
+          diaDiemList: diaDiemList ?? [],
+          canEdit: canEditVanChuyen,
+          goiYDiem: {
             diem_1_id: order.noi_lay_cont_hang_id,
             diem_2_id: order.noi_dong_giao_id,
             diem_3_id: order.noi_ha_tra_rong_id,
-          }}
-        />
-      </div>
-
-      {tamUngDoiChieu.length > 0 && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Tạm ứng & đã chi cho lô này</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs font-medium text-slate-500">
-                <tr>
-                  <th className="py-1 pr-3">Nhân viên</th>
-                  <th className="py-1 pr-3">Đã tạm ứng</th>
-                  <th className="py-1 pr-3">Đã chi (kể cả chi hộ)</th>
-                  <th className="py-1 pr-3">Còn lại</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tamUngDoiChieu.map((r) => (
-                  <tr key={r.nvId} className="border-t border-slate-100">
-                    <td className="py-1.5 pr-3 font-medium text-slate-900">{r.ten}</td>
-                    <td className="py-1.5 pr-3">{r.tamUng.toLocaleString("en-US")}</td>
-                    <td className="py-1.5 pr-3">{r.daChi.toLocaleString("en-US")}</td>
-                    <td className={`py-1.5 pr-3 font-medium ${r.conLai < 0 ? "text-red-600" : "text-slate-900"}`}>{r.conLai.toLocaleString("en-US")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2 text-xs text-slate-400">
-            &quot;Đã chi&quot; gồm cả dòng đánh dấu Chi hộ — chi hộ vẫn là tiền rút từ tạm ứng của người đó, vẫn phải trừ.
-          </p>
-        </div>
-      )}
-
-      <div className="mb-4">
-        <ChiPhiGopSection
-          donHangId={order.id}
-          initialChiPhiRows={chiPhiRowsDayDu}
-          initialThueNgoaiRows={thueNgoaiRowsDayDu}
-          initialPhuThuRows={phuThuRows ?? []}
-          loaiChiPhiList={loaiChiPhiList ?? []}
-          nhaCungCapList={nhaCungCapList ?? []}
-          doiTacThueNgoaiList={doiTacList ?? []}
-          chiTietVanChuyenList={chiTietRows ?? []}
-          phongBan={user?.phong_ban ?? ""}
-          currentUserId={user?.id}
-          nhanVienChiPhiTamUngOptions={nhanVienChiPhiTamUngOptions}
-          nhanVienThueNgoaiTamUngOptions={nhanVienThueNgoaiTamUngOptions}
-          congViecMap={congViecMap}
-          donHangSoLuong={order.so_luong}
-        />
-      </div>
-
-      <div className="mb-4">
-        <LineItemsSection
-          table="chi_phi_giao_nhan"
-          donHangId={order.id}
-          soDonHang={order.so_don_hang}
-          title="Chi phí giao nhận / COMMS Chứng từ, Hiện trường theo lô"
-          fields={[
-            { key: "nhan_vien_id", label: "Nhân viên", type: "select", required: true, options: nhanVienGiaoNhanOptions },
-            { key: "loai", label: "Loại", type: "text", required: true },
-            { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
-            { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
-          ]}
-          initialRows={chiPhiGiaoNhanRows ?? []}
-          canEdit={user?.phong_ban === "Kế toán"}
-        />
-      </div>
-
-      {canSeeLoiNhuan && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Lợi nhuận sơ bộ</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Info label="Tổng giá bán (+ phụ thu)" value={tongSell.toLocaleString("en-US")} />
-            <Info label="Tổng số tiền đã chi (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
-            <Info label="Chi phí giao nhận/chuyến" value={tongChiPhiGiaoNhan.toLocaleString("en-US")} />
-            <Info label="Chi phí thuê ngoài (Module E)" value={tongChiPhiThueNgoai.toLocaleString("en-US")} />
-            <Info label="Lợi nhuận trước định phí" value={loiNhuanTruocDinhPhi.toLocaleString("en-US")} />
-            <Info
-              label="Định phí phân bổ/lô"
-              value={`${dinhPhiPhanBo.toLocaleString("en-US")} (${soLoTrongThang ?? 0} lô trong tháng ${monthKey})`}
-            />
-            <Info label="Lợi nhuận trước hoa hồng" value={loiNhuanTruocHoaHong.toLocaleString("en-US")} />
-            <Info
-              label={`Hoa hồng Sale (4/10)${salePhuTrach?.ho_ten ? ` — ${salePhuTrach.ho_ten}` : ""}`}
-              value={chiPhiSale.toLocaleString("en-US")}
-            />
-          </div>
-          <p className="mt-3 border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
-            Lợi nhuận công ty (6/10): {loiNhuanCongTy.toLocaleString("en-US")}
-          </p>
-          <p className="mt-2 text-xs text-slate-400">
-            * Số liệu sơ bộ — tính cả các dòng chưa duyệt (Nháp/Chờ duyệt), kiểm tra lại trước khi
-            chốt sổ chính thức cuối tháng.
-          </p>
-        </div>
-      )}
-
-      <DinhKemSection donHangId={order.id} soDonHang={order.so_don_hang} initialRows={dinhKemRows ?? []} currentUserId={user?.id} canUpload={canUploadDinhKem} />
+          },
+        }}
+        tamUngDoiChieu={
+          tamUngDoiChieu.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">Tạm ứng & đã chi cho lô này</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs font-medium text-slate-500">
+                    <tr>
+                      <th className="py-1 pr-3">Nhân viên</th>
+                      <th className="py-1 pr-3">Đã tạm ứng</th>
+                      <th className="py-1 pr-3">Đã chi (kể cả chi hộ)</th>
+                      <th className="py-1 pr-3">Còn lại</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tamUngDoiChieu.map((r) => (
+                      <tr key={r.nvId} className="border-t border-slate-100">
+                        <td className="py-1.5 pr-3 font-medium text-slate-900">{r.ten}</td>
+                        <td className="py-1.5 pr-3">{r.tamUng.toLocaleString("en-US")}</td>
+                        <td className="py-1.5 pr-3">{r.daChi.toLocaleString("en-US")}</td>
+                        <td className={`py-1.5 pr-3 font-medium ${r.conLai < 0 ? "text-red-600" : "text-slate-900"}`}>{r.conLai.toLocaleString("en-US")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                &quot;Đã chi&quot; gồm cả dòng đánh dấu Chi hộ — chi hộ vẫn là tiền rút từ tạm ứng của người đó, vẫn phải trừ.
+              </p>
+            </div>
+          )
+        }
+        chiPhiGopProps={{
+          donHangId: order.id,
+          initialChiPhiRows: chiPhiRowsDayDu,
+          initialThueNgoaiRows: thueNgoaiRowsDayDu,
+          initialPhuThuRows: phuThuRows ?? [],
+          loaiChiPhiList: loaiChiPhiList ?? [],
+          nhaCungCapList: nhaCungCapList ?? [],
+          doiTacThueNgoaiList: doiTacList ?? [],
+          chiTietVanChuyenList: chiTietRows ?? [],
+          phongBan: user?.phong_ban ?? "",
+          currentUserId: user?.id,
+          nhanVienChiPhiTamUngOptions,
+          nhanVienThueNgoaiTamUngOptions,
+          congViecMap,
+          donHangSoLuong: order.so_luong,
+        }}
+        dinhKem={
+          <DinhKemSection
+            donHangId={order.id}
+            soDonHang={order.so_don_hang}
+            initialRows={dinhKemRows ?? []}
+            currentUserId={user?.id}
+            canUpload={canUploadDinhKem}
+          />
+        }
+        chiPhiGiaoNhan={
+          <LineItemsSection
+            table="chi_phi_giao_nhan"
+            donHangId={order.id}
+            soDonHang={order.so_don_hang}
+            title="Chi phí giao nhận / COMMS Chứng từ, Hiện trường theo lô"
+            fields={[
+              { key: "nhan_vien_id", label: "Nhân viên", type: "select", required: true, options: nhanVienGiaoNhanOptions },
+              { key: "loai", label: "Loại", type: "text", required: true },
+              { key: "thanh_tien", label: "Thành tiền", type: "number", required: true },
+              { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+            ]}
+            initialRows={chiPhiGiaoNhanRows ?? []}
+            canEdit={user?.phong_ban === "Kế toán"}
+          />
+        }
+        loiNhuan={
+          canSeeLoiNhuan && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">Lợi nhuận sơ bộ</h2>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Info label="Tổng giá bán (+ phụ thu)" value={tongSell.toLocaleString("en-US")} />
+                <Info label="Tổng số tiền đã chi (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
+                <Info label="Chi phí giao nhận/chuyến" value={tongChiPhiGiaoNhan.toLocaleString("en-US")} />
+                <Info label="Chi phí thuê ngoài (Module E)" value={tongChiPhiThueNgoai.toLocaleString("en-US")} />
+                <Info label="Lợi nhuận trước định phí" value={loiNhuanTruocDinhPhi.toLocaleString("en-US")} />
+                <Info
+                  label="Định phí phân bổ/lô"
+                  value={`${dinhPhiPhanBo.toLocaleString("en-US")} (${soLoTrongThang ?? 0} lô trong tháng ${monthKey})`}
+                />
+                <Info label="Lợi nhuận trước hoa hồng" value={loiNhuanTruocHoaHong.toLocaleString("en-US")} />
+                <Info
+                  label={`Hoa hồng Sale (4/10)${salePhuTrach?.ho_ten ? ` — ${salePhuTrach.ho_ten}` : ""}`}
+                  value={chiPhiSale.toLocaleString("en-US")}
+                />
+              </div>
+              <p className="mt-3 border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
+                Lợi nhuận công ty (6/10): {loiNhuanCongTy.toLocaleString("en-US")}
+              </p>
+              <p className="mt-2 text-xs text-slate-400">
+                * Số liệu sơ bộ — tính cả các dòng chưa duyệt (Nháp/Chờ duyệt), kiểm tra lại trước khi
+                chốt sổ chính thức cuối tháng.
+              </p>
+            </div>
+          )
+        }
+      />
     </div>
   );
 }

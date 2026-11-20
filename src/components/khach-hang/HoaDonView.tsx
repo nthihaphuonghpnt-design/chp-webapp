@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
@@ -129,6 +130,12 @@ export default function HoaDonView({
   const [doiChieuMoRong, setDoiChieuMoRong] = useState<string | null>(null);
   const [dctForm, setDctForm] = useState<{ mode: "dieu_chinh" | "thay_the"; row: Row } | null>(null);
   const [lichSuMoRong, setLichSuMoRong] = useState<string | null>(null);
+  // Chon nhieu hoa don de thu tien trong 1 lan (vd 1 lan chuyen khoan tra
+  // nhieu hoa don cung luc) — phan bo tuan tu theo ngay xuat cu nhat truoc,
+  // van goi lai dung RPC thu_tien_hoa_don_xuat cho tung hoa don (khong doi
+  // logic da co), chi gom lam 1 thao tac UI thay vi bam "Thu tiền" tung dong.
+  const [selectedForThu, setSelectedForThu] = useState<Set<string>>(new Set());
+  const [showThuTienNhieu, setShowThuTienNhieu] = useState(false);
   const [doiChieuCong, setDoiChieuCong] = useState<{ dong: number; so: string; ketQua: string }[] | null>(null);
   const [loiFileCong, setLoiFileCong] = useState<string | null>(null);
 
@@ -494,7 +501,10 @@ export default function HoaDonView({
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold text-slate-900">Hóa đơn xuất</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/bao-cao#cong-no-theo-lo" className="text-sm font-medium text-blue-600 hover:underline">
+            Xem công nợ theo lô →
+          </Link>
           <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
             Xuất Excel
           </button>
@@ -556,11 +566,47 @@ export default function HoaDonView({
         <strong>{(tongTien - tongDaThu).toLocaleString("en-US")}</strong>
       </p>
 
+      {canEdit && selectedForThu.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-blue-50 p-3 text-sm">
+          <span>
+            Đã chọn <strong>{selectedForThu.size}</strong> hóa đơn — còn phải thu tổng{" "}
+            <strong>
+              {rows
+                .filter((r) => selectedForThu.has(r.id))
+                .reduce((s, r) => s + (r.tong_tien - (r.so_tien_da_thu ?? 0)), 0)
+                .toLocaleString("en-US")}
+            </strong>
+          </span>
+          <div className="flex gap-2">
+            <button onClick={() => setShowThuTienNhieu(true)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
+              Thu tiền (1 lần cho các hóa đơn đã chọn)
+            </button>
+            <button onClick={() => setSelectedForThu(new Set())} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700">
+              Bỏ chọn
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         {filtered.map((row) => (
           <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-              <span className="font-medium text-slate-900">
+              <span className="flex items-center gap-2 font-medium text-slate-900">
+                {canEdit && row.trang_thai === "Đã phát hành" && row.trang_thai_thanh_toan !== "Đã thu đủ" && (
+                  <input
+                    type="checkbox"
+                    checked={selectedForThu.has(row.id)}
+                    onChange={(e) =>
+                      setSelectedForThu((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(row.id);
+                        else next.delete(row.id);
+                        return next;
+                      })
+                    }
+                  />
+                )}
                 {row.so_hoa_don || "(chưa có số)"} · {khName(one(row.khach_hang))}
               </span>
               <span className="flex gap-1">
@@ -677,6 +723,137 @@ export default function HoaDonView({
           onSave={(values, lyDo) => handleDieuChinhThayThe(dctForm.mode, dctForm.row, values, lyDo)}
         />
       )}
+
+      {showThuTienNhieu && (
+        <ThuTienNhieuHoaDonForm
+          rows={rows.filter((r) => selectedForThu.has(r.id))}
+          onCancel={() => setShowThuTienNhieu(false)}
+          onDone={async () => {
+            setShowThuTienNhieu(false);
+            const ids = Array.from(selectedForThu);
+            setSelectedForThu(new Set());
+            const updated = await Promise.all(ids.map((id) => refetchRow(id)));
+            setRows((prev) => prev.map((r) => updated.find((u) => u?.id === r.id) ?? r));
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Ghi nhan 1 lan thu tien (vd 1 lan chuyen khoan) duoc phan bo cho NHIEU hoa
+ * don da chon — dien 1 so tien + 1 phuong thuc duy nhat, tu dong chia theo
+ * thu tu ngay xuat cu nhat truoc, moi hoa don nhan toi da dung phan con thieu
+ * cua no; hoa don CUOI CUNG trong danh sach nhan phan con du (neu nhap du
+ * nhieu hon tong con phai thu) de RPC thu_tien_hoa_don_xuat tu chuyen thanh
+ * credit nhu hanh vi thu tung hoa don rieng le da co. Goi lai dung RPC do cho
+ * tung hoa don (tuan tu, khong dung transaction gop) — khong doi logic nghiep
+ * vu, chi gom thao tac UI. */
+function ThuTienNhieuHoaDonForm({ rows, onCancel, onDone }: { rows: Row[]; onCancel: () => void; onDone: () => void }) {
+  const supabase = useMemo(() => createClient(), []);
+  const sorted = useMemo(() => [...rows].sort((a, b) => a.ngay_xuat.localeCompare(b.ngay_xuat)), [rows]);
+  const tongConLai = sorted.reduce((s, r) => s + (r.tong_tien - (r.so_tien_da_thu ?? 0)), 0);
+  const [soTien, setSoTien] = useState(String(tongConLai));
+  const [phuongThuc, setPhuongThuc] = useState("Tài khoản công ty");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const phanBo = useMemo(() => {
+    const tongInput = Number(soTien) || 0;
+    return sorted.reduce<{ result: { row: Row; apDung: number }[]; pool: number }>(
+      (acc, r, i) => {
+        const conLai = r.tong_tien - (r.so_tien_da_thu ?? 0);
+        const isLast = i === sorted.length - 1;
+        const apDung = isLast ? acc.pool : Math.min(acc.pool, conLai);
+        return { result: [...acc.result, { row: r, apDung }], pool: acc.pool - conLai };
+      },
+      { result: [], pool: tongInput }
+    ).result;
+  }, [sorted, soTien]);
+
+  async function handleSubmit() {
+    const tong = Number(soTien);
+    if (!tong || tong <= 0) {
+      setErr("Nhập số tiền hợp lệ.");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    for (const { row, apDung } of phanBo) {
+      if (apDung <= 0) continue;
+      const { error } = await supabase.rpc("thu_tien_hoa_don_xuat", {
+        p_hoa_don_id: row.id,
+        p_so_tien: apDung,
+        p_phuong_thuc: phuongThuc,
+        p_ghi_chu: `Thu gộp nhiều hóa đơn cùng lúc (${sorted.length} hóa đơn)`,
+      });
+      if (error) {
+        setSaving(false);
+        setErr(`Đã dừng tại hóa đơn "${row.so_hoa_don ?? row.id}": ${error.message}. Các hóa đơn xử lý trước đó vẫn đã được ghi nhận.`);
+        return;
+      }
+    }
+    setSaving(false);
+    onDone();
+  }
+
+  const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+      <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl">
+        <h2 className="mb-1 text-lg font-semibold text-slate-900">Thu tiền cho {sorted.length} hóa đơn</h2>
+        <p className="mb-4 text-xs text-slate-400">
+          Dùng khi 1 lần chuyển khoản/tiền mặt trả gộp nhiều hóa đơn — nhập đúng 1 số tiền tổng, hệ thống tự chia cho
+          từng hóa đơn (cũ nhất trước), phần dư nếu có sẽ thành credit của khách hàng.
+        </p>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Tổng số tiền thực nhận</label>
+            <MoneyInput value={soTien} onChange={setSoTien} className={cls} />
+            <p className="mt-1 text-xs text-slate-400">Tổng còn phải thu của các hóa đơn đã chọn: {tongConLai.toLocaleString("en-US")}</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức</label>
+            <select value={phuongThuc} onChange={(e) => setPhuongThuc(e.target.value)} className={cls}>
+              <option value="Tiền mặt">Tiền mặt</option>
+              <option value="Tài khoản công ty">Tài khoản công ty</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-1.5 rounded-lg bg-slate-50 p-3 text-sm">
+          <p className="mb-1 text-xs font-medium text-slate-500">Dự kiến phân bổ:</p>
+          {phanBo.map(({ row, apDung }) => (
+            <div key={row.id} className="flex items-center justify-between">
+              <span className="text-slate-700">
+                {row.so_hoa_don || "(chưa có số)"} · {row.ngay_xuat}
+              </span>
+              <span className={`font-medium ${apDung > row.tong_tien - (row.so_tien_da_thu ?? 0) ? "text-blue-600" : "text-slate-900"}`}>
+                {apDung.toLocaleString("en-US")}
+                {apDung > row.tong_tien - (row.so_tien_da_thu ?? 0) && " (gồm dư → credit)"}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
+
+        <div className="mt-6 flex gap-3">
+          <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {saving ? "Đang ghi nhận..." : "Ghi nhận thu tiền"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -842,6 +1019,15 @@ function HoaDonForm({
   const donHangCuaKh = donHangList.filter((d) => !values.khach_hang_id || d.khach_hang_id === values.khach_hang_id);
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 
+  const HOA_DON_STEPS = ["Khách hàng & đơn hàng", "Dòng tiền & VAT", "Thanh toán", "Xem trước"] as const;
+  const [step, setStep] = useState(0);
+
+  function khOptionTen(id: string) {
+    return khachHangList.find((k) => k.id === id)?.ten_day_du ?? "—";
+  }
+
+  const tongTienCoThue = (Number(values.tong_tien_truoc_thue) || 0) * (1 + (Number(values.vat_percent) || 0) / 100) + (Number(values.tien_chi_ho) || 0);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
       <form
@@ -851,143 +1037,220 @@ function HoaDonForm({
         }}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">{initial ? "Sửa hóa đơn" : "Thêm hóa đơn"}</h2>
+        <h2 className="mb-2 text-lg font-semibold text-slate-900">{initial ? "Sửa hóa đơn" : "Thêm hóa đơn"}</h2>
+        <div className="mb-4 flex flex-wrap gap-1.5 text-xs">
+          {HOA_DON_STEPS.map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => i < step && setStep(i)}
+              disabled={i > step}
+              className={`rounded-full px-2.5 py-1 font-medium ${
+                i === step ? "bg-blue-600 text-white" : i < step ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-400"
+              }`}
+            >
+              {i + 1}. {label}
+            </button>
+          ))}
+        </div>
         {khoaTruongTaiChinh && (
           <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
             Hóa đơn đã có tiền thu hoặc đã qua điều chỉnh/thay thế/hủy — không sửa trực tiếp được số tiền/khách hàng/số hóa đơn/ngày xuất nữa. Dùng nút
             &quot;Điều chỉnh&quot;/&quot;Thay thế&quot; ở danh sách nếu cần thay đổi.
           </p>
         )}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
-            <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} disabled={khoaTruongTaiChinh} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Số hóa đơn</label>
-            <input
-              value={values.so_hoa_don}
-              onChange={(e) => set("so_hoa_don", e.target.value)}
-              className={cls}
-              disabled={khoaTruongTaiChinh}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Ngày xuất</label>
-            <input
-              required
-              type="date"
-              value={values.ngay_xuat}
-              onChange={(e) => set("ngay_xuat", e.target.value)}
-              className={cls}
-              disabled={khoaTruongTaiChinh}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tổng tiền trước thuế</label>
-            <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} disabled={khoaTruongTaiChinh} />
-            {goiYTong !== null && (
-              <p className="mt-1 text-xs text-blue-600">
-                Gợi ý (đã bán cho khách, không gồm chi hộ): {goiYTong.toLocaleString("en-US")}
-                {values.tong_tien_truoc_thue !== String(goiYTong) && (
-                  <button type="button" onClick={() => set("tong_tien_truoc_thue", String(goiYTong))} className="ml-2 underline">
-                    Dùng số này
-                  </button>
-                )}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">VAT %</label>
-            <input
-              type="number"
-              step="any"
-              value={values.vat_percent}
-              onChange={(e) => set("vat_percent", e.target.value)}
-              className={cls}
-              disabled={khoaTruongTaiChinh}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tiền chi hộ</label>
-            <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} disabled={khoaTruongTaiChinh} />
-            <p className="mt-1 text-xs text-slate-400">Khoản thu hộ đúng số tiền, không tính VAT</p>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Kỳ kê khai VAT</label>
-            <input
-              value={values.ky_ke_khai}
-              onChange={(e) => set("ky_ke_khai", e.target.value)}
-              placeholder={values.ngay_xuat.slice(0, 7)}
-              className={cls}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái thanh toán</label>
-            {initial ? (
-              <p className={`rounded-lg px-3 py-2 text-sm ${TT_COLOR[values.trang_thai_thanh_toan] ?? ""}`}>{values.trang_thai_thanh_toan}</p>
-            ) : (
-              <select value={values.trang_thai_thanh_toan} onChange={(e) => set("trang_thai_thanh_toan", e.target.value)} className={cls}>
-                {TT_THU.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
+
+        {step === 0 && (
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
+              <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} disabled={khoaTruongTaiChinh} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (có thể chọn nhiều)</label>
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                {donHangCuaKh.length === 0 && <p className="text-xs text-slate-400">Chọn khách hàng để xem đơn hàng.</p>}
+                {donHangCuaKh.map((d) => (
+                  <label key={d.id} className="flex items-center gap-2 py-1 text-sm">
+                    <input type="checkbox" checked={selectedDonHang.includes(d.id)} onChange={() => toggleDonHang(d.id)} />
+                    {d.so_don_hang}
+                  </label>
                 ))}
-              </select>
-            )}
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Đã thu</label>
-            {initial ? (
-              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                {(initial.so_tien_da_thu ?? 0).toLocaleString("en-US")}
-                <span className="ml-1 text-xs text-slate-400">— dùng nút &quot;Thu tiền&quot; ở danh sách để ghi nhận thêm</span>
-              </p>
-            ) : (
-              <MoneyInput value={values.so_tien_da_thu} onChange={(v) => set("so_tien_da_thu", v)} className={cls} />
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức thu</label>
-            {initial ? (
-              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{values.phuong_thuc_thu || "—"}</p>
-            ) : (
-              <select value={values.phuong_thuc_thu} onChange={(e) => set("phuong_thuc_thu", e.target.value)} className={cls}>
-                <option value="">-- Chọn --</option>
-                <option value="Tiền mặt">Tiền mặt</option>
-                <option value="Tài khoản công ty">Tài khoản công ty</option>
-              </select>
-            )}
-          </div>
-        </div>
+        )}
 
-        <div className="mt-3">
-          <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (có thể chọn nhiều)</label>
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2">
-            {donHangCuaKh.length === 0 && <p className="text-xs text-slate-400">Chọn khách hàng để xem đơn hàng.</p>}
-            {donHangCuaKh.map((d) => (
-              <label key={d.id} className="flex items-center gap-2 py-1 text-sm">
-                <input type="checkbox" checked={selectedDonHang.includes(d.id)} onChange={() => toggleDonHang(d.id)} />
-                {d.so_don_hang}
-              </label>
-            ))}
+        {step === 1 && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Số hóa đơn</label>
+              <input
+                value={values.so_hoa_don}
+                onChange={(e) => set("so_hoa_don", e.target.value)}
+                className={cls}
+                disabled={khoaTruongTaiChinh}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Ngày xuất</label>
+              <input
+                required
+                type="date"
+                value={values.ngay_xuat}
+                onChange={(e) => set("ngay_xuat", e.target.value)}
+                className={cls}
+                disabled={khoaTruongTaiChinh}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Tổng tiền trước thuế</label>
+              <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} disabled={khoaTruongTaiChinh} />
+              {goiYTong !== null && (
+                <p className="mt-1 text-xs text-blue-600">
+                  Gợi ý (đã bán cho khách, không gồm chi hộ): {goiYTong.toLocaleString("en-US")}
+                  {values.tong_tien_truoc_thue !== String(goiYTong) && (
+                    <button type="button" onClick={() => set("tong_tien_truoc_thue", String(goiYTong))} className="ml-2 underline">
+                      Dùng số này
+                    </button>
+                  )}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">VAT %</label>
+              <input
+                type="number"
+                step="any"
+                value={values.vat_percent}
+                onChange={(e) => set("vat_percent", e.target.value)}
+                className={cls}
+                disabled={khoaTruongTaiChinh}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Tiền chi hộ</label>
+              <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} disabled={khoaTruongTaiChinh} />
+              <p className="mt-1 text-xs text-slate-400">Khoản thu hộ đúng số tiền, không tính VAT</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Kỳ kê khai VAT</label>
+              <input
+                value={values.ky_ke_khai}
+                onChange={(e) => set("ky_ke_khai", e.target.value)}
+                placeholder={values.ngay_xuat.slice(0, 7)}
+                className={cls}
+              />
+            </div>
+            <p className="sm:col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Tổng cộng (có thuế + chi hộ): <strong>{tongTienCoThue.toLocaleString("en-US")}</strong>
+            </p>
           </div>
-        </div>
+        )}
 
-        <div className="mt-3">
-          <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú</label>
-          <textarea rows={2} value={values.ghi_chu} onChange={(e) => set("ghi_chu", e.target.value)} className={cls} />
-        </div>
+        {step === 2 && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái thanh toán</label>
+              {initial ? (
+                <p className={`rounded-lg px-3 py-2 text-sm ${TT_COLOR[values.trang_thai_thanh_toan] ?? ""}`}>{values.trang_thai_thanh_toan}</p>
+              ) : (
+                <select value={values.trang_thai_thanh_toan} onChange={(e) => set("trang_thai_thanh_toan", e.target.value)} className={cls}>
+                  {TT_THU.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Đã thu</label>
+              {initial ? (
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {(initial.so_tien_da_thu ?? 0).toLocaleString("en-US")}
+                  <span className="ml-1 text-xs text-slate-400">— dùng nút &quot;Thu tiền&quot; ở danh sách để ghi nhận thêm</span>
+                </p>
+              ) : (
+                <MoneyInput value={values.so_tien_da_thu} onChange={(v) => set("so_tien_da_thu", v)} className={cls} />
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức thu</label>
+              {initial ? (
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{values.phuong_thuc_thu || "—"}</p>
+              ) : (
+                <select value={values.phuong_thuc_thu} onChange={(e) => set("phuong_thuc_thu", e.target.value)} className={cls}>
+                  <option value="">-- Chọn --</option>
+                  <option value="Tiền mặt">Tiền mặt</option>
+                  <option value="Tài khoản công ty">Tài khoản công ty</option>
+                </select>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú</label>
+              <textarea rows={2} value={values.ghi_chu} onChange={(e) => set("ghi_chu", e.target.value)} className={cls} />
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="flex flex-col gap-2 text-sm">
+            <ReviewRow label="Khách hàng" value={values.khach_hang_id ? khOptionTen(values.khach_hang_id) : "—"} />
+            <ReviewRow
+              label="Đơn hàng liên quan"
+              value={selectedDonHang.length > 0 ? donHangList.filter((d) => selectedDonHang.includes(d.id)).map((d) => d.so_don_hang).join(", ") : "—"}
+            />
+            <ReviewRow label="Số hóa đơn" value={values.so_hoa_don || "—"} />
+            <ReviewRow label="Ngày xuất" value={values.ngay_xuat} />
+            <ReviewRow label="Tổng tiền trước thuế" value={values.tong_tien_truoc_thue ? Number(values.tong_tien_truoc_thue).toLocaleString("en-US") : "—"} />
+            <ReviewRow label="VAT %" value={values.vat_percent || "0"} />
+            <ReviewRow label="Tiền chi hộ" value={values.tien_chi_ho ? Number(values.tien_chi_ho).toLocaleString("en-US") : "—"} />
+            <ReviewRow label="Tổng cộng (có thuế + chi hộ)" value={tongTienCoThue.toLocaleString("en-US")} />
+            <ReviewRow label="Trạng thái thanh toán" value={values.trang_thai_thanh_toan} />
+            <ReviewRow label="Đã thu" value={values.so_tien_da_thu ? Number(values.so_tien_da_thu).toLocaleString("en-US") : (initial?.so_tien_da_thu ?? 0).toLocaleString("en-US")} />
+            <ReviewRow label="Phương thức thu" value={values.phuong_thuc_thu || "—"} />
+          </div>
+        )}
 
         <div className="mt-6 flex gap-3">
-          <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
-            Hủy
-          </button>
-          <button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white">
-            Lưu
-          </button>
+          {step === 0 ? (
+            <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
+              Hủy
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s - 1)}
+              className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700"
+            >
+              Quay lại
+            </button>
+          )}
+          {step < HOA_DON_STEPS.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => setStep((s) => Math.min(s + 1, HOA_DON_STEPS.length - 1))}
+              className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white"
+            >
+              Tiếp tục
+            </button>
+          ) : (
+            <button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white">
+              Lưu
+            </button>
+          )}
         </div>
       </form>
+    </div>
+  );
+}
+
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-slate-100 pb-2">
+      <span className="text-xs text-slate-400">{label}</span>
+      <span className="font-medium text-slate-800">{value}</span>
     </div>
   );
 }

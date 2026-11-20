@@ -552,7 +552,7 @@ export default function BaoCaoView({
             </p>
           </Section>
 
-          <Section title="Công nợ theo lô hàng (giá bán + chi hộ + hóa đơn)">
+          <Section id="cong-no-theo-lo" title="Công nợ theo lô hàng (giá bán + chi hộ + hóa đơn)">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
@@ -641,9 +641,9 @@ export default function BaoCaoView({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+    <div id={id} className="mb-6 scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4">
       <h2 className="mb-3 text-sm font-semibold text-slate-900">{title}</h2>
       {children}
     </div>

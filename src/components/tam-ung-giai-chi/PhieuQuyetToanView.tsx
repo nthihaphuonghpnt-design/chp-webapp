@@ -45,6 +45,12 @@ interface DonHangCho {
   tong_chi_treo: number;
 }
 
+interface DonHangKhongDu {
+  don_hang_id: string;
+  so_don_hang: string;
+  ly_do: string;
+}
+
 interface XemTruoc {
   tong_tam_ung_luc_tao: number;
   tong_chi_luc_tao: number;
@@ -527,6 +533,7 @@ function NewPhieuModal({
   const [nhanVienId, setNhanVienId] = useState("");
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<DonHangCho[]>([]);
+  const [excludedOrders, setExcludedOrders] = useState<DonHangKhongDu[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -534,11 +541,17 @@ function NewPhieuModal({
   async function handlePickNhanVien(id: string) {
     setNhanVienId(id);
     setOrders([]);
+    setExcludedOrders([]);
     setSelected({});
     setErrMsg(null);
     if (!id) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc("don_hang_cho_quyet_toan", { p_nhan_vien_id: id });
+    const [{ data, error }, { data: excludedData }] = await Promise.all([
+      supabase.rpc("don_hang_cho_quyet_toan", { p_nhan_vien_id: id }),
+      // Rieng, khong chan loading chinh neu loi — chi la thong tin "vi sao
+      // thieu", khong phai du lieu bat buoc de dung duoc man hinh.
+      supabase.rpc("don_hang_khong_du_dieu_kien_quyet_toan", { p_nhan_vien_id: id }),
+    ]);
     setLoading(false);
     if (error) {
       setErrMsg(error.message);
@@ -546,6 +559,7 @@ function NewPhieuModal({
     }
     const rows = (data ?? []) as DonHangCho[];
     setOrders(rows);
+    setExcludedOrders((excludedData ?? []) as DonHangKhongDu[]);
     const all: Record<string, boolean> = {};
     for (const r of rows) all[r.don_hang_id] = true;
     setSelected(all);
@@ -592,11 +606,25 @@ function NewPhieuModal({
 
         {loading && <p className="mt-3 text-sm text-slate-400">Đang tải danh sách đơn hàng...</p>}
 
-        {!loading && nhanVienId && orders.length === 0 && (
+        {!loading && nhanVienId && orders.length === 0 && excludedOrders.length === 0 && (
           <p className="mt-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">
-            Nhân viên này chưa có đơn hàng nào đủ điều kiện quyết toán (phải đã được Kế toán tiếp nhận phần việc và
-            còn tạm ứng/chi phí treo chưa quyết toán).
+            Nhân viên này không còn tạm ứng/chi phí treo nào chưa quyết toán.
           </p>
+        )}
+
+        {!loading && excludedOrders.length > 0 && (
+          <div className="mt-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">
+            <p className="font-medium">
+              {excludedOrders.length} đơn hàng còn tạm ứng/chi phí treo nhưng chưa đủ điều kiện quyết toán:
+            </p>
+            <ul className="mt-1 list-inside list-disc">
+              {excludedOrders.map((o) => (
+                <li key={o.don_hang_id}>
+                  <span className="font-medium">{o.so_don_hang}</span> — {o.ly_do}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {orders.length > 0 && (

@@ -112,8 +112,13 @@ export default async function DonHangPage() {
         canImport={user?.phong_ban === "Kế toán" || user?.phong_ban === "Giám đốc"}
       />
 
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <DonHangList initialRows={(rows ?? []) as any[]} />
+      <DonHangList
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        initialRows={(rows ?? []) as any[]}
+        khachHangList={khachHang ?? []}
+        saleList={saleList ?? []}
+        hienTruongList={hienTruongList ?? []}
+      />
     </div>
   );
 }

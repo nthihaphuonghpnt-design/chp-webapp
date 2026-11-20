@@ -117,6 +117,11 @@ export default function TamUngGiaiChiView({
   const [editing, setEditing] = useState<Row | null>(null);
   const [proposing, setProposing] = useState(() => !!autoProposeDonHangId);
   const [khachTamUngMode, setKhachTamUngMode] = useState(false);
+  // Tach rieng 2 nut cua Ke toan (truoc day gop chung 1 nut "+ Thêm (Kế
+  // toán)" voi 1 dropdown "Loai" tu chon Tam ung/Giai chi — de nham lan 2
+  // nghiep vu rat khac nhau). Khac null thi khoa cung gia tri "Loai" trong
+  // form, giong y het cach "proposing" dang khoa "Tam ung".
+  const [ketoanForcedLoai, setKetoanForcedLoai] = useState<"Tạm ứng" | "Giải chi" | null>(null);
   const [giaiChiPrefill, setGiaiChiPrefill] = useState<{
     nhan_vien_id: string;
     don_hang_id: string;
@@ -484,6 +489,7 @@ export default function TamUngGiaiChiView({
               setProposing(true);
               setKhachTamUngMode(false);
               setGiaiChiPrefill(null);
+              setKetoanForcedLoai(null);
               setShowForm(true);
             }}
             className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm"
@@ -497,6 +503,7 @@ export default function TamUngGiaiChiView({
                 setProposing(false);
                 setKhachTamUngMode(true);
                 setGiaiChiPrefill(null);
+                setKetoanForcedLoai(null);
                 setShowForm(true);
               }}
               className="rounded-lg border border-purple-300 px-4 py-2.5 text-sm font-medium text-purple-700"
@@ -505,18 +512,34 @@ export default function TamUngGiaiChiView({
             </button>
           )}
           {isKeToan && (
-            <button
-              onClick={() => {
-                setEditing(null);
-                setProposing(false);
-                setKhachTamUngMode(false);
-                setGiaiChiPrefill(null);
-                setShowForm(true);
-              }}
-              className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-700"
-            >
-              + Thêm (Kế toán)
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setEditing(null);
+                  setProposing(false);
+                  setKhachTamUngMode(false);
+                  setGiaiChiPrefill(null);
+                  setKetoanForcedLoai("Tạm ứng");
+                  setShowForm(true);
+                }}
+                className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-700"
+              >
+                + Thêm tạm ứng (Kế toán)
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(null);
+                  setProposing(false);
+                  setKhachTamUngMode(false);
+                  setGiaiChiPrefill(null);
+                  setKetoanForcedLoai("Giải chi");
+                  setShowForm(true);
+                }}
+                className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-700"
+              >
+                + Thêm giải chi (Kế toán)
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -695,6 +718,7 @@ export default function TamUngGiaiChiView({
                       setProposing(false);
                       setKhachTamUngMode(false);
                       setGiaiChiPrefill(null);
+                      setKetoanForcedLoai(null);
                       setShowForm(true);
                     }}
                     className="text-xs font-medium text-blue-600"
@@ -733,6 +757,7 @@ export default function TamUngGiaiChiView({
           proposing={proposing}
           khachTamUngMode={khachTamUngMode}
           giaiChiPrefill={giaiChiPrefill}
+          forcedLoai={ketoanForcedLoai}
           nhanVienList={nhanVienList}
           donHangList={donHangList}
           khachHangList={khachHangList}
@@ -750,6 +775,7 @@ function TamUngForm({
   proposing,
   khachTamUngMode,
   giaiChiPrefill,
+  forcedLoai,
   nhanVienList,
   donHangList,
   khachHangList,
@@ -761,6 +787,10 @@ function TamUngForm({
   proposing: boolean;
   khachTamUngMode: boolean;
   giaiChiPrefill: { nhan_vien_id: string; don_hang_id: string; tam_ung_goc_id: string; so_tien: string; ghi_chu: string } | null;
+  /** Ke toan bam rieng nut "+ Thêm tạm ứng (Kế toán)" hoac "+ Thêm giải chi
+   * (Kế toán)" — khoa cung "Loai" theo dung nut da bam, khong cho doi qua
+   * lai giua 2 nghiep vu trong cung 1 lan mo form nua. */
+  forcedLoai?: "Tạm ứng" | "Giải chi" | null;
   nhanVienList: NhanVien[];
   donHangList: DonHangOpt[];
   khachHangList: KhachHangOpt[];
@@ -769,7 +799,7 @@ function TamUngForm({
   onSave: (values: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState({
-    loai: initial?.loai ?? (proposing ? "Tạm ứng" : giaiChiPrefill ? "Giải chi" : "Tạm ứng"),
+    loai: initial?.loai ?? forcedLoai ?? (proposing ? "Tạm ứng" : giaiChiPrefill ? "Giải chi" : "Tạm ứng"),
     ngay_thuc_hien: initial?.ngay_thuc_hien ?? new Date().toISOString().slice(0, 10),
     doi_tuong: initial?.doi_tuong ?? (khachTamUngMode ? "Khách hàng" : "Nhân viên"),
     nhan_vien_id: initial?.nhan_vien_id ?? giaiChiPrefill?.nhan_vien_id ?? (proposing ? currentUserId ?? "" : ""),
@@ -810,7 +840,11 @@ function TamUngForm({
                 ? "Đề nghị tạm ứng"
                 : giaiChiPrefill
                   ? "Ghi nhận hoàn ứng"
-                  : "Thêm tạm ứng/giải chi"}
+                  : forcedLoai === "Tạm ứng"
+                    ? "Thêm tạm ứng (Kế toán)"
+                    : forcedLoai === "Giải chi"
+                      ? "Thêm giải chi (Kế toán)"
+                      : "Thêm tạm ứng/giải chi"}
         </h2>
         {khachTamUngMode && !initial && (
           <p className="mb-3 rounded-lg bg-purple-50 p-2 text-xs text-purple-800">
@@ -821,7 +855,7 @@ function TamUngForm({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Loại</label>
-            <select disabled={proposing || khachTamUngMode} value={values.loai} onChange={(e) => set("loai", e.target.value)} className={cls}>
+            <select disabled={proposing || khachTamUngMode || !!forcedLoai} value={values.loai} onChange={(e) => set("loai", e.target.value)} className={cls}>
               <option value="Tạm ứng">Tạm ứng</option>
               <option value="Giải chi">Giải chi</option>
             </select>
