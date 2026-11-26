@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import {
   gomVatTheoKy,
@@ -154,9 +155,16 @@ export default function VatBaoCaoView({
     router.refresh();
   }
 
-  async function handleBoSung01Khbs(t: TongHopVatKy) {
-    const lyDo = window.prompt(`Nhập lý do/nội dung thay đổi cho tờ khai bổ sung 01/KHBS kỳ ${t.ky} (bắt buộc):`);
-    if (!lyDo || !lyDo.trim()) return;
+  // window.prompt() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choBoSung01Khbs, setChoBoSung01Khbs] = useState<TongHopVatKy | null>(null);
+
+  function handleBoSung01Khbs(t: TongHopVatKy) {
+    setChoBoSung01Khbs(t);
+  }
+
+  async function xuLyBoSung01KhbsConfirm(t: TongHopVatKy, lyDo: string) {
+    setChoBoSung01Khbs(null);
     setDangXuLyKy(t.ky);
     const { error } = await supabase.rpc("ghi_nhan_bo_sung_01khbs", {
       p_ky: t.ky,
@@ -352,6 +360,16 @@ export default function VatBaoCaoView({
           </tbody>
         </table>
       </div>
+
+      {choBoSung01Khbs && (
+        <ConfirmDialog
+          title={`Bổ sung 01/KHBS — kỳ ${choBoSung01Khbs.ky}`}
+          fields={[{ key: "ly_do", label: "Lý do/nội dung thay đổi", type: "textarea", required: true, placeholder: "Bắt buộc" }]}
+          confirmLabel="Ghi nhận"
+          onCancel={() => setChoBoSung01Khbs(null)}
+          onConfirm={(values) => void xuLyBoSung01KhbsConfirm(choBoSung01Khbs, values.ly_do)}
+        />
+      )}
     </div>
   );
 }

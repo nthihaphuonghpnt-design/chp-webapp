@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 type TrangThai = "Chưa hoàn thành" | "Đã hoàn thành" | "Đã tiếp nhận";
 
@@ -59,13 +60,16 @@ export default function CongViecHoanThanhSection({
     setEntries((prev) => prev.map((e) => (e.nhanVienId === entry.nhanVienId ? { ...e, trangThai: "Đã tiếp nhận" } : e)));
   }
 
-  async function handleMoLai(entry: CongViecEntry) {
-    const lyDo = window.prompt(`Lý do mở lại phần việc của ${entry.hoTen}?`);
-    if (lyDo === null) return;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi mở lại.");
-      return;
-    }
+  // window.prompt() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choMoLai, setChoMoLai] = useState<CongViecEntry | null>(null);
+
+  function handleMoLai(entry: CongViecEntry) {
+    setChoMoLai(entry);
+  }
+
+  async function xuLyMoLaiConfirm(entry: CongViecEntry, lyDo: string) {
+    setChoMoLai(null);
     setBusy(entry.nhanVienId);
     const { error } = await supabase.rpc("mo_lai_cong_viec", {
       p_don_hang_id: donHangId,
@@ -122,6 +126,16 @@ export default function CongViecHoanThanhSection({
           </div>
         ))}
       </div>
+
+      {choMoLai && (
+        <ConfirmDialog
+          title={`Mở lại phần việc của ${choMoLai.hoTen}`}
+          fields={[{ key: "ly_do", label: "Lý do mở lại", type: "textarea", required: true, placeholder: "Bắt buộc" }]}
+          confirmLabel="Mở lại"
+          onCancel={() => setChoMoLai(null)}
+          onConfirm={(values) => void xuLyMoLaiConfirm(choMoLai, values.ly_do)}
+        />
+      )}
     </div>
   );
 }
