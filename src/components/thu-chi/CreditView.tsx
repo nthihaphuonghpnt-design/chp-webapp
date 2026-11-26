@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 interface SoDu {
   id: string;
@@ -83,6 +84,10 @@ export default function CreditView({
   const [tab, setTab] = useState<"Khách hàng" | "Nhà cung cấp">("Khách hàng");
   const [moRong, setMoRong] = useState<string | null>(null); // id cua doi tuong (khach_hang_id / nha_cung_cap_id) dang xem lich su
   const [dangXuLy, setDangXuLy] = useState(false);
+  // window.prompt() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choCanTru, setChoCanTru] = useState<{ soDu: SoDu; dsHoaDon: (HoaDonXuatMo | HoaDonDauVaoMo)[] } | null>(null);
+  const [choHoanTien, setChoHoanTien] = useState<SoDu | null>(null);
 
   const khMap = useMemo(() => new Map(khachHangList.map((k) => [k.id, k.ten_viet_tat || k.ten_day_du])), [khachHangList]);
   const ncMap = useMemo(() => new Map(ncList.map((n) => [n.id, n.ten || "—"])), [ncList]);
@@ -97,41 +102,27 @@ export default function CreditView({
     return s.doi_tuong === "Khách hàng" ? (khMap.get(s.khach_hang_id!) ?? "—") : (ncMap.get(s.nha_cung_cap_id!) ?? "—");
   }
 
-  async function handleCanTru(s: SoDu) {
+  function handleCanTru(s: SoDu) {
     const dsHoaDon = s.doi_tuong === "Khách hàng" ? hoaDonXuatMoList.filter((h) => h.khach_hang_id === s.khach_hang_id) : hoaDonDauVaoMoList.filter((h) => h.nha_cung_cap_id === s.nha_cung_cap_id);
     if (dsHoaDon.length === 0) {
       window.alert("Không có hóa đơn nào đang mở (chưa thu/trả đủ) của đối tượng này để cấn trừ.");
       return;
     }
-    const danhSachGoiY = dsHoaDon
-      .map((h) => {
-        const conLai = s.doi_tuong === "Khách hàng" ? (h as HoaDonXuatMo).tong_tien - ((h as HoaDonXuatMo).so_tien_da_thu ?? 0) : (h as HoaDonDauVaoMo).tong_tien_thanh_toan - ((h as HoaDonDauVaoMo).so_tien_da_thanh_toan ?? 0);
-        return `${h.so_hoa_don ?? "(chưa có số)"} — còn ${conLai.toLocaleString("en-US")}`;
-      })
-      .join("\n");
-    const soHoaDonGo = window.prompt(`Cấn trừ credit (còn ${s.so_du.toLocaleString("en-US")}) vào hóa đơn nào? Gõ đúng số hóa đơn:\n${danhSachGoiY}`);
-    if (!soHoaDonGo) return;
-    const hd = dsHoaDon.find((h) => h.so_hoa_don === soHoaDonGo.trim());
-    if (!hd) {
-      window.alert("Không tìm thấy hóa đơn khớp đúng số đã gõ.");
-      return;
-    }
-    const conLai = s.doi_tuong === "Khách hàng" ? (hd as HoaDonXuatMo).tong_tien - ((hd as HoaDonXuatMo).so_tien_da_thu ?? 0) : (hd as HoaDonDauVaoMo).tong_tien_thanh_toan - ((hd as HoaDonDauVaoMo).so_tien_da_thanh_toan ?? 0);
-    const soTienGo = window.prompt(`Số tiền cấn trừ (tối đa ${Math.min(s.so_du, conLai).toLocaleString("en-US")}):`, String(Math.min(s.so_du, conLai)));
-    if (!soTienGo) return;
-    const soTien = Number(soTienGo.replace(/[^\d.]/g, ""));
+    setChoCanTru({ soDu: s, dsHoaDon });
+  }
+
+  async function xuLyCanTruConfirm(s: SoDu, hd: HoaDonXuatMo | HoaDonDauVaoMo, values: Record<string, string>) {
+    const soTien = Number(values.so_tien.replace(/[^\d.]/g, ""));
     if (!soTien || soTien <= 0) {
       window.alert("Số tiền không hợp lệ.");
       return;
     }
-    const lyDo = window.prompt("Lý do cấn trừ (bắt buộc):");
-    if (!lyDo || !lyDo.trim()) return;
-
+    setChoCanTru(null);
     setDangXuLy(true);
     const { error } =
       s.doi_tuong === "Khách hàng"
-        ? await supabase.rpc("can_tru_credit_hoa_don_xuat", { p_khach_hang_id: s.khach_hang_id, p_hoa_don_id: hd.id, p_so_tien: soTien, p_ly_do: lyDo.trim() })
-        : await supabase.rpc("can_tru_credit_hoa_don_dau_vao", { p_nha_cung_cap_id: s.nha_cung_cap_id, p_hoa_don_id: hd.id, p_so_tien: soTien, p_ly_do: lyDo.trim() });
+        ? await supabase.rpc("can_tru_credit_hoa_don_xuat", { p_khach_hang_id: s.khach_hang_id, p_hoa_don_id: hd.id, p_so_tien: soTien, p_ly_do: values.ly_do.trim() })
+        : await supabase.rpc("can_tru_credit_hoa_don_dau_vao", { p_nha_cung_cap_id: s.nha_cung_cap_id, p_hoa_don_id: hd.id, p_so_tien: soTien, p_ly_do: values.ly_do.trim() });
     setDangXuLy(false);
     if (error) {
       window.alert(error.message);
@@ -140,27 +131,22 @@ export default function CreditView({
     router.refresh();
   }
 
-  async function handleHoanTien(s: SoDu) {
-    const soTienGo = window.prompt(`Hoàn tiền — số dư hiện có ${s.so_du.toLocaleString("en-US")}. Nhập số tiền hoàn:`, String(s.so_du));
-    if (!soTienGo) return;
-    const soTien = Number(soTienGo.replace(/[^\d.]/g, ""));
+  function handleHoanTien(s: SoDu) {
+    setChoHoanTien(s);
+  }
+
+  async function xuLyHoanTienConfirm(s: SoDu, values: Record<string, string>) {
+    const soTien = Number(values.so_tien.replace(/[^\d.]/g, ""));
     if (!soTien || soTien <= 0) {
       window.alert("Số tiền không hợp lệ.");
       return;
     }
-    const phuongThuc = window.prompt('Phương thức hoàn — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":', "Tài khoản công ty");
-    if (phuongThuc !== "Tiền mặt" && phuongThuc !== "Tài khoản công ty") {
-      window.alert("Phương thức không hợp lệ.");
-      return;
-    }
-    const lyDo = window.prompt("Lý do hoàn tiền (bắt buộc):");
-    if (!lyDo || !lyDo.trim()) return;
-
+    setChoHoanTien(null);
     setDangXuLy(true);
     const { error } =
       s.doi_tuong === "Khách hàng"
-        ? await supabase.rpc("hoan_tien_khach_hang", { p_khach_hang_id: s.khach_hang_id, p_so_tien: soTien, p_phuong_thuc: phuongThuc, p_ly_do: lyDo.trim() })
-        : await supabase.rpc("hoan_tien_ncc", { p_nha_cung_cap_id: s.nha_cung_cap_id, p_so_tien: soTien, p_phuong_thuc: phuongThuc, p_ly_do: lyDo.trim() });
+        ? await supabase.rpc("hoan_tien_khach_hang", { p_khach_hang_id: s.khach_hang_id, p_so_tien: soTien, p_phuong_thuc: values.phuong_thuc, p_ly_do: values.ly_do.trim() })
+        : await supabase.rpc("hoan_tien_ncc", { p_nha_cung_cap_id: s.nha_cung_cap_id, p_so_tien: soTien, p_phuong_thuc: values.phuong_thuc, p_ly_do: values.ly_do.trim() });
     setDangXuLy(false);
     if (error) {
       window.alert(error.message);
@@ -291,6 +277,61 @@ export default function CreditView({
           </tbody>
         </table>
       </div>
+
+      {choCanTru && (
+        <ConfirmDialog
+          title={`Cấn trừ credit — ${tenDoiTuong(choCanTru.soDu)}`}
+          message={`Số dư credit hiện có: ${choCanTru.soDu.so_du.toLocaleString("en-US")}.`}
+          fields={[
+            {
+              key: "hoa_don_id",
+              label: "Cấn trừ vào hóa đơn",
+              type: "select",
+              required: true,
+              options: choCanTru.dsHoaDon.map((h) => {
+                const conLai =
+                  choCanTru.soDu.doi_tuong === "Khách hàng"
+                    ? (h as HoaDonXuatMo).tong_tien - ((h as HoaDonXuatMo).so_tien_da_thu ?? 0)
+                    : (h as HoaDonDauVaoMo).tong_tien_thanh_toan - ((h as HoaDonDauVaoMo).so_tien_da_thanh_toan ?? 0);
+                return { value: h.id, label: `${h.so_hoa_don ?? "(chưa có số)"} — còn ${conLai.toLocaleString("en-US")}` };
+              }),
+            },
+            { key: "so_tien", label: "Số tiền cấn trừ", type: "text", required: true, placeholder: "VD: 1000000" },
+            { key: "ly_do", label: "Lý do cấn trừ", type: "textarea", required: true, placeholder: "Bắt buộc" },
+          ]}
+          confirmLabel="Cấn trừ"
+          onCancel={() => setChoCanTru(null)}
+          onConfirm={(values) => {
+            const hd = choCanTru.dsHoaDon.find((h) => h.id === values.hoa_don_id);
+            if (!hd) return;
+            void xuLyCanTruConfirm(choCanTru.soDu, hd, values);
+          }}
+        />
+      )}
+
+      {choHoanTien && (
+        <ConfirmDialog
+          title={`Hoàn tiền — ${tenDoiTuong(choHoanTien)}`}
+          message={`Số dư hiện có: ${choHoanTien.so_du.toLocaleString("en-US")}.`}
+          fields={[
+            { key: "so_tien", label: "Số tiền hoàn", type: "text", required: true, defaultValue: String(choHoanTien.so_du) },
+            {
+              key: "phuong_thuc",
+              label: "Phương thức hoàn",
+              type: "select",
+              defaultValue: "Tài khoản công ty",
+              options: [
+                { value: "Tiền mặt", label: "Tiền mặt" },
+                { value: "Tài khoản công ty", label: "Tài khoản công ty" },
+              ],
+            },
+            { key: "ly_do", label: "Lý do hoàn tiền", type: "textarea", required: true, placeholder: "Bắt buộc" },
+          ]}
+          confirmLabel="Hoàn tiền"
+          onCancel={() => setChoHoanTien(null)}
+          onConfirm={(values) => void xuLyHoanTienConfirm(choHoanTien, values)}
+        />
+      )}
     </div>
   );
 }
