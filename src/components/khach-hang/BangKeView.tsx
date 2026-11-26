@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS } from "@/lib/giaBan";
 
@@ -177,72 +178,74 @@ export default function BangKeView({
   // (ke ca chi_ho) deu can ly_do_sua_gan_nhat, khong thi DB tu choi im lim
   // (chi bao qua error.message, de sot mat neu khong hoi truoc) — hoi ngay
   // tai day, dung y het pattern da dung o luuSua cua ChiPhiGopSection.tsx.
-  function hoiLyDoNeuDaDuyet(trangThai: string, nhan: string): string | null | undefined {
-    if (trangThai !== "Đã duyệt") return null;
-    const lyDo = window.prompt(`"${nhan}" này đã duyệt — phải nhập lý do khi đổi Chi hộ/Giá bán:`);
-    if (lyDo === null) return undefined;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi sửa dòng đã duyệt.");
-      return undefined;
+  // window.prompt() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang 1 ConfirmDialog dung chung, goi tiep tuc (callback)
+  // voi lyDo sau khi nguoi dung xac nhan, thay vi tra ve dong bo nhu truoc.
+  const [choLyDoTruocKhiSua, setChoLyDoTruocKhiSua] = useState<{ nhan: string; tiepTuc: (lyDo: string | null) => void } | null>(null);
+
+  function suaCoLyDoNeuDaDuyet(trangThai: string, nhan: string, tiepTuc: (lyDo: string | null) => void) {
+    if (trangThai !== "Đã duyệt") {
+      tiepTuc(null);
+      return;
     }
-    return lyDo;
+    setChoLyDoTruocKhiSua({ nhan, tiepTuc });
   }
 
-  async function toggleChiHo(row: ChiPhiRow) {
-    const lyDo = hoiLyDoNeuDaDuyet(row.trang_thai, "Chi phí phát sinh");
-    if (lyDo === undefined) return;
-    const { data, error } = await supabase
-      .from("phat_sinh_chi_phi")
-      .update({ chi_ho: !row.chi_ho, noi_bo: row.chi_ho, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
-      .eq("id", row.id)
-      .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
-      .single();
-    if (!error && data) {
-      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as ChiPhiRow;
-      setChiPhiRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
-    } else if (error) {
-      window.alert(error.message);
-    }
+  function toggleChiHo(row: ChiPhiRow) {
+    suaCoLyDoNeuDaDuyet(row.trang_thai, "Chi phí phát sinh", async (lyDo) => {
+      const { data, error } = await supabase
+        .from("phat_sinh_chi_phi")
+        .update({ chi_ho: !row.chi_ho, noi_bo: row.chi_ho, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
+        .eq("id", row.id)
+        .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
+        .single();
+      if (!error && data) {
+        const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as ChiPhiRow;
+        setChiPhiRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
+      } else if (error) {
+        window.alert(error.message);
+      }
+    });
   }
 
-  async function toggleThueNgoaiChiHo(row: ThueNgoaiRow) {
-    const lyDo = hoiLyDoNeuDaDuyet(row.trang_thai, "Thuê ngoài");
-    if (lyDo === undefined) return;
-    const { data, error } = await supabase
-      .from("don_thue_ngoai")
-      .update({ chi_ho: !row.chi_ho, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
-      .eq("id", row.id)
-      .select(`${DON_THUE_NGOAI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang)`)
-      .single();
-    if (!error && data) {
-      const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as ThueNgoaiRow;
-      setThueNgoaiRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
-    } else if (error) {
-      window.alert(error.message);
-    }
+  function toggleThueNgoaiChiHo(row: ThueNgoaiRow) {
+    suaCoLyDoNeuDaDuyet(row.trang_thai, "Thuê ngoài", async (lyDo) => {
+      const { data, error } = await supabase
+        .from("don_thue_ngoai")
+        .update({ chi_ho: !row.chi_ho, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
+        .eq("id", row.id)
+        .select(`${DON_THUE_NGOAI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang)`)
+        .single();
+      if (!error && data) {
+        const rowDayDu = { ...data, gia_ban_sell: row.gia_ban_sell } as ThueNgoaiRow;
+        setThueNgoaiRows((prev) => prev.map((r) => (r.id === row.id ? rowDayDu : r)));
+      } else if (error) {
+        window.alert(error.message);
+      }
+    });
   }
 
-  async function handleCapNhatVat(chiPhiId: string, vatMoi: string) {
+  function handleCapNhatVat(chiPhiId: string, vatMoi: string) {
     const so = vatMoi.trim() === "" ? null : Number(vatMoi);
     if (so !== null && Number.isNaN(so)) return;
     const rowCu = chiPhiRowsAll.find((r) => r.id === chiPhiId);
     // Ghi lai lich su khi sua dong "Da duyet" — cung quy tac voi
     // ChiPhiGopSection.tsx (enforce_phat_sinh_chi_phi_update, 0104): moi lan
     // sua dong da duyet deu phai co ly do, khong thi DB tu choi.
-    const lyDo = hoiLyDoNeuDaDuyet(rowCu?.trang_thai ?? "", "VAT %");
-    if (lyDo === undefined) return;
-    const { data, error } = await supabase
-      .from("phat_sinh_chi_phi")
-      .update({ vat_percent: so, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
-      .eq("id", chiPhiId)
-      .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
-      .single();
-    if (!error && data) {
-      const rowDayDu = { ...data, gia_ban_sell: rowCu?.gia_ban_sell ?? null } as ChiPhiRow;
-      setChiPhiRows((prev) => prev.map((r) => (r.id === chiPhiId ? rowDayDu : r)));
-    } else if (error) {
-      window.alert(error.message);
-    }
+    suaCoLyDoNeuDaDuyet(rowCu?.trang_thai ?? "", "VAT %", async (lyDo) => {
+      const { data, error } = await supabase
+        .from("phat_sinh_chi_phi")
+        .update({ vat_percent: so, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
+        .eq("id", chiPhiId)
+        .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
+        .single();
+      if (!error && data) {
+        const rowDayDu = { ...data, gia_ban_sell: rowCu?.gia_ban_sell ?? null } as ChiPhiRow;
+        setChiPhiRows((prev) => prev.map((r) => (r.id === chiPhiId ? rowDayDu : r)));
+      } else if (error) {
+        window.alert(error.message);
+      }
+    });
   }
 
   function toggle(set: Set<string>, id: string, setter: (s: Set<string>) => void) {
@@ -493,7 +496,9 @@ export default function BangKeView({
     });
   }
 
-  async function handleXuatHoaDon() {
+  const [choXacNhanXuatHoaDon, setChoXacNhanXuatHoaDon] = useState(false);
+
+  function handleXuatHoaDon() {
     if (!khachHangIdChon) return;
     const chiPhiIds = chiPhiRows.filter((r) => chonChiPhi.has(r.id)).map((r) => r.id);
     const phuThuIds = phuThuRows.filter((r) => chonPhuThu.has(r.id)).map((r) => r.id);
@@ -502,7 +507,14 @@ export default function BangKeView({
       window.alert("Chưa chọn dòng nào để xuất hóa đơn.");
       return;
     }
-    if (!window.confirm(`Xuất hóa đơn với tổng cộng ${tongCong.toLocaleString("en-US")}?`)) return;
+    setChoXacNhanXuatHoaDon(true);
+  }
+
+  async function thucHienXuatHoaDon() {
+    if (!khachHangIdChon) return;
+    const chiPhiIds = chiPhiRows.filter((r) => chonChiPhi.has(r.id)).map((r) => r.id);
+    const phuThuIds = phuThuRows.filter((r) => chonPhuThu.has(r.id)).map((r) => r.id);
+    const thueNgoaiIds = thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)).map((r) => r.id);
 
     setDangXuat(true);
 
@@ -825,6 +837,34 @@ export default function BangKeView({
             </button>
           </div>
         </>
+      )}
+
+      {choXacNhanXuatHoaDon && (
+        <ConfirmDialog
+          title="Xuất hóa đơn"
+          message={`Xuất hóa đơn với tổng cộng ${tongCong.toLocaleString("en-US")}?`}
+          confirmLabel="Xuất hóa đơn"
+          onCancel={() => setChoXacNhanXuatHoaDon(false)}
+          onConfirm={() => {
+            setChoXacNhanXuatHoaDon(false);
+            void thucHienXuatHoaDon();
+          }}
+        />
+      )}
+
+      {choLyDoTruocKhiSua && (
+        <ConfirmDialog
+          title={`Sửa "${choLyDoTruocKhiSua.nhan}" đã duyệt`}
+          message="Dòng này đã duyệt — phải nhập lý do khi đổi Chi hộ/Giá bán/VAT."
+          fields={[{ key: "ly_do", label: "Lý do sửa", type: "textarea", required: true, placeholder: "Bắt buộc" }]}
+          confirmLabel="Lưu"
+          onCancel={() => setChoLyDoTruocKhiSua(null)}
+          onConfirm={(values) => {
+            const tiepTuc = choLyDoTruocKhiSua.tiepTuc;
+            setChoLyDoTruocKhiSua(null);
+            tiepTuc(values.ly_do);
+          }}
+        />
       )}
     </div>
   );
