@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ngayHienTaiVietNam } from "@/lib/ngayVietNam";
 
 interface PhongBan {
@@ -185,8 +186,15 @@ export default function LichNhacNhoView({
     else if (error) window.alert(error.message);
   }
 
-  async function handleDelete(row: Row) {
-    if (!window.confirm("Xóa nhắc nhở này?")) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<Row | null>(null);
+
+  function handleDelete(row: Row) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: Row) {
     const { error } = await supabase.from("lich_nhac_nho").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
     else window.alert(error.message);
@@ -525,6 +533,20 @@ export default function LichNhacNhoView({
           donHangOptions={donHangOptions}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title="Xóa nhắc nhở này?"
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
         />
       )}
     </div>
