@@ -12,7 +12,7 @@ export default async function TamUngGiaiChiPage({
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: khachHangList }, { data: chiPhiRows }, { data: soQuyRows }] = await Promise.all([
+  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: khachHangList }, { data: chiPhiRows }, { data: soQuyRows }, { data: chotList }] = await Promise.all([
     supabase
       .from("tam_ung_giai_chi")
       .select("*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)")
@@ -34,6 +34,13 @@ export default async function TamUngGiaiChiPage({
     // trong Postgres) nen phai truy van rieng roi ghep tay o phia component,
     // khong dung duoc cach Supabase tu join qua quan he FK.
     supabase.from("so_quy").select("id, loai_so, loai_giao_dich, so_tien, ngay, nguon_id").eq("nguon_bang", "tam_ung_giai_chi"),
+    // P1 muc 7: moc "chot so du dau ky" rieng cho tung nhan vien, xem giai
+    // thich trong TamUngGiaiChiView (tinhTienDauKy).
+    supabase
+      .from("chot_so_du_dau_ky")
+      .select("id, nhan_vien_id, ngay_ap_dung, so_du, ghi_chu")
+      .eq("doi_tuong_loai", "tam_ung_nhan_vien")
+      .order("ngay_ap_dung", { ascending: false }),
   ]);
 
   // Gop tong da chi theo tung nguoi + tung lo hang, de doi chieu voi tam ung
@@ -63,6 +70,7 @@ export default async function TamUngGiaiChiPage({
         })}
         daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
         soQuyList={soQuyRows ?? []}
+        chotList={chotList ?? []}
         currentUserId={user?.id}
         currentPhongBan={user?.phong_ban ?? ""}
         autoProposeDonHangId={autoProposeDonHangId}

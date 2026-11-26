@@ -1,12 +1,22 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { taoWorkbook, themSheetKeO, taiWorkbook, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import { khoangThangVietNam } from "@/lib/ngayVietNam";
 import MoneyInput from "@/components/common/MoneyInput";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
+
+interface ChotSoDu {
+  id: string;
+  nhan_vien_id: string;
+  ngay_ap_dung: string;
+  so_du: number;
+  ghi_chu: string | null;
+}
 
 interface NhanVien {
   id: string;
@@ -95,6 +105,7 @@ export default function TamUngGiaiChiView({
   currentUserId,
   currentPhongBan,
   autoProposeDonHangId,
+  chotList = [],
 }: {
   initialRows: Row[];
   nhanVienList: NhanVien[];
@@ -106,7 +117,9 @@ export default function TamUngGiaiChiView({
   currentPhongBan: string;
   /** Den tu nut "Ung tien nhanh" o trang chi tiet don hang (?don_hang_id=...) — tu mo san form de nghi tam ung voi don hang nay dien san. */
   autoProposeDonHangId?: string;
+  chotList?: ChotSoDu[];
 }) {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
   // Den tu link "Ung tien nhanh" o trang don hang (?don_hang_id=...) thi tu
@@ -136,6 +149,30 @@ export default function TamUngGiaiChiView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [showChotDauKy, setShowChotDauKy] = useState(false);
+
+  async function handleChotDauKy(values: Record<string, string>) {
+    const soDu = Number(values.so_du);
+    if (!values.nhan_vien_id || !values.ngay_ap_dung || Number.isNaN(soDu)) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+    const { error } = await supabase.from("chot_so_du_dau_ky").insert({
+      doi_tuong_loai: "tam_ung_nhan_vien",
+      nhan_vien_id: values.nhan_vien_id,
+      ngay_ap_dung: values.ngay_ap_dung,
+      so_du: soDu,
+      ghi_chu: values.ghi_chu || null,
+      nguoi_chot_id: nv?.id,
+    });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setShowChotDauKy(false);
+    router.refresh();
+  }
 
   const defaultRange = monthRange();
   const [tuNgay, setTuNgay] = useState(defaultRange.start);
@@ -210,23 +247,68 @@ export default function TamUngGiaiChiView({
     return Array.from(map.values());
   }, [detailRows, donHangList]);
 
+  // P1 muc 7 (2026-11-26): chot gan nhat (<= tuNgay) theo tung nhan_vien_id —
+  // xem giai thich o SoQuyView (tinhTonDauKy), ap dung y het logic cho "Tiền
+  // đầu kỳ" cua tam ung (truoc gio cong don tu dau thoi gian nen 1 nhan vien
+  // lau nam co the hien thi du 800+ trieu "dau ky" du khong con dung thuc te).
+  function chotApDungChoNhanVien(nhanVienId: string | null, truocNgay: string): ChotSoDu | null {
+    if (!nhanVienId) return null;
+    return chotList.find((c) => c.nhan_vien_id === nhanVienId && c.ngay_ap_dung <= truocNgay) ?? null;
+  }
+
   const summary = useMemo(() => {
-    const map = new Map<string, { ten: string; dauKy: number; tamUng: number; giaiChi: number }>();
+    const map = new Map<string, { ten: string; nhanVienId: string | null; dauKy: number; tamUng: number; giaiChi: number }>();
     for (const r of filteredByPerson) {
       if (r.trang_thai !== "Đã duyệt") continue;
       const key = personKey(r);
-      if (!map.has(key)) map.set(key, { ten: doiTuongTen(r), dauKy: 0, tamUng: 0, giaiChi: 0 });
+      if (!map.has(key)) map.set(key, { ten: doiTuongTen(r), nhanVienId: r.doi_tuong === "Nhân viên" ? r.nhan_vien_id : null, dauKy: 0, tamUng: 0, giaiChi: 0 });
       const s = map.get(key)!;
+      const chot = chotApDungChoNhanVien(s.nhanVienId, tuNgay);
       const amount = r.loai === "Tạm ứng" ? r.so_tien : -r.so_tien;
       if (r.ngay_thuc_hien < tuNgay) {
-        s.dauKy += amount;
+        // Da co moc chot cho nguoi nay: chi cong don TU ngay chot tro di, bo
+        // qua giao dich truoc do (da gop vao so_du cua moc chot).
+        if (!chot || r.ngay_thuc_hien >= chot.ngay_ap_dung) s.dauKy += amount;
       } else if (r.ngay_thuc_hien <= denNgay) {
         if (r.loai === "Tạm ứng") s.tamUng += r.so_tien;
         else s.giaiChi += r.so_tien;
       }
     }
+    // Cong them so_du cua moc chot (neu co) vao dauKy cua tung nguoi.
+    for (const s of map.values()) {
+      const chot = chotApDungChoNhanVien(s.nhanVienId, tuNgay);
+      if (chot) s.dauKy += chot.so_du;
+    }
     return Array.from(map.values()).map((s) => ({ ...s, conLai: s.dauKy + s.tamUng - s.giaiChi }));
-  }, [filteredByPerson, tuNgay, denNgay]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredByPerson, tuNgay, denNgay, chotList]);
+
+  // P1 muc 7: danh sach nhan vien dang "no" tam ung (con phai hoan > 0), kem
+  // ngay tam ung CU NHAT chua hoan het + so ngay qua han — de Ke toan de dang
+  // thay ai can nhac/tao Phieu quyet toan, khong phai doc tung dong rieng le.
+  const nhanVienDangNoTamUng = useMemo(() => {
+    const map = new Map<string, { ten: string; conPhaiHoanTong: number; ngayCuNhat: string }>();
+    for (const r of rows) {
+      if (r.loai !== "Tạm ứng" || r.trang_thai !== "Đã duyệt" || r.doi_tuong !== "Nhân viên" || !r.nhan_vien_id) continue;
+      const con = conPhaiHoan(r);
+      if (con <= 0) continue;
+      const key = r.nhan_vien_id;
+      const ten = one(r.nhan_vien)?.ho_ten ?? "—";
+      if (!map.has(key)) map.set(key, { ten, conPhaiHoanTong: 0, ngayCuNhat: r.ngay_thuc_hien });
+      const s = map.get(key)!;
+      s.conPhaiHoanTong += con;
+      if (r.ngay_thuc_hien < s.ngayCuNhat) s.ngayCuNhat = r.ngay_thuc_hien;
+    }
+    const homNay = new Date().toISOString().slice(0, 10);
+    return Array.from(map.entries())
+      .map(([nhanVienId, s]) => ({
+        nhanVienId,
+        ...s,
+        soNgayQuaHan: Math.floor((Date.parse(homNay) - Date.parse(s.ngayCuNhat)) / 86400000),
+      }))
+      .sort((a, b) => b.soNgayQuaHan - a.soNgayQuaHan);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   async function handleSave(values: Record<string, string>) {
     const payload: Record<string, unknown> = {
@@ -580,6 +662,9 @@ export default function TamUngGiaiChiView({
         </button>
         {isKeToan && (
           <>
+            <button onClick={() => setShowChotDauKy(true)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-700">
+              Chốt số dư đầu kỳ
+            </button>
             <button onClick={handleDownloadTemplate} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
               Tải mẫu
             </button>
@@ -637,6 +722,38 @@ export default function TamUngGiaiChiView({
                 <td className="px-4 py-2">{summary.reduce((s, r) => s + r.giaiChi, 0).toLocaleString("en-US")}</td>
                 <td className="px-4 py-2">{summary.reduce((s, r) => s + r.conLai, 0).toLocaleString("en-US")}</td>
               </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {canSeeSummary && nhanVienDangNoTamUng.length > 0 && (
+        <div className="mb-6 overflow-x-auto rounded-xl border border-amber-200 bg-amber-50/40">
+          <p className="px-4 pt-3 text-xs font-medium text-amber-800">Nhân viên đang nợ tạm ứng (còn phải hoàn &gt; 0, không phụ thuộc bộ lọc ngày ở trên)</p>
+          <table className="w-full text-sm">
+            <thead className="text-left text-slate-500">
+              <tr>
+                <th className="px-4 py-2 font-medium">Nhân viên</th>
+                <th className="px-4 py-2 font-medium">Còn phải hoàn</th>
+                <th className="px-4 py-2 font-medium">Tạm ứng cũ nhất chưa hoàn hết</th>
+                <th className="px-4 py-2 font-medium">Số ngày quá hạn</th>
+                <th className="px-4 py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {nhanVienDangNoTamUng.map((s) => (
+                <tr key={s.nhanVienId} className="border-t border-amber-100">
+                  <td className="px-4 py-2">{s.ten}</td>
+                  <td className="px-4 py-2 font-medium text-amber-800">{s.conPhaiHoanTong.toLocaleString("en-US")}</td>
+                  <td className="px-4 py-2">{s.ngayCuNhat}</td>
+                  <td className="px-4 py-2">{s.soNgayQuaHan} ngày</td>
+                  <td className="px-4 py-2">
+                    <a href="/tam-ung-giai-chi/quyet-toan" className="text-xs font-medium text-blue-600 hover:underline">
+                      Tạo phiếu quyết toán →
+                    </a>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -764,6 +881,28 @@ export default function TamUngGiaiChiView({
           currentUserId={currentUserId}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {showChotDauKy && (
+        <ConfirmDialog
+          title="Chốt số dư đầu kỳ — Tạm ứng nhân viên"
+          message="Nhập đúng số dư tạm ứng CÒN NỢ thực tế của 1 nhân viên tại 1 ngày đã đối chiếu xong. Từ mốc này, 'Tiền đầu kỳ' của các kỳ sau sẽ tính dựa trên số đã chốt thay vì cộng dồn từ đầu."
+          fields={[
+            {
+              key: "nhan_vien_id",
+              label: "Nhân viên",
+              type: "select",
+              required: true,
+              options: [{ value: "", label: "-- Chọn --" }, ...nhanVienList.map((n) => ({ value: n.id, label: n.ho_ten }))],
+            },
+            { key: "ngay_ap_dung", label: "Đúng tại ngày", type: "text", required: true, defaultValue: new Date().toISOString().slice(0, 10), placeholder: "yyyy-mm-dd" },
+            { key: "so_du", label: "Số dư còn nợ thực tế", type: "text", required: true, placeholder: "VD: 5000000" },
+            { key: "ghi_chu", label: "Ghi chú", type: "textarea" },
+          ]}
+          confirmLabel="Lưu mốc chốt"
+          onCancel={() => setShowChotDauKy(false)}
+          onConfirm={handleChotDauKy}
         />
       )}
     </div>
@@ -916,12 +1055,16 @@ function TamUngForm({
             <input value={values.so_phieu} onChange={(e) => set("so_phieu", e.target.value)} className={cls} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Phương thức</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Nguồn tiền</label>
             <select value={values.phuong_thuc} onChange={(e) => set("phuong_thuc", e.target.value)} className={cls}>
               <option value="">-- Chọn --</option>
-              <option value="Tiền mặt">Tiền mặt</option>
+              <option value="Tiền mặt">Tiền mặt quỹ công ty</option>
               <option value="Tài khoản công ty">Tài khoản công ty</option>
+              <option value="Chuyển khoản cá nhân (không qua quỹ)">Chuyển khoản cá nhân (không qua quỹ)</option>
             </select>
+            {values.phuong_thuc === "Chuyển khoản cá nhân (không qua quỹ)" && (
+              <p className="mt-1 text-xs text-amber-600">Dòng này vẫn được theo dõi công nợ tạm ứng bình thường, nhưng sẽ KHÔNG tạo giao dịch trong Sổ quỹ công ty.</p>
+            )}
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (tùy chọn)</label>

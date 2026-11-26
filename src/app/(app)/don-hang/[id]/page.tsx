@@ -12,7 +12,7 @@ import LineItemsSection from "@/components/don-hang/LineItemsSection";
 import DonHangTabsClient from "@/components/don-hang/DonHangTabsClient";
 import CongViecHoanThanhSection, { type CongViecEntry } from "@/components/don-hang/CongViecHoanThanhSection";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
-import { tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
+import { tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang, tinhCongNoTheoLo, type DongPhaiThuInput, type HoaDonChoPhaiThuInput } from "@/lib/baoCao";
 
 export default async function DonHangDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -96,6 +96,50 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       .gte("ngay_len_don", monthStart)
       .lt("ngay_len_don", nextMonthStart),
   ]);
+
+  // --- Cong no phai thu cua lo (P1 muc 1, 2026-11-26): CONG THUC DUY NHAT,
+  // dung chung voi BaoCaoView.tsx — xem tinhCongNoTheoLo trong lib/baoCao.ts.
+  // chiPhiRowsDayDu/thueNgoaiRowsDayDu da ghep san gia_ban_sell nhung van giu
+  // nguyen cac cot khac (vat_percent, chi_ho, hoa_don_id...) tu PHAT_SINH_CHI_PHI_SAFE_COLS/
+  // DON_THUE_NGOAI_SAFE_COLS, nen dung thang duoc, khong can zip lai voi rows goc.
+  const { data: hoaDonLienKetRows } = await supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id").eq("don_hang_id", id);
+  const hoaDonIdsCuaLo = (hoaDonLienKetRows ?? []).map((r) => r.hoa_don_id);
+  let soHoaDonCuaLo = "";
+  let hoaDonGomNhieuDon = false;
+  let dongCacDonKhac: DongPhaiThuInput[] = [];
+  const hoaDonMap = new Map<string, HoaDonChoPhaiThuInput>();
+  if (hoaDonIdsCuaLo.length > 0) {
+    const [{ data: hoaDonRows }, { data: lienKetTatCa }] = await Promise.all([
+      supabase.from("hoa_don_xuat").select("id, so_hoa_don, so_tien_da_thu, trang_thai").in("id", hoaDonIdsCuaLo),
+      supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id").in("hoa_don_id", hoaDonIdsCuaLo),
+    ]);
+    const hoaDonHopLe = (hoaDonRows ?? []).filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế");
+    soHoaDonCuaLo = hoaDonHopLe.map((h) => h.so_hoa_don || "(chưa có số)").join(", ");
+    for (const h of hoaDonHopLe) hoaDonMap.set(h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu });
+    const donHangIdsKhac = Array.from(new Set((lienKetTatCa ?? []).map((l) => l.don_hang_id).filter((d) => d !== id)));
+    hoaDonGomNhieuDon = donHangIdsKhac.length > 0;
+    if (donHangIdsKhac.length > 0) {
+      // Hoa don nay gom ca don hang khac — can lay chi phi/phu thu/thue ngoai
+      // cua CAC DON DO de tinh dung ty le phan bo "Da thu" (tranh cong lap).
+      const [{ data: cpKhac }, { data: ptKhac }, { data: tnKhac }] = await Promise.all([
+        supabase.from("phat_sinh_chi_phi").select(PHAT_SINH_CHI_PHI_SAFE_COLS).in("don_hang_id", donHangIdsKhac),
+        supabase.from("phu_thu").select("don_hang_id, thanh_tien, hoa_don_id").in("don_hang_id", donHangIdsKhac),
+        supabase.from("don_thue_ngoai").select(DON_THUE_NGOAI_SAFE_COLS).in("don_hang_id", donHangIdsKhac),
+      ]);
+      const [cpKhacDayDu, tnKhacDayDu] = await Promise.all([ghepGiaBanChiPhi(supabase, cpKhac ?? []), ghepGiaBanThueNgoai(supabase, tnKhac ?? [])]);
+      dongCacDonKhac = [
+        ...cpKhacDayDu.map((c) => ({ don_hang_id: c.don_hang_id, chi_ho: c.chi_ho, gia_ban_sell: c.gia_ban_sell, vat_percent: c.vat_percent, so_tien_da_chi: c.so_tien_da_chi, hoa_don_id: c.hoa_don_id })),
+        ...(ptKhac ?? []).map((p) => ({ don_hang_id: p.don_hang_id, chi_ho: false, gia_ban_sell: p.thanh_tien, vat_percent: null, so_tien_da_chi: null, hoa_don_id: p.hoa_don_id })),
+        ...tnKhacDayDu.map((t) => ({ don_hang_id: t.don_hang_id, chi_ho: t.chi_ho, gia_ban_sell: t.gia_ban_sell, vat_percent: null, so_tien_da_chi: t.so_tien_da_chi, hoa_don_id: t.hoa_don_id })),
+      ];
+    }
+  }
+  const dongCuaLoNay: DongPhaiThuInput[] = [
+    ...chiPhiRowsDayDu.map((c) => ({ don_hang_id: id, chi_ho: c.chi_ho, gia_ban_sell: c.gia_ban_sell, vat_percent: c.vat_percent, so_tien_da_chi: c.so_tien_da_chi, hoa_don_id: c.hoa_don_id })),
+    ...(phuThuRows ?? []).map((p) => ({ don_hang_id: id, chi_ho: false, gia_ban_sell: p.thanh_tien, vat_percent: null, so_tien_da_chi: null, hoa_don_id: p.hoa_don_id })),
+    ...thueNgoaiRowsDayDu.map((t) => ({ don_hang_id: id, chi_ho: t.chi_ho, gia_ban_sell: t.gia_ban_sell, vat_percent: null, so_tien_da_chi: t.so_tien_da_chi, hoa_don_id: t.hoa_don_id })),
+  ];
+  const congNoLo = tinhCongNoTheoLo([id], [...dongCuaLoNay, ...dongCacDonKhac], hoaDonMap, new Map([[id, order.gia]])).get(id)!;
 
   const tongDinhPhiThang = ((dinhPhiRows ?? []) as { thang_nam: string; so_tien: number }[])
     .filter((r) => r.thang_nam === monthKey)
@@ -297,12 +341,35 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
             <Info label="Ngày lên đơn" value={order.ngay_len_don} />
             <Info label="Ngày vận chuyển" value={order.ngay_van_chuyen} />
             <Info label="Hạn lệnh" value={order.han_lenh_ngay ? `${order.han_lenh_ngay} ${order.han_lenh_gio ?? ""}` : null} />
-            <Info label="Giá bán" value={order.gia} />
             <Info label="Người tạo" value={nguoiTao?.ho_ten} />
             {order.ghi_chu_van_chuyen && (
               <div className="sm:col-span-2">
                 <p className="text-slate-500">Ghi chú vận chuyển</p>
                 <p className="font-medium text-slate-900">{order.ghi_chu_van_chuyen}</p>
+              </div>
+            )}
+            {canSeeLoiNhuan && (
+              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Công nợ phải thu của lô</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+                  <Info label="Dịch vụ (trước VAT)" value={congNoLo.dichVuTruocVat.toLocaleString("en-US")} />
+                  <Info label="VAT" value={congNoLo.vat.toLocaleString("en-US")} />
+                  <Info label="Chi hộ" value={congNoLo.chiHo.toLocaleString("en-US")} />
+                  <Info label="Tổng phải thu" value={congNoLo.tongPhaiThu.toLocaleString("en-US")} />
+                  <Info
+                    label="Hóa đơn"
+                    value={
+                      soHoaDonCuaLo
+                        ? `${soHoaDonCuaLo}${hoaDonGomNhieuDon ? " (gộp nhiều đơn)" : ""}`
+                        : "Chưa xuất HĐ"
+                    }
+                  />
+                  <Info label="Đã thu" value={congNoLo.daThu.toLocaleString("en-US")} />
+                  <Info label="Còn phải thu" value={congNoLo.conPhaiThu.toLocaleString("en-US")} />
+                </div>
+                {order.gia != null && (
+                  <p className="mt-1 text-xs text-slate-400">Giá bán nhập khi tạo đơn: {order.gia.toLocaleString("en-US")}</p>
+                )}
               </div>
             )}
           </div>

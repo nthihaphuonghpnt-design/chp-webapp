@@ -179,6 +179,13 @@ export default function HoaDonDauVaoView({
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState<{ success: number; errors: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // P1 muc 3 (2026-11-26): loc + chon hang loat de "Xac nhan du dieu kien khau
+  // tru" nhieu hoa don cung luc, thay vi phai sua tung dong.
+  const [ncLoc, setNcLoc] = useState("Tất cả");
+  const [phuongThucLoc, setPhuongThucLoc] = useState("Tất cả");
+  const [dieuKienLoc, setDieuKienLoc] = useState("Tất cả");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dangXuLyBulk, setDangXuLyBulk] = useState(false);
 
   const ncMap = new Map(ncList.map((n) => [n.id, n.ten ?? ""]));
   const ncInfoMap = new Map(ncList.map((n) => [n.id, n]));
@@ -187,6 +194,9 @@ export default function HoaDonDauVaoView({
   const filteredRows = rows.filter((r) => {
     if (thangLoc && r.thang_phan_bo !== thangLoc) return false;
     if (loaiLoc !== "Tất cả" && r.loai_chi_phi !== loaiLoc) return false;
+    if (ncLoc !== "Tất cả" && r.nha_cung_cap_id !== ncLoc) return false;
+    if (phuongThucLoc !== "Tất cả" && (r.phuong_thuc_thanh_toan ?? "(chưa có)") !== phuongThucLoc) return false;
+    if (dieuKienLoc !== "Tất cả" && r.dieu_kien_khau_tru !== dieuKienLoc) return false;
     if (!query) return true;
     const q = query.toLowerCase();
     return (
@@ -197,6 +207,54 @@ export default function HoaDonDauVaoView({
   });
 
   const tongTheoLoc = filteredRows.reduce((s, r) => s + (r.tong_tien_thanh_toan ?? 0), 0);
+
+  // Goi y mac dinh (P1 muc 3): thanh toan khong dung tien mat (chuyen khoan),
+  // da xac dinh duoc nha cung cap, va khong phai chi ho — day la het cac tieu
+  // chi CO THE kiem tra duoc tu du lieu hien co (chua co luu MST tren tung hoa
+  // don rieng hay file dinh kem o bang nay nen khong doi chieu duoc 2 muc do,
+  // kế toan van phai tu kiem tra 2 muc nay truoc khi xac nhan hang loat).
+  function duDieuKienDeXuat(r: HoaDonDauVao): boolean {
+    return !r.chi_ho && r.phuong_thuc_thanh_toan === "Tài khoản công ty" && !!r.nha_cung_cap_id && r.dieu_kien_khau_tru === "Chưa xác định";
+  }
+
+  async function xacNhanDuDieuKienHangLoat() {
+    if (selectedIds.size === 0) return;
+    if (
+      !window.confirm(
+        `Xác nhận "Đủ điều kiện khấu trừ" cho ${selectedIds.size} hóa đơn đã chọn? Kế toán cần tự đảm bảo các hóa đơn này đã kiểm tra đúng MST/tên công ty và có đủ hồ sơ/chứng từ.`,
+      )
+    )
+      return;
+    setDangXuLyBulk(true);
+    const ids = Array.from(selectedIds);
+    const { data, error } = await supabase
+      .from("hoa_don_dau_vao")
+      .update({ dieu_kien_khau_tru: "Đủ điều kiện" })
+      .in("id", ids)
+      .select("*");
+    setDangXuLyBulk(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    const map = new Map((data ?? []).map((d) => [d.id, d as HoaDonDauVao]));
+    setRows((prev) => prev.map((r) => map.get(r.id) ?? r));
+    setSelectedIds(new Set());
+  }
+
+  function toggleChon(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleChonTatCa() {
+    const idsChuaXacDinh = filteredRows.filter((r) => r.dieu_kien_khau_tru === "Chưa xác định").map((r) => r.id);
+    const daChonHet = idsChuaXacDinh.length > 0 && idsChuaXacDinh.every((id) => selectedIds.has(id));
+    setSelectedIds(daChonHet ? new Set() : new Set(idsChuaXacDinh));
+  }
 
   function set(key: keyof EditValues, value: string) {
     setEditValues((prev) => ({ ...prev, [key]: value }));
@@ -836,6 +894,26 @@ export default function HoaDonDauVaoView({
           <option>Định phí cố định</option>
           <option>Phát sinh</option>
         </select>
+        <select value={ncLoc} onChange={(e) => setNcLoc(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <option value="Tất cả">Tất cả NCC</option>
+          {ncList.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.ten}
+            </option>
+          ))}
+        </select>
+        <select value={phuongThucLoc} onChange={(e) => setPhuongThucLoc(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <option value="Tất cả">Tất cả phương thức TT</option>
+          <option value="Tiền mặt">Tiền mặt</option>
+          <option value="Tài khoản công ty">Tài khoản công ty</option>
+          <option value="(chưa có)">(chưa thanh toán)</option>
+        </select>
+        <select value={dieuKienLoc} onChange={(e) => setDieuKienLoc(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <option value="Tất cả">Tất cả điều kiện khấu trừ</option>
+          <option value="Chưa xác định">Chưa xác định</option>
+          <option value="Đủ điều kiện">Đủ điều kiện</option>
+          <option value="Không đủ điều kiện">Không đủ điều kiện</option>
+        </select>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -843,6 +921,22 @@ export default function HoaDonDauVaoView({
           className="min-w-[200px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </div>
+
+      {canEdit && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2 text-sm">
+          <span className="text-slate-700">Đã chọn {selectedIds.size} hóa đơn</span>
+          <button
+            onClick={xacNhanDuDieuKienHangLoat}
+            disabled={selectedIds.size === 0 || dangXuLyBulk}
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          >
+            {dangXuLyBulk ? "Đang xử lý..." : "Xác nhận đủ điều kiện khấu trừ (hàng loạt)"}
+          </button>
+          <span className="text-xs text-slate-400">
+            Chỉ chọn những dòng chắc chắn đúng MST/tên công ty và đủ hồ sơ — hệ thống chỉ đề xuất theo phương thức thanh toán, không tự kiểm tra 2 điều kiện này.
+          </span>
+        </div>
+      )}
 
       <datalist id="ds-nha-cung-cap">
         {ncList.map((n) => (
@@ -856,9 +950,22 @@ export default function HoaDonDauVaoView({
       </datalist>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[2050px] text-sm">
+        <table className="w-full min-w-[2080px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
+              {canEdit && (
+                <th className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={(() => {
+                      const ids = filteredRows.filter((r) => r.dieu_kien_khau_tru === "Chưa xác định").map((r) => r.id);
+                      return ids.length > 0 && ids.every((id) => selectedIds.has(id));
+                    })()}
+                    onChange={toggleChonTatCa}
+                    title="Chọn tất cả dòng 'Chưa xác định' đang hiển thị"
+                  />
+                </th>
+              )}
               <th className="px-3 py-2 font-medium">Mẫu số</th>
               <th className="px-3 py-2 font-medium">Ngày HĐ</th>
               <th className="px-3 py-2 font-medium">Ngày ký</th>
@@ -889,6 +996,7 @@ export default function HoaDonDauVaoView({
             {filteredRows.map((row) =>
               editingId === row.id ? (
                 <tr key={row.id} className="border-t border-blue-100 bg-blue-50/40">
+                  {canEdit && <td className="px-3 py-1.5"></td>}
                   <td className="px-2 py-1.5">
                     <input value={editValues.mau_so_hoa_don} onChange={(e) => set("mau_so_hoa_don", e.target.value)} className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" />
                   </td>
@@ -1007,6 +1115,16 @@ export default function HoaDonDauVaoView({
                 </tr>
               ) : (
                 <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  {canEdit && (
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(row.id)}
+                        disabled={row.dieu_kien_khau_tru !== "Chưa xác định"}
+                        onChange={() => toggleChon(row.id)}
+                      />
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-slate-700">{row.mau_so_hoa_don ?? "—"}</td>
                   <td className="px-3 py-2 text-slate-700">{row.ngay_hoa_don}</td>
                   <td className="px-3 py-2 text-slate-700">{row.ngay_ky_hoa_don ?? "—"}</td>
@@ -1062,6 +1180,11 @@ export default function HoaDonDauVaoView({
                     >
                       {row.dieu_kien_khau_tru}
                     </span>
+                    {duDieuKienDeXuat(row) && (
+                      <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700" title="CK ngân hàng, đã xác định NCC — kế toán tự kiểm tra MST/hồ sơ trước khi xác nhận">
+                        Đề xuất: Đủ điều kiện
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-slate-700">{row.chi_ho ? "Có" : "—"}</td>
                   {canEdit && (
@@ -1097,7 +1220,7 @@ export default function HoaDonDauVaoView({
             )}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={24} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={25} className="px-4 py-8 text-center text-slate-400">
                   Chưa có hóa đơn nào trong tháng này.
                 </td>
               </tr>

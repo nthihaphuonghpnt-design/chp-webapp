@@ -15,10 +15,18 @@ export default async function SoQuyPage() {
     );
   }
 
-  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }] = await Promise.all([
+  const [{ data: rows }, { data: nhanVienList }, { data: donHangList }, { data: chotList }] = await Promise.all([
     supabase.from("so_quy").select("*").order("ngay", { ascending: false }),
     supabase.from("nhan_vien").select("id, ho_ten").eq("dang_lam_viec", true).order("ho_ten"),
     supabase.from("don_hang").select("id, so_don_hang").order("created_at", { ascending: false }).limit(300),
+    // P1 muc 6 (2026-11-26): moc "chot so du dau ky" — xem giai thich trong
+    // SoQuyView (tinhTonDauKy) ve ly do can co bang nay thay vi cong don tu
+    // dau thoi gian.
+    supabase
+      .from("chot_so_du_dau_ky")
+      .select("id, doi_tuong_loai, ngay_ap_dung, so_du, ghi_chu, created_at")
+      .in("doi_tuong_loai", ["so_quy_tien_mat", "so_quy_tai_khoan_cong_ty"])
+      .order("ngay_ap_dung", { ascending: false }),
   ]);
 
   // Rieng giao dich xuat phat tu Tam ung & Giai chi: lay them thong tin doi
@@ -98,6 +106,7 @@ export default async function SoQuyPage() {
       canEdit={user.phong_ban === "Kế toán"}
       nhanVienList={nhanVienList ?? []}
       donHangOptions={donHangList ?? []}
+      chotList={chotList ?? []}
     />
   );
 }

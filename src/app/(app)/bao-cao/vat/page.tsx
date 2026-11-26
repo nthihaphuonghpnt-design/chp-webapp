@@ -19,11 +19,11 @@ export default async function BaoCaoVatPage() {
   const [{ data: hoaDonXuatRaw }, { data: hoaDonDauVaoRaw }, { data: kyKeKhaiRaw }] = await Promise.all([
     supabase
       .from("hoa_don_xuat")
-      .select("id, so_hoa_don, ngay_xuat, trang_thai, loai_hoa_don, ky_ke_khai, tien_vat, vat_percent, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
+      .select("id, so_hoa_don, ngay_xuat, trang_thai, loai_hoa_don, ky_ke_khai, tien_vat, vat_percent, updated_at, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)")
       .order("ngay_xuat", { ascending: false }),
     supabase
       .from("hoa_don_dau_vao")
-      .select("id, so_hoa_don, ngay_hoa_don, ky_ke_khai, dieu_kien_khau_tru, chi_ho, tien_thue_gtgt, tong_tien_hang, nha_cung_cap:nha_cung_cap_id(ten)")
+      .select("id, so_hoa_don, ngay_hoa_don, ky_ke_khai, dieu_kien_khau_tru, chi_ho, tien_thue_gtgt, tong_tien_hang, updated_at, nha_cung_cap:nha_cung_cap_id(ten)")
       .order("ngay_hoa_don", { ascending: false }),
     supabase
       .from("ky_ke_khai_vat")

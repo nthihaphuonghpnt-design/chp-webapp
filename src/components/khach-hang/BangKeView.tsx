@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -44,6 +44,11 @@ interface DonHangOpt {
   bien_so: string[];
   so_to_khai: string[];
   so_cont: string[];
+  /** So hoa don DA co cho don nay (qua hoa_don_don_hang) — co the van con dong
+   * chua gan hoa_don_id rieng (vd hoa don tao tu wizard "Them hoa don" khong
+   * chon tung dong), nen KHONG dung de loai don khoi bang, chi de canh bao
+   * tranh xuat trung (P1 muc 4). */
+  hoa_don_hien_co: string[];
 }
 
 interface ChiPhiRow {
@@ -55,6 +60,7 @@ interface ChiPhiRow {
   chi_ho: boolean;
   so_chung_tu_goc: string | null;
   trang_thai: string;
+  ngay_phat_sinh: string;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
   loai_chi_phi: { ten: string } | { ten: string }[] | null;
 }
@@ -63,6 +69,7 @@ interface PhuThuRow {
   don_hang_id: string;
   loai_phu_thu: string | null;
   thanh_tien: number | null;
+  created_at: string;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
 interface ThueNgoaiRow {
@@ -73,6 +80,7 @@ interface ThueNgoaiRow {
   so_tien_da_chi: number | null;
   chi_ho: boolean;
   trang_thai: string;
+  ngay_thue: string;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
 
@@ -116,10 +124,33 @@ export default function BangKeView({
   const [vatPercent, setVatPercent] = useState("");
   const [soHoaDon, setSoHoaDon] = useState("");
   const [dangXuat, setDangXuat] = useState(false);
+  // P1 muc 4 (2026-11-26): mac dinh chi hien 6 thang gan nhat khi xem "Tat ca
+  // don hang" — tranh liet ke ca dong tu 2025 nhu bao cao (vd Sao May 126
+  // dong). Khi da chon 1 don cu the thi bo loc ngay (xem het dong cua don do,
+  // bat ke cu bao nhieu — ke toan dang muon xem rieng 1 don thi can thay het).
+  function macDinhTuNgay() {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().slice(0, 10);
+  }
+  const [tuNgay, setTuNgay] = useState(macDinhTuNgay());
+  const [denNgay, setDenNgay] = useState(() => new Date().toISOString().slice(0, 10));
+  const locNgayDangBat = !donHangFilter;
 
-  const chiPhiRows = donHangFilter ? chiPhiRowsAll.filter((r) => r.don_hang_id === donHangFilter) : chiPhiRowsAll;
-  const phuThuRows = donHangFilter ? phuThuRowsAll.filter((r) => r.don_hang_id === donHangFilter) : phuThuRowsAll;
-  const thueNgoaiRows = donHangFilter ? thueNgoaiRowsAll.filter((r) => r.don_hang_id === donHangFilter) : thueNgoaiRowsAll;
+  const chiPhiRows = chiPhiRowsAll.filter(
+    (r) => (!donHangFilter || r.don_hang_id === donHangFilter) && (!locNgayDangBat || (r.ngay_phat_sinh >= tuNgay && r.ngay_phat_sinh <= denNgay)),
+  );
+  const phuThuRows = phuThuRowsAll.filter(
+    (r) => (!donHangFilter || r.don_hang_id === donHangFilter) && (!locNgayDangBat || (r.created_at.slice(0, 10) >= tuNgay && r.created_at.slice(0, 10) <= denNgay)),
+  );
+  const thueNgoaiRows = thueNgoaiRowsAll.filter(
+    (r) => (!donHangFilter || r.don_hang_id === donHangFilter) && (!locNgayDangBat || (r.ngay_thue >= tuNgay && r.ngay_thue <= denNgay)),
+  );
+  const soDongNgoaiKhoangNgay = locNgayDangBat
+    ? chiPhiRowsAll.filter((r) => r.ngay_phat_sinh < tuNgay || r.ngay_phat_sinh > denNgay).length +
+      phuThuRowsAll.filter((r) => r.created_at.slice(0, 10) < tuNgay || r.created_at.slice(0, 10) > denNgay).length +
+      thueNgoaiRowsAll.filter((r) => r.ngay_thue < tuNgay || r.ngay_thue > denNgay).length
+    : 0;
 
   const [chonChiPhi, setChonChiPhi] = useState<Set<string>>(new Set(initialChiPhi.map((r) => r.id)));
   const [chonPhuThu, setChonPhuThu] = useState<Set<string>>(new Set(initialPhuThu.map((r) => r.id)));
@@ -195,9 +226,14 @@ export default function BangKeView({
     const so = vatMoi.trim() === "" ? null : Number(vatMoi);
     if (so !== null && Number.isNaN(so)) return;
     const rowCu = chiPhiRowsAll.find((r) => r.id === chiPhiId);
+    // Ghi lai lich su khi sua dong "Da duyet" — cung quy tac voi
+    // ChiPhiGopSection.tsx (enforce_phat_sinh_chi_phi_update, 0104): moi lan
+    // sua dong da duyet deu phai co ly do, khong thi DB tu choi.
+    const lyDo = hoiLyDoNeuDaDuyet(rowCu?.trang_thai ?? "", "VAT %");
+    if (lyDo === undefined) return;
     const { data, error } = await supabase
       .from("phat_sinh_chi_phi")
-      .update({ vat_percent: so })
+      .update({ vat_percent: so, ...(lyDo ? { ly_do_sua_gan_nhat: lyDo } : {}) })
       .eq("id", chiPhiId)
       .select(`${PHAT_SINH_CHI_PHI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang), loai_chi_phi:loai_chi_phi_id(ten)`)
       .single();
@@ -327,10 +363,33 @@ export default function BangKeView({
         coTheSuaVat: false,
       });
     }
-    // Chi ho truoc, Xuat HD sau (giu nguyen thu tu ngay phat sinh trong tung nhom).
-    rows.sort((a, b) => (a.ghiChu === "Chi hộ" ? 0 : 1) - (b.ghiChu === "Chi hộ" ? 0 : 1));
+    // Xem "Tat ca don hang" (P1 muc 4): nhom theo don hang truoc (sap xep theo
+    // so don hang) de co the hien tong tung don + banner don da co hoa don;
+    // trong tung nhom van giu Chi ho truoc, Xuat HD sau nhu cu.
+    if (donHangFilter) {
+      rows.sort((a, b) => (a.ghiChu === "Chi hộ" ? 0 : 1) - (b.ghiChu === "Chi hộ" ? 0 : 1));
+    } else {
+      rows.sort((a, b) => a.donHang.localeCompare(b.donHang) || (a.ghiChu === "Chi hộ" ? 0 : 1) - (b.ghiChu === "Chi hộ" ? 0 : 1));
+    }
     return rows;
-  }, [chiPhiRows, phuThuRows, thueNgoaiRows, vatPercent]);
+  }, [chiPhiRows, phuThuRows, thueNgoaiRows, vatPercent, donHangFilter]);
+
+  // Nhom theo don hang khi xem "Tat ca don hang" (P1 muc 4) — moi nhom co
+  // tong rieng + banner neu don DA CO hoa don khac (tranh xuat trung, muc 5b).
+  const nhomTheoDon = useMemo(() => {
+    if (donHangFilter) return null;
+    const map = new Map<
+      string,
+      { donHangId: string; donHang: string; hoaDonHienCo: string[]; rows: typeof chiTietBangKe }
+    >();
+    for (const r of chiTietBangKe) {
+      if (!map.has(r.donHangId)) {
+        map.set(r.donHangId, { donHangId: r.donHangId, donHang: r.donHang, hoaDonHienCo: donHangMap.get(r.donHangId)?.hoa_don_hien_co ?? [], rows: [] });
+      }
+      map.get(r.donHangId)!.rows.push(r);
+    }
+    return Array.from(map.values());
+  }, [chiTietBangKe, donHangFilter, donHangMap]);
 
   async function handleXuatExcelBangKe() {
     const khTen = khachHangList.find((k) => k.id === khachHangIdChon);
@@ -338,9 +397,10 @@ export default function BangKeView({
     const columns: ExcelColumn[] = [
       { header: "No", key: "no", width: 5 },
       { header: "Charge Descriptions", key: "dienGiai", width: 32 },
+      { header: "Đơn hàng", key: "donHang", width: 16 },
       { header: "Đơn giá", key: "donGia", width: 14, numFmt: "#,##0" },
       { header: "SL", key: "sl", width: 6 },
-      { header: "Total", key: "total", width: 14, numFmt: "#,##0" },
+      { header: "Total (trước VAT)", key: "total", width: 16, numFmt: "#,##0" },
       { header: "VAT (%)", key: "vat", width: 8 },
       { header: "Tiền VAT", key: "tienVat", width: 14, numFmt: "#,##0" },
       { header: "Total (sau VAT)", key: "tongSauVat", width: 16, numFmt: "#,##0" },
@@ -350,6 +410,7 @@ export default function BangKeView({
     const rows = chiTietBangKe.map((r, i) => [
       i + 1,
       r.dienGiai,
+      donHangMap.get(r.donHangId)?.so_don_hang ?? "—",
       r.donGia,
       r.soLuong,
       r.thanhTien,
@@ -362,6 +423,7 @@ export default function BangKeView({
     const totalRow = [
       "",
       "TỔNG CỘNG",
+      "",
       "",
       "",
       chiTietBangKe.reduce((s, r) => s + r.thanhTien, 0),
@@ -494,6 +556,31 @@ export default function BangKeView({
             />
           </div>
         )}
+        {khachHangIdChon && locNgayDangBat && (
+          <>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Từ ngày</label>
+              <input type="date" value={tuNgay} onChange={(e) => setTuNgay(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Đến ngày</label>
+              <input type="date" value={denNgay} onChange={(e) => setDenNgay(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            {soDongNgoaiKhoangNgay > 0 && (
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setTuNgay("0000-01-01");
+                    setDenNgay("9999-12-31");
+                  }}
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+                >
+                  +{soDongNgoaiKhoangNgay} dòng ngoài khoảng ngày — bấm để xem tất cả
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {!khachHangIdChon && <p className="text-sm text-slate-400">Chọn khách hàng để xem bảng kê chi phí chưa xuất hóa đơn.</p>}
@@ -521,7 +608,7 @@ export default function BangKeView({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    {["No", "Charge Descriptions", "Đơn hàng", "Đơn giá", "SL", "Total", "VAT (%)", "Tiền VAT", "Total (sau VAT)", "Ghi chú"].map((h) => (
+                    {["No", "Charge Descriptions", "Đơn hàng", "Đơn giá", "SL", "Total (trước VAT)", "VAT (%)", "Tiền VAT", "Total (sau VAT)", "Ghi chú"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">
                         {h}
                       </th>
@@ -529,35 +616,82 @@ export default function BangKeView({
                   </tr>
                 </thead>
                 <tbody>
-                  {chiTietBangKe.map((r, i) => (
-                    <tr key={r.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2">{i + 1}</td>
-                      <td className="px-3 py-2">{r.dienGiai}</td>
-                      <td className="px-3 py-2">{r.donHang}</td>
-                      <td className="px-3 py-2">{r.donGia.toLocaleString("en-US")}</td>
-                      <td className="px-3 py-2">{r.soLuong}</td>
-                      <td className="px-3 py-2">{r.thanhTien.toLocaleString("en-US")}</td>
-                      <td className="px-3 py-2">
-                        {r.coTheSuaVat ? (
-                          <input
-                            type="number"
-                            step="any"
-                            defaultValue={r.vatPercent || ""}
-                            onBlur={(e) => {
-                              if (Number(e.target.value || 0) !== r.vatPercent) handleCapNhatVat(r.id, e.target.value);
-                            }}
-                            className="w-16 rounded border border-slate-200 px-1.5 py-1 text-sm focus:border-blue-500 focus:outline-none"
-                            title="Sửa VAT% cho riêng dòng này (ghi lại vào Chi phí phát sinh ở Đơn hàng)"
-                          />
-                        ) : (
-                          r.vatPercent || ""
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{r.tienVat ? r.tienVat.toLocaleString("en-US") : ""}</td>
-                      <td className="px-3 py-2 font-medium">{r.tongSauVat.toLocaleString("en-US")}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500">{r.ghiChu}</td>
-                    </tr>
-                  ))}
+                  {nhomTheoDon
+                    ? nhomTheoDon.map((nhom) => (
+                        <Fragment key={nhom.donHangId}>
+                          <tr className="border-t border-slate-200 bg-slate-100/80">
+                            <td colSpan={10} className="px-3 py-1.5 text-xs font-semibold text-slate-700">
+                              Đơn {nhom.donHang}
+                              {nhom.hoaDonHienCo.length > 0 && (
+                                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                                  ⚠ Đã có hóa đơn: {nhom.hoaDonHienCo.join(", ")} — kiểm tra kỹ các dòng dưới, tránh xuất trùng
+                                </span>
+                              )}
+                              <span className="ml-2 font-normal text-slate-500">
+                                Tổng đơn: {nhom.rows.reduce((s, r) => s + r.tongSauVat, 0).toLocaleString("en-US")}
+                              </span>
+                            </td>
+                          </tr>
+                          {nhom.rows.map((r, i) => (
+                            <tr key={r.id} className="border-t border-slate-100">
+                              <td className="px-3 py-2">{i + 1}</td>
+                              <td className="px-3 py-2">{r.dienGiai}</td>
+                              <td className="px-3 py-2">{r.donHang}</td>
+                              <td className="px-3 py-2">{r.donGia.toLocaleString("en-US")}</td>
+                              <td className="px-3 py-2">{r.soLuong}</td>
+                              <td className="px-3 py-2">{r.thanhTien.toLocaleString("en-US")}</td>
+                              <td className="px-3 py-2">
+                                {r.coTheSuaVat ? (
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    defaultValue={r.vatPercent || ""}
+                                    onBlur={(e) => {
+                                      if (Number(e.target.value || 0) !== r.vatPercent) handleCapNhatVat(r.id, e.target.value);
+                                    }}
+                                    className="w-16 rounded border border-slate-200 px-1.5 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                                    title="Sửa VAT% cho riêng dòng này (ghi lại vào Chi phí phát sinh ở Đơn hàng)"
+                                  />
+                                ) : (
+                                  r.vatPercent || ""
+                                )}
+                              </td>
+                              <td className="px-3 py-2">{r.tienVat ? r.tienVat.toLocaleString("en-US") : ""}</td>
+                              <td className="px-3 py-2 font-medium">{r.tongSauVat.toLocaleString("en-US")}</td>
+                              <td className="px-3 py-2 text-xs text-slate-500">{r.ghiChu}</td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))
+                    : chiTietBangKe.map((r, i) => (
+                        <tr key={r.id} className="border-t border-slate-100">
+                          <td className="px-3 py-2">{i + 1}</td>
+                          <td className="px-3 py-2">{r.dienGiai}</td>
+                          <td className="px-3 py-2">{r.donHang}</td>
+                          <td className="px-3 py-2">{r.donGia.toLocaleString("en-US")}</td>
+                          <td className="px-3 py-2">{r.soLuong}</td>
+                          <td className="px-3 py-2">{r.thanhTien.toLocaleString("en-US")}</td>
+                          <td className="px-3 py-2">
+                            {r.coTheSuaVat ? (
+                              <input
+                                type="number"
+                                step="any"
+                                defaultValue={r.vatPercent || ""}
+                                onBlur={(e) => {
+                                  if (Number(e.target.value || 0) !== r.vatPercent) handleCapNhatVat(r.id, e.target.value);
+                                }}
+                                className="w-16 rounded border border-slate-200 px-1.5 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                                title="Sửa VAT% cho riêng dòng này (ghi lại vào Chi phí phát sinh ở Đơn hàng)"
+                              />
+                            ) : (
+                              r.vatPercent || ""
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{r.tienVat ? r.tienVat.toLocaleString("en-US") : ""}</td>
+                          <td className="px-3 py-2 font-medium">{r.tongSauVat.toLocaleString("en-US")}</td>
+                          <td className="px-3 py-2 text-xs text-slate-500">{r.ghiChu}</td>
+                        </tr>
+                      ))}
                   {chiTietBangKe.length === 0 && (
                     <tr>
                       <td colSpan={10} className="px-3 py-6 text-center text-slate-400">

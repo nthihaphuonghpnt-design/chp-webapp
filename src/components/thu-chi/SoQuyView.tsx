@@ -9,7 +9,22 @@ import { createClient } from "@/lib/supabase/client";
 import { khoangThangVietNam } from "@/lib/ngayVietNam";
 import MoneyInput from "@/components/common/MoneyInput";
 import DoiChieuSaoKeView from "@/components/thu-chi/DoiChieuSaoKeView";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { SoQuy } from "@/types/database";
+
+interface ChotSoDu {
+  id: string;
+  doi_tuong_loai: string;
+  ngay_ap_dung: string;
+  so_du: number;
+  ghi_chu: string | null;
+  created_at: string;
+}
+
+const CHOT_LOAI_THEO_SO: Record<"Tiền mặt" | "Tài khoản công ty", string> = {
+  "Tiền mặt": "so_quy_tien_mat",
+  "Tài khoản công ty": "so_quy_tai_khoan_cong_ty",
+};
 
 const NGUON_HREF: Record<string, string> = {
   tam_ung_giai_chi: "/tam-ung-giai-chi",
@@ -65,6 +80,7 @@ export default function SoQuyView({
   canEdit = false,
   nhanVienList = [],
   donHangOptions = [],
+  chotList = [],
 }: {
   initialRows: SoQuy[];
   tamUngDetailMap?: Record<string, string>;
@@ -73,6 +89,7 @@ export default function SoQuyView({
   canEdit?: boolean;
   nhanVienList?: { id: string; ho_ten: string }[];
   donHangOptions?: { id: string; so_don_hang: string }[];
+  chotList?: ChotSoDu[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -88,6 +105,11 @@ export default function SoQuyView({
   const [ghiChuChuyen, setGhiChuChuyen] = useState("");
   const [savingChuyen, setSavingChuyen] = useState(false);
   const [loiChuyen, setLoiChuyen] = useState<string | null>(null);
+  // P1 muc 6 (2026-11-26): "Chot so du dau ky" — thay vi cong don tu dau thoi
+  // gian (lam "Ton dau ky" am rat sau vi thieu du lieu rat cu), Ke toan chot
+  // 1 moc "dung tai ngay X co bao nhieu tien" — moi tinh toan sau chi can moc
+  // GAN NHAT truoc tuNgay + cong don giao dich TU moc do, khong phai tu dau.
+  const [showChotDauKy, setShowChotDauKy] = useState(false);
 
   async function handleChuyenQuy() {
     if (!soTienChuyen || Number(soTienChuyen) <= 0) {
@@ -119,11 +141,48 @@ export default function SoQuyView({
 
   const rowsCuaSo = initialRows.filter((r) => r.loai_so === loaiSo);
 
+  // Moc chot gan nhat (<= tuNgay) cua dung loai so dang xem — sap xep theo
+  // ngay_ap_dung desc tu page.tsx nen phan tu dau tien thoa dieu kien la gan nhat.
+  const chotApDung = useMemo(() => {
+    const loaiChot = CHOT_LOAI_THEO_SO[loaiSo];
+    return chotList.find((c) => c.doi_tuong_loai === loaiChot && c.ngay_ap_dung <= tuNgay) ?? null;
+  }, [chotList, loaiSo, tuNgay]);
+
   const tonDauKy = useMemo(() => {
+    if (chotApDung) {
+      return (
+        chotApDung.so_du +
+        rowsCuaSo
+          .filter((r) => r.ngay >= chotApDung.ngay_ap_dung && r.ngay < tuNgay)
+          .reduce((s, r) => s + (r.loai_giao_dich === "Thu" ? r.so_tien : -r.so_tien), 0)
+      );
+    }
     return rowsCuaSo
       .filter((r) => r.ngay < tuNgay)
       .reduce((s, r) => s + (r.loai_giao_dich === "Thu" ? r.so_tien : -r.so_tien), 0);
-  }, [rowsCuaSo, tuNgay]);
+  }, [rowsCuaSo, tuNgay, chotApDung]);
+
+  async function handleChotDauKy(values: Record<string, string>) {
+    const soDu = Number(values.so_du);
+    if (!values.ngay_ap_dung || Number.isNaN(soDu)) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+    const { error } = await supabase.from("chot_so_du_dau_ky").insert({
+      doi_tuong_loai: CHOT_LOAI_THEO_SO[loaiSo],
+      ngay_ap_dung: values.ngay_ap_dung,
+      so_du: soDu,
+      ghi_chu: values.ghi_chu || null,
+      nguoi_chot_id: nv?.id,
+    });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setShowChotDauKy(false);
+    router.refresh();
+  }
 
   const trongKy = rowsCuaSo.filter((r) => r.ngay >= tuNgay && r.ngay <= denNgay).sort((a, b) => a.ngay.localeCompare(b.ngay));
 
@@ -201,6 +260,14 @@ export default function SoQuyView({
               className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700"
             >
               Đối chiếu sao kê
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => setShowChotDauKy(true)}
+              className="rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-700"
+            >
+              Chốt số dư đầu kỳ
             </button>
           )}
         </div>
@@ -283,6 +350,9 @@ export default function SoQuyView({
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <p className="text-xs text-slate-500">Tồn đầu kỳ</p>
           <p className="text-lg font-semibold text-slate-900">{fmt(tonDauKy)}</p>
+          {chotApDung && (
+            <p className="mt-0.5 text-[11px] text-amber-600">Tính từ mốc chốt {chotApDung.ngay_ap_dung}: {fmt(chotApDung.so_du)}</p>
+          )}
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <p className="text-xs text-slate-500">Thu trong kỳ</p>
@@ -376,6 +446,21 @@ export default function SoQuyView({
         toán Thuê dịch vụ ngoài, thu tiền Hóa đơn — chọn đúng &quot;Phương thức&quot; (Tiền mặt/Tài
         khoản công ty) ở từng nơi để dòng tiền tự chạy vào đúng sổ.
       </p>
+
+      {showChotDauKy && (
+        <ConfirmDialog
+          title={`Chốt số dư đầu kỳ — ${loaiSo}`}
+          message="Nhập đúng số dư thực tế tại 1 ngày đã đối chiếu xong (vd đếm tiền mặt thực tế, hoặc khớp sổ phụ ngân hàng). Từ mốc này, Tồn đầu kỳ của các kỳ sau sẽ tính dựa trên số đã chốt thay vì cộng dồn từ đầu, không ảnh hưởng dữ liệu giao dịch cũ."
+          fields={[
+            { key: "ngay_ap_dung", label: "Đúng tại ngày", type: "text", required: true, defaultValue: new Date().toISOString().slice(0, 10), placeholder: "yyyy-mm-dd" },
+            { key: "so_du", label: "Số dư thực tế", type: "text", required: true, placeholder: "VD: 5000000" },
+            { key: "ghi_chu", label: "Ghi chú", type: "textarea", placeholder: "VD: đếm tiền mặt thực tế ngày ..." },
+          ]}
+          confirmLabel="Lưu mốc chốt"
+          onCancel={() => setShowChotDauKy(false)}
+          onConfirm={handleChotDauKy}
+        />
+      )}
     </div>
   );
 }

@@ -3,7 +3,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { taoWorkbook, themSheetKeO, taiWorkbook } from "@/lib/excel";
-import { phanLoaiChiPhi, tongPhanLoaiChiPhi, doanhThuVoiFallbackGiaDonHang } from "@/lib/baoCao";
+import {
+  phanLoaiChiPhi,
+  tongPhanLoaiChiPhi,
+  doanhThuVoiFallbackGiaDonHang,
+  tinhCongNoTheoLo,
+  type DongPhaiThuInput,
+  type HoaDonChoPhaiThuInput,
+} from "@/lib/baoCao";
 import { khoangThangVietNam } from "@/lib/ngayVietNam";
 
 interface DonHang {
@@ -24,6 +31,8 @@ interface ChiPhi {
   gia_ban_sell: number | null;
   chi_ho: boolean;
   noi_bo: boolean;
+  vat_percent: number | null;
+  hoa_don_id: string | null;
   ngay_phat_sinh: string;
   tinh_trang_thanh_toan: string;
   so_tien_da_thanh_toan: number | null;
@@ -32,6 +41,7 @@ interface ChiPhi {
 interface PhuThu {
   don_hang_id: string;
   thanh_tien: number | null;
+  hoa_don_id: string | null;
 }
 interface ThueNgoai {
   don_hang_id: string;
@@ -39,6 +49,7 @@ interface ThueNgoai {
   so_tien_da_chi: number | null;
   gia_ban_sell: number | null;
   chi_ho: boolean;
+  hoa_don_id: string | null;
   so_tien_da_thanh_toan: number | null;
   ngay_thue: string;
   trang_thai: string;
@@ -198,42 +209,74 @@ export default function BaoCaoView({
     });
   }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, chiPhiGiaoNhanList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- 2b) Cong no theo lo (Ke toan/Giam doc): gia ban + chi ho + hoa don da xuat + con phai thu ---
+  // --- 2b) Cong no theo lo (Ke toan/Giam doc) ---
+  // CONG THUC DUY NHAT (P1 muc 1, 2026-11-26): xem tinhCongNoTheoLo trong
+  // lib/baoCao.ts — dung chung voi Bang ke, Hoa don xuat, Tab chi tiet don.
   const congNoTheoLo = useMemo(() => {
     if (!isKeToanOrGiamDoc) return [];
+    const hoaDonMap = new Map<string, HoaDonChoPhaiThuInput>(
+      hoaDonList.filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế").map((h) => [h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu }]),
+    );
+    const dongList: DongPhaiThuInput[] = [
+      ...chiPhiList
+        .filter((c) => c.trang_thai !== "Từ chối")
+        .map((c) => ({
+          don_hang_id: c.don_hang_id,
+          chi_ho: c.chi_ho,
+          gia_ban_sell: c.gia_ban_sell,
+          vat_percent: c.vat_percent,
+          so_tien_da_chi: c.so_tien_da_chi,
+          hoa_don_id: c.hoa_don_id && hoaDonMap.has(c.hoa_don_id) ? c.hoa_don_id : null,
+        })),
+      ...phuThuList.map((p) => ({
+        don_hang_id: p.don_hang_id,
+        chi_ho: false,
+        gia_ban_sell: p.thanh_tien,
+        vat_percent: null,
+        so_tien_da_chi: null,
+        hoa_don_id: p.hoa_don_id && hoaDonMap.has(p.hoa_don_id) ? p.hoa_don_id : null,
+      })),
+      ...thueNgoaiList
+        .filter((t) => t.trang_thai !== "Từ chối")
+        .map((t) => ({
+          don_hang_id: t.don_hang_id,
+          chi_ho: t.chi_ho,
+          gia_ban_sell: t.gia_ban_sell,
+          vat_percent: null, // don_thue_ngoai chua co cot VAT rieng
+          so_tien_da_chi: t.so_tien_da_chi,
+          hoa_don_id: t.hoa_don_id && hoaDonMap.has(t.hoa_don_id) ? t.hoa_don_id : null,
+        })),
+    ];
+    const giaDonHangMap = new Map(donHangTrongKy.map((d) => [d.id, d.gia]));
+    const ketQua = tinhCongNoTheoLo(
+      donHangTrongKy.map((d) => d.id),
+      dongList,
+      hoaDonMap,
+      giaDonHangMap,
+    );
     return donHangTrongKy.map((d) => {
-      const cp = chiPhiList.filter((c) => c.don_hang_id === d.id && c.trang_thai !== "Từ chối");
-      const giaBanItemize =
-        cp.filter((c) => !c.chi_ho).reduce((s, c) => s + (c.gia_ban_sell ?? 0), 0) +
-        phuThuList.filter((p) => p.don_hang_id === d.id).reduce((s, p) => s + (p.thanh_tien ?? 0), 0);
-      const giaBan = doanhThuVoiFallbackGiaDonHang(giaBanItemize, d.gia);
-      const chiHo = cp.filter((c) => c.chi_ho).reduce((s, c) => s + (c.so_tien_da_chi ?? 0), 0);
+      const kq = ketQua.get(d.id)!;
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
-      // Hoa don Da huy/Da thay the khong con la nghia vu cong no thuc su cua
-      // dong nay nua (xem quy tac o migration 0092) — loai ra khoi cong no.
       const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id) && h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế");
-      // tong_tien la cot generated = truoc_thue + VAT + tien_chi_ho (xem
-      // migration 0031/0038) — DA GOM san chi ho, khong duoc cong them lan nua
-      // (tung nham la khong gom, cong du 1 lan tien_chi_ho gay tinh THUA cong
-      // no, da sua lai dung).
-      const tongHoaDon = hoaDonLienQuan.reduce((s, h) => s + h.tong_tien, 0);
-      const daThu = hoaDonLienQuan.reduce((s, h) => s + (h.so_tien_da_thu ?? 0), 0);
       return {
         donHang: d,
         khTen: khTen(d.khach_hang_id),
-        giaBan,
-        chiHo,
+        dichVuTruocVat: kq.dichVuTruocVat,
+        vat: kq.vat,
+        chiHo: kq.chiHo,
+        tongPhaiThu: kq.tongPhaiThu,
+        daThu: kq.daThu,
+        conPhaiThu: kq.conPhaiThu,
         soHoaDon: hoaDonLienQuan.map((h) => h.so_hoa_don || "(chưa có số)").join(", "),
         soLuongHoaDon: hoaDonLienQuan.length,
-        tongHoaDon,
-        daThu,
-        // Neu 1 hoa don gom nhieu don hang thi "da thu" cua rieng lo nay khong tach
-        // rach roi duoc (tien thu ve tinh chung cho ca hoa don) — chi chinh xac khi
-        // moi don hang 1 hoa don rieng.
+        // Neu 1 hoa don gom nhieu don hang thi da thu hien da duoc PHAN BO theo
+        // ty le dich vu cua tung lo (xem tinhCongNoTheoLo) — van hien canh bao
+        // de ke toan biet so "Da thu" nay la phan bo, khong phai tien thuc nhan
+        // rieng cho lo nay.
         gomNhieuDon: hoaDonLienQuan.some((h) => hoaDonDonHangList.filter((l) => l.hoa_don_id === h.id).length > 1),
       };
     });
-  }, [donHangTrongKy, chiPhiList, phuThuList, hoaDonDonHangList, hoaDonList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, hoaDonDonHangList, hoaDonList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 3) Doanh so theo Sale ---
   const doanhSoTheoSale = useMemo(() => {
@@ -291,23 +334,22 @@ export default function BaoCaoView({
     return Array.from(map.values());
   }, [chiPhiTrongKy, loaiChiPhiList]);
 
-  // --- 5) Cong no phai thu (theo khach hang, tu hoa don) ---
-  // Loai hoa don Da huy/Da thay the — cung ly do voi congNoTheoLo phia tren.
-  const hoaDonTrongKy = hoaDonList.filter(
-    (h) => h.ngay_xuat >= tuNgay && h.ngay_xuat <= denNgay && h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế"
-  );
+  // --- 5) Cong no phai thu (theo khach hang) ---
+  // Cong tu CHINH congNoTheoLo (2b) theo khach hang cua tung lo — dam bao tong
+  // theo khach LUON bang tong cac lo cua khach do (yeu cau P1 muc 1 dong 26),
+  // khong tu tinh rieng tu hoa don nhu truoc (de lech voi congNoTheoLo).
   const congNoPhaiThu = useMemo(() => {
-    const map = new Map<string, { ten: string; tongHoaDon: number; daThu: number }>();
-    for (const h of hoaDonTrongKy) {
-      const key = h.khach_hang_id;
-      if (!map.has(key)) map.set(key, { ten: khTen(key), tongHoaDon: 0, daThu: 0 });
+    const map = new Map<string, { ten: string; tongHoaDon: number; daThu: number; conPhaiThu: number }>();
+    for (const r of congNoTheoLo) {
+      const key = r.donHang.khach_hang_id ?? "khac";
+      if (!map.has(key)) map.set(key, { ten: r.khTen, tongHoaDon: 0, daThu: 0, conPhaiThu: 0 });
       const m = map.get(key)!;
-      // tong_tien da gom san tien_chi_ho — xem giai thich o congNoTheoLo phia tren.
-      m.tongHoaDon += h.tong_tien;
-      m.daThu += h.so_tien_da_thu ?? 0;
+      m.tongHoaDon += r.tongPhaiThu;
+      m.daThu += r.daThu;
+      m.conPhaiThu += r.conPhaiThu;
     }
-    return Array.from(map.values()).map((m) => ({ ...m, conPhaiThu: m.tongHoaDon - m.daThu }));
-  }, [hoaDonTrongKy]); // eslint-disable-line react-hooks/exhaustive-deps
+    return Array.from(map.values());
+  }, [congNoTheoLo]);
 
   // --- 6) Cong no phai tra (NCC tu chi phi noi bo, + doi tac tu thue ngoai) ---
   // Loai "Tu choi" — cung ly do nhu chiPhiTrongKy o tren; con dung lai cho (7)
@@ -402,22 +444,24 @@ export default function BaoCaoView({
         columns: [
           { header: "Số đơn", key: "soDon", width: 14 },
           { header: "Khách hàng", key: "kh", width: 20 },
-          { header: "Giá bán", key: "giaBan", width: 14, numFmt: "#,##0" },
+          { header: "Dịch vụ (trước VAT)", key: "dichVu", width: 18, numFmt: "#,##0" },
+          { header: "VAT", key: "vat", width: 14, numFmt: "#,##0" },
           { header: "Chi hộ", key: "chiHo", width: 14, numFmt: "#,##0" },
+          { header: "Tổng phải thu", key: "tongPhaiThu", width: 16, numFmt: "#,##0" },
           { header: "Số hóa đơn", key: "soHd", width: 18 },
-          { header: "Tổng hóa đơn", key: "tongHd", width: 14, numFmt: "#,##0" },
           { header: "Đã thu", key: "daThu", width: 14, numFmt: "#,##0" },
           { header: "Còn phải thu", key: "conPhaiThu", width: 14, numFmt: "#,##0" },
         ],
         rows: congNoTheoLo.map((r) => [
           r.donHang.so_don_hang,
           r.khTen,
-          r.giaBan,
+          r.dichVuTruocVat,
+          r.vat,
           r.chiHo,
+          r.tongPhaiThu,
           r.soLuongHoaDon > 0 ? r.soHoaDon : "Chưa xuất HĐ",
-          r.tongHoaDon,
           r.daThu,
-          r.soLuongHoaDon > 0 ? r.tongHoaDon - r.daThu : r.giaBan + r.chiHo,
+          r.conPhaiThu,
         ]),
       });
       themSheetKeO(wb, {
@@ -434,7 +478,7 @@ export default function BaoCaoView({
         sheetName: "Công nợ phải thu",
         columns: [
           { header: "Khách hàng", key: "kh", width: 22 },
-          { header: "Tổng hóa đơn", key: "tongHoaDon", width: 16 },
+          { header: "Tổng phải thu", key: "tongHoaDon", width: 16 },
           { header: "Đã thu", key: "daThu", width: 14 },
           { header: "Còn phải thu", key: "conPhaiThu", width: 14 },
         ],
@@ -557,7 +601,7 @@ export default function BaoCaoView({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    {["Số đơn", "Khách hàng", "Giá bán", "Chi hộ", "Hóa đơn", "Tổng HĐ", "Đã thu", "Còn phải thu"].map((h) => (
+                    {["Số đơn", "Khách hàng", "Dịch vụ (trước VAT)", "VAT", "Chi hộ", "Tổng phải thu", "Hóa đơn", "Đã thu", "Còn phải thu"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium">
                         {h}
                       </th>
@@ -566,7 +610,6 @@ export default function BaoCaoView({
                 </thead>
                 <tbody>
                   {congNoTheoLo.map((r) => {
-                    const conPhaiThu = r.soLuongHoaDon > 0 ? r.tongHoaDon - r.daThu : r.giaBan + r.chiHo;
                     return (
                       <tr key={r.donHang.id} className="border-t border-slate-100">
                         <td className="px-3 py-2">
@@ -575,27 +618,28 @@ export default function BaoCaoView({
                           </Link>
                         </td>
                         <td className="px-3 py-2">{r.khTen}</td>
-                        <td className="px-3 py-2">{fmt(r.giaBan)}</td>
+                        <td className="px-3 py-2">{fmt(r.dichVuTruocVat)}</td>
+                        <td className="px-3 py-2">{fmt(r.vat)}</td>
                         <td className="px-3 py-2">{fmt(r.chiHo)}</td>
+                        <td className="px-3 py-2">{fmt(r.tongPhaiThu)}</td>
                         <td className="px-3 py-2">
                           {r.soLuongHoaDon > 0 ? (
                             <>
                               {r.soHoaDon}
-                              {r.gomNhieuDon && <span className="ml-1 text-amber-600" title="Hóa đơn này gồm nhiều đơn hàng, số đã thu không tách riêng được cho từng đơn">*</span>}
+                              {r.gomNhieuDon && <span className="ml-1 text-amber-600" title="Hóa đơn này gồm nhiều đơn hàng — Đã thu đã được phân bổ theo tỷ lệ dịch vụ của từng đơn, không phải tiền thực nhận riêng cho đơn này">*</span>}
                             </>
                           ) : (
                             <span className="text-slate-400">Chưa xuất HĐ</span>
                           )}
                         </td>
-                        <td className="px-3 py-2">{fmt(r.tongHoaDon)}</td>
                         <td className="px-3 py-2">{fmt(r.daThu)}</td>
-                        <td className="px-3 py-2 font-medium">{fmt(conPhaiThu)}</td>
+                        <td className="px-3 py-2 font-medium">{fmt(r.conPhaiThu)}</td>
                       </tr>
                     );
                   })}
                   {congNoTheoLo.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                      <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
                         Không có đơn hàng trong khoảng thời gian này.
                       </td>
                     </tr>
@@ -604,7 +648,7 @@ export default function BaoCaoView({
               </table>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              * Hóa đơn gộp nhiều đơn hàng thì &quot;Đã thu&quot;/&quot;Còn phải thu&quot; hiển thị theo cả hóa đơn, không tách được cho riêng từng đơn.
+              * Hóa đơn gộp nhiều đơn hàng: &quot;Đã thu&quot; của mỗi đơn đã được phân bổ theo tỷ lệ dịch vụ của đơn đó trong hóa đơn, không phải tiền thực nhận riêng cho đơn này.
             </p>
           </Section>
 
@@ -617,7 +661,7 @@ export default function BaoCaoView({
 
           <Section title="Công nợ phải thu (theo khách hàng)">
             <SimpleTable
-              cols={["Khách hàng", "Tổng hóa đơn", "Đã thu", "Còn phải thu"]}
+              cols={["Khách hàng", "Tổng phải thu", "Đã thu", "Còn phải thu"]}
               rows={congNoPhaiThu.map((r) => [r.ten, fmt(r.tongHoaDon), fmt(r.daThu), fmt(r.conPhaiThu)])}
             />
           </Section>

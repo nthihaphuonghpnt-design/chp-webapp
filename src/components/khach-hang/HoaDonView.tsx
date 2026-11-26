@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
 import MoneyInput from "@/components/common/MoneyInput";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { docDanhSachHoaDonDienTu } from "@/lib/danhSachHoaDonDienTu";
 import type { DinhKem } from "@/types/database";
@@ -136,6 +137,11 @@ export default function HoaDonView({
   // logic da co), chi gom lam 1 thao tac UI thay vi bam "Thu tiền" tung dong.
   const [selectedForThu, setSelectedForThu] = useState<Set<string>>(new Set());
   const [showThuTienNhieu, setShowThuTienNhieu] = useState(false);
+  // P1 muc 5e: state cho 3 ConfirmDialog thay window.prompt() (xem huy/
+  // xuLy*Confirm phia tren).
+  const [dialogThuTien, setDialogThuTien] = useState<Row | null>(null);
+  const [dialogSuaPhuongThuc, setDialogSuaPhuongThuc] = useState<Row | null>(null);
+  const [dialogHuy, setDialogHuy] = useState<Row | null>(null);
   const [doiChieuCong, setDoiChieuCong] = useState<{ dong: number; so: string; ketQua: string }[] | null>(null);
   const [loiFileCong, setLoiFileCong] = useState<string | null>(null);
 
@@ -322,26 +328,25 @@ export default function HoaDonView({
     return data as Row | null;
   }
 
-  async function handleThuTien(row: Row) {
-    const conLai = row.tong_tien - (row.so_tien_da_thu ?? 0);
-    const nhap = window.prompt(
-      `Ghi nhận thu tiền cho hóa đơn "${row.so_hoa_don ?? ""}" — còn phải thu ${conLai.toLocaleString("en-US")}.\nNhập số tiền thực nhận (có thể lớn hơn số còn phải thu, phần dư sẽ tự chuyển thành credit của khách hàng):`,
-    );
-    if (nhap === null) return;
-    const soTien = Number(nhap.replace(/[^\d.]/g, ""));
+  // P1 muc 5e (2026-11-26): window.prompt()/window.confirm() KHONG duoc trinh
+  // duyet nhung (preview trong app) ho tro — bam nut im lim, console bao loi
+  // "prompt() is not supported". Thay bang modal rieng cua app (ConfirmDialog)
+  // cho ca 3 hanh dong duoi day — mo dialog qua state, RPC thuc su chay trong
+  // cac ham xuLy*ConfirmDialog goi tu onConfirm.
+  function handleThuTien(row: Row) {
+    setDialogThuTien(row);
+  }
+  async function xuLyThuTienConfirm(row: Row, values: Record<string, string>) {
+    const soTien = Number((values.so_tien || "").replace(/[^\d.]/g, ""));
     if (!soTien || soTien <= 0) {
       window.alert("Số tiền không hợp lệ.");
       return;
     }
-    const phuongThuc = window.prompt('Phương thức thu — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":', row.phuong_thuc_thu || "Tài khoản công ty");
-    if (phuongThuc !== "Tiền mặt" && phuongThuc !== "Tài khoản công ty") {
-      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
-      return;
-    }
+    setDialogThuTien(null);
     const { data, error } = await supabase.rpc("thu_tien_hoa_don_xuat", {
       p_hoa_don_id: row.id,
       p_so_tien: soTien,
-      p_phuong_thuc: phuongThuc,
+      p_phuong_thuc: values.phuong_thuc,
       p_ghi_chu: null,
     });
     if (error) {
@@ -358,27 +363,15 @@ export default function HoaDonView({
     if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
   }
 
-  async function handleSuaPhuongThucThu(row: Row) {
-    const hienTai = row.phuong_thuc_thu || "(chưa có)";
-    const moi = window.prompt(
-      `Hóa đơn "${row.so_hoa_don ?? ""}" đang ghi nhận thu qua "${hienTai}".\nSửa lại đúng phương thức thực tế — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":`,
-      hienTai === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
-    );
-    if (moi === null) return;
-    if (moi !== "Tiền mặt" && moi !== "Tài khoản công ty") {
-      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
-      return;
-    }
-    const lyDo = window.prompt("Lý do sửa phương thức thu tiền (bắt buộc)?");
-    if (lyDo === null) return;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi sửa phương thức.");
-      return;
-    }
+  function handleSuaPhuongThucThu(row: Row) {
+    setDialogSuaPhuongThuc(row);
+  }
+  async function xuLySuaPhuongThucConfirm(row: Row, values: Record<string, string>) {
+    setDialogSuaPhuongThuc(null);
     const { error } = await supabase.rpc("sua_phuong_thuc_thu_hoa_don_xuat", {
       p_hoa_don_id: row.id,
-      p_phuong_thuc_moi: moi,
-      p_ly_do: lyDo,
+      p_phuong_thuc_moi: values.phuong_thuc_moi,
+      p_ly_do: values.ly_do,
     });
     if (error) {
       window.alert(error.message);
@@ -388,14 +381,12 @@ export default function HoaDonView({
     if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
   }
 
-  async function handleHuy(row: Row) {
-    const lyDo = window.prompt(`Lý do hủy hóa đơn "${row.so_hoa_don ?? ""}"?`);
-    if (lyDo === null) return;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi hủy.");
-      return;
-    }
-    const { error } = await supabase.rpc("huy_hoa_don_xuat", { p_hoa_don_id: row.id, p_ly_do: lyDo });
+  function handleHuy(row: Row) {
+    setDialogHuy(row);
+  }
+  async function xuLyHuyConfirm(row: Row, values: Record<string, string>) {
+    setDialogHuy(null);
+    const { error } = await supabase.rpc("huy_hoa_don_xuat", { p_hoa_don_id: row.id, p_ly_do: values.ly_do });
     if (error) {
       window.alert(error.message);
       return;
@@ -709,6 +700,21 @@ export default function HoaDonView({
           khachHangList={khachHangList}
           donHangList={donHangList}
           initialDonHangIds={editing ? donHangCuaHoaDon(editing.id).map((d) => d.id) : []}
+          donHangDaCoHoaDon={(() => {
+            // P1 muc 5b: don da duoc hoa don KHAC (khong phai hoa don dang
+            // sua, neu co) gan toi — dung de canh bao trong form, khong loc
+            // khoi danh sach (xem HoaDonForm).
+            const map = new Map<string, string[]>();
+            for (const l of lienKet) {
+              if (editing && l.hoa_don_id === editing.id) continue;
+              const hd = rows.find((r) => r.id === l.hoa_don_id);
+              if (!hd || hd.trang_thai === "Đã hủy" || hd.trang_thai === "Đã thay thế") continue;
+              const arr = map.get(l.don_hang_id) ?? [];
+              arr.push(hd.so_hoa_don || "(chưa có số)");
+              map.set(l.don_hang_id, arr);
+            }
+            return map;
+          })()}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
         />
@@ -735,6 +741,63 @@ export default function HoaDonView({
             const updated = await Promise.all(ids.map((id) => refetchRow(id)));
             setRows((prev) => prev.map((r) => updated.find((u) => u?.id === r.id) ?? r));
           }}
+        />
+      )}
+
+      {dialogThuTien && (
+        <ConfirmDialog
+          title={`Ghi nhận thu tiền — ${dialogThuTien.so_hoa_don ?? "(chưa có số)"}`}
+          message={`Còn phải thu ${(dialogThuTien.tong_tien - (dialogThuTien.so_tien_da_thu ?? 0)).toLocaleString("en-US")}. Số tiền thực nhận có thể lớn hơn, phần dư sẽ tự chuyển thành credit của khách hàng.`}
+          fields={[
+            { key: "so_tien", label: "Số tiền thực nhận", required: true, placeholder: "VD: 10000000" },
+            {
+              key: "phuong_thuc",
+              label: "Phương thức thu",
+              type: "select",
+              defaultValue: dialogThuTien.phuong_thuc_thu || "Tài khoản công ty",
+              options: [
+                { value: "Tài khoản công ty", label: "Tài khoản công ty" },
+                { value: "Tiền mặt", label: "Tiền mặt" },
+              ],
+            },
+          ]}
+          confirmLabel="Ghi nhận"
+          onCancel={() => setDialogThuTien(null)}
+          onConfirm={(values) => xuLyThuTienConfirm(dialogThuTien, values)}
+        />
+      )}
+
+      {dialogSuaPhuongThuc && (
+        <ConfirmDialog
+          title={`Sửa phương thức thu — ${dialogSuaPhuongThuc.so_hoa_don ?? "(chưa có số)"}`}
+          message={`Đang ghi nhận thu qua "${dialogSuaPhuongThuc.phuong_thuc_thu || "(chưa có)"}".`}
+          fields={[
+            {
+              key: "phuong_thuc_moi",
+              label: "Phương thức đúng",
+              type: "select",
+              defaultValue: dialogSuaPhuongThuc.phuong_thuc_thu === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
+              options: [
+                { value: "Tài khoản công ty", label: "Tài khoản công ty" },
+                { value: "Tiền mặt", label: "Tiền mặt" },
+              ],
+            },
+            { key: "ly_do", label: "Lý do sửa", type: "textarea", required: true, placeholder: "Bắt buộc" },
+          ]}
+          confirmLabel="Lưu"
+          onCancel={() => setDialogSuaPhuongThuc(null)}
+          onConfirm={(values) => xuLySuaPhuongThucConfirm(dialogSuaPhuongThuc, values)}
+        />
+      )}
+
+      {dialogHuy && (
+        <ConfirmDialog
+          title={`Hủy hóa đơn — ${dialogHuy.so_hoa_don ?? "(chưa có số)"}`}
+          fields={[{ key: "ly_do", label: "Lý do hủy", type: "textarea", required: true, placeholder: "Bắt buộc" }]}
+          confirmLabel="Xác nhận hủy"
+          danger
+          onCancel={() => setDialogHuy(null)}
+          onConfirm={(values) => xuLyHuyConfirm(dialogHuy, values)}
         />
       )}
     </div>
@@ -958,6 +1021,7 @@ function HoaDonForm({
   khachHangList,
   donHangList,
   initialDonHangIds,
+  donHangDaCoHoaDon,
   onCancel,
   onSave,
 }: {
@@ -965,6 +1029,11 @@ function HoaDonForm({
   khachHangList: KhachHang[];
   donHangList: DonHangOpt[];
   initialDonHangIds: string[];
+  /** So hoa don KHAC (khong phai hoa don dang sua) da gan cho tung don hang —
+   * P1 muc 5b: don da co hoa don van hien de chon (co the con phan chua len
+   * hoa don), nhung phai canh bao ro + bat xac nhan truoc khi chon, tranh
+   * xuat trung vo y. */
+  donHangDaCoHoaDon: Map<string, string[]>;
   onCancel: () => void;
   onSave: (values: Record<string, string>, selectedDonHang: string[]) => void;
 }) {
@@ -994,7 +1063,19 @@ function HoaDonForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  // P1 muc 5b/5e (2026-11-26): window.confirm() khong duoc trinh duyet nhung
+  // ho tro (xac nhan xong im lim, khong tick duoc) — xac nhan don-da-co-HD
+  // qua ConfirmDialog (state ben duoi) thay vi goi truc tiep window.confirm().
+  const [xacNhanChonDonDaCoHD, setXacNhanChonDonDaCoHD] = useState<string | null>(null);
+
   function toggleDonHang(id: string) {
+    if (!selectedDonHang.includes(id)) {
+      const hoaDonKhac = donHangDaCoHoaDon.get(id);
+      if (hoaDonKhac && hoaDonKhac.length > 0) {
+        setXacNhanChonDonDaCoHD(id);
+        return;
+      }
+    }
     setSelectedDonHang((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
@@ -1028,11 +1109,55 @@ function HoaDonForm({
 
   const tongTienCoThue = (Number(values.tong_tien_truoc_thue) || 0) * (1 + (Number(values.vat_percent) || 0) / 100) + (Number(values.tien_chi_ho) || 0);
 
+  // P1 muc 5a (2026-11-26): khong cho luu hoa don trong — bat buoc So hoa don,
+  // Ngay xuat, Tong tien > 0. Validate o DAY (truoc khi goi onSave) de chan
+  // moi duong dan submit (kec ca neu Escape/phim tat nao do vo tinh trigger
+  // submit cua <form>), khong chi dua vao nguoi dung bam dung nut "Luu".
+  function hopLeDeLuu(): string | null {
+    if (!values.khach_hang_id) return "Chưa chọn khách hàng.";
+    if (!values.so_hoa_don.trim()) return "Chưa nhập Số hóa đơn.";
+    if (!values.ngay_xuat) return "Chưa nhập Ngày xuất.";
+    if (tongTienCoThue <= 0) return "Tổng tiền phải lớn hơn 0.";
+    return null;
+  }
+
+  const coDuLieuDaNhap =
+    !!values.so_hoa_don.trim() || !!values.tong_tien_truoc_thue.trim() || !!values.tien_chi_ho.trim() || !!values.ghi_chu.trim() || selectedDonHang.length > 0;
+  // P1 muc 5e: window.confirm() cung khong duoc trinh duyet nhung ho tro —
+  // dung ConfirmDialog (modal rieng cua app) thay vi window.confirm().
+  const [xacNhanDong, setXacNhanDong] = useState(false);
+
+  function huyForm() {
+    // P1 muc 5a: hoi xac nhan neu da nhap do, tranh mat du lieu khi bam
+    // Huy/Escape/bam ra ngoai nham.
+    if (coDuLieuDaNhap) {
+      setXacNhanDong(true);
+      return;
+    }
+    onCancel();
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+      onKeyDown={(e) => {
+        // Chan Escape o tang NGOAI CUNG — tuyet doi khong de lot xuong <form>
+        // (vai trinh duyet nhung tung ghi nhan Escape nhu mot phim submit).
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          huyForm();
+        }
+      }}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          const loi = hopLeDeLuu();
+          if (loi) {
+            window.alert(loi);
+            return;
+          }
           onSave(values, selectedDonHang);
         }}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl"
@@ -1070,12 +1195,18 @@ function HoaDonForm({
               <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (có thể chọn nhiều)</label>
               <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200 p-2">
                 {donHangCuaKh.length === 0 && <p className="text-xs text-slate-400">Chọn khách hàng để xem đơn hàng.</p>}
-                {donHangCuaKh.map((d) => (
-                  <label key={d.id} className="flex items-center gap-2 py-1 text-sm">
-                    <input type="checkbox" checked={selectedDonHang.includes(d.id)} onChange={() => toggleDonHang(d.id)} />
-                    {d.so_don_hang}
-                  </label>
-                ))}
+                {donHangCuaKh.map((d) => {
+                  const hoaDonKhac = donHangDaCoHoaDon.get(d.id);
+                  return (
+                    <label key={d.id} className="flex items-center gap-2 py-1 text-sm">
+                      <input type="checkbox" checked={selectedDonHang.includes(d.id)} onChange={() => toggleDonHang(d.id)} />
+                      {d.so_don_hang}
+                      {hoaDonKhac && hoaDonKhac.length > 0 && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">⚠ Đã có HĐ: {hoaDonKhac.join(", ")}</span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1215,7 +1346,7 @@ function HoaDonForm({
 
         <div className="mt-6 flex gap-3">
           {step === 0 ? (
-            <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
+            <button type="button" onClick={huyForm} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
               Hủy
             </button>
           ) : (
@@ -1242,6 +1373,33 @@ function HoaDonForm({
           )}
         </div>
       </form>
+      {xacNhanDong && (
+        <ConfirmDialog
+          title="Đóng form?"
+          message="Dữ liệu đã nhập sẽ không được lưu."
+          confirmLabel="Đóng, không lưu"
+          danger
+          onCancel={() => setXacNhanDong(false)}
+          onConfirm={() => {
+            setXacNhanDong(false);
+            onCancel();
+          }}
+        />
+      )}
+      {xacNhanChonDonDaCoHD && (
+        <ConfirmDialog
+          title="Đơn đã có hóa đơn"
+          message={`Đơn này đã có hóa đơn: ${(donHangDaCoHoaDon.get(xacNhanChonDonDaCoHD) ?? []).join(", ")}. Chọn tiếp có thể gây xuất trùng — chỉ tiếp tục nếu chắc chắn đơn còn phần chưa lên hóa đơn.`}
+          confirmLabel="Vẫn chọn đơn này"
+          danger
+          onCancel={() => setXacNhanChonDonDaCoHD(null)}
+          onConfirm={() => {
+            const id = xacNhanChonDonDaCoHD;
+            setXacNhanChonDonDaCoHD(null);
+            setSelectedDonHang((prev) => (prev.includes(id) ? prev : [...prev, id]));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1280,6 +1438,7 @@ function DieuChinhThayTheForm({
     ky_ke_khai: "",
   });
   const [lyDo, setLyDo] = useState("");
+  const [xacNhanDong, setXacNhanDong] = useState(false);
   const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 
@@ -1287,13 +1446,38 @@ function DieuChinhThayTheForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  function huyForm() {
+    // P1 muc 5a/5e: hoi xac nhan bang ConfirmDialog (khong dung window.confirm,
+    // xem giai thich o HoaDonForm) neu da nhap do.
+    if (values.so_hoa_don.trim() || values.tong_tien_truoc_thue.trim() || lyDo.trim()) {
+      setXacNhanDong(true);
+      return;
+    }
+    onCancel();
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+      onKeyDown={(e) => {
+        // Xem giai thich o HoaDonForm (P1 muc 5a) — chan Escape o tang ngoai
+        // cung, khong de lot xuong <form> co the vo tinh trigger submit.
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          huyForm();
+        }
+      }}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (!lyDo.trim()) {
             window.alert("Phải nhập lý do.");
+            return;
+          }
+          if (!values.so_hoa_don.trim() || !values.ngay_xuat || !values.tong_tien_truoc_thue.trim()) {
+            window.alert("Phải nhập đủ Số hóa đơn, Ngày xuất và Tổng tiền.");
             return;
           }
           onSave(values, lyDo);
@@ -1364,7 +1548,7 @@ function DieuChinhThayTheForm({
         </div>
 
         <div className="mt-6 flex gap-3">
-          <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
+          <button type="button" onClick={huyForm} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
             Hủy
           </button>
           <button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white">
@@ -1372,6 +1556,19 @@ function DieuChinhThayTheForm({
           </button>
         </div>
       </form>
+      {xacNhanDong && (
+        <ConfirmDialog
+          title="Đóng form?"
+          message="Dữ liệu đã nhập sẽ không được lưu."
+          confirmLabel="Đóng, không lưu"
+          danger
+          onCancel={() => setXacNhanDong(false)}
+          onConfirm={() => {
+            setXacNhanDong(false);
+            onCancel();
+          }}
+        />
+      )}
     </div>
   );
 }

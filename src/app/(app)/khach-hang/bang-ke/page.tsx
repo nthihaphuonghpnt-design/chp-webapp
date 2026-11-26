@@ -58,7 +58,22 @@ export default async function BangKePage({
     let bienSoMap: Record<string, string[]> = {};
     let toKhaiMap: Record<string, string[]> = {};
     let contMap: Record<string, string[]> = {};
+    let hoaDonHienCoMap: Record<string, string[]> = {};
     if (donHangIds.length > 0) {
+      // P1 muc 4 (2026-11-26): don da co hoa don (gan qua hoa_don_don_hang,
+      // ke ca khi tao tu wizard "Them hoa don" khong gan hoa_don_id tung dong)
+      // van co the con dong chua gan — hien banner canh bao ngay tren Bang ke
+      // thay vi am tham liet ke nhu chua tung xuat hoa don (de xuat trung).
+      const { data: lienKetHienCo } = await supabase
+        .from("hoa_don_don_hang")
+        .select("don_hang_id, hoa_don:hoa_don_id(so_hoa_don, trang_thai)")
+        .in("don_hang_id", donHangIds);
+      for (const l of lienKetHienCo ?? []) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const hd = Array.isArray(l.hoa_don) ? (l.hoa_don[0] as any) : (l.hoa_don as any);
+        if (!hd || hd.trang_thai === "Đã hủy" || hd.trang_thai === "Đã thay thế") continue;
+        (hoaDonHienCoMap[l.don_hang_id] ??= []).push(hd.so_hoa_don || "(chưa có số)");
+      }
       const [{ data: cp }, { data: pt }, { data: tn }, { data: ctvc }, { data: tk }, { data: cont }] = await Promise.all([
         supabase
           .from("phat_sinh_chi_phi")
@@ -66,20 +81,20 @@ export default async function BangKePage({
           .in("don_hang_id", donHangIds)
           .is("hoa_don_id", null)
           .neq("trang_thai", "Từ chối")
-          .order("ngay_phat_sinh"),
+          .order("ngay_phat_sinh", { ascending: false }),
         supabase
           .from("phu_thu")
           .select("*, don_hang:don_hang_id(so_don_hang)")
           .in("don_hang_id", donHangIds)
           .is("hoa_don_id", null)
-          .order("created_at"),
+          .order("created_at", { ascending: false }),
         supabase
           .from("don_thue_ngoai")
           .select(`${DON_THUE_NGOAI_SAFE_COLS}, don_hang:don_hang_id(so_don_hang)`)
           .in("don_hang_id", donHangIds)
           .is("hoa_don_id", null)
           .neq("trang_thai", "Từ chối")
-          .order("ngay_thue"),
+          .order("ngay_thue", { ascending: false }),
         supabase
           .from("chi_tiet_van_chuyen")
           .select("don_hang_id, so_xe")
@@ -120,6 +135,7 @@ export default async function BangKePage({
       bien_so: bienSoMap[d.id] ?? [],
       so_to_khai: toKhaiMap[d.id] ?? [],
       so_cont: contMap[d.id] ?? [],
+      hoa_don_hien_co: hoaDonHienCoMap[d.id] ?? [],
     }));
   }
 

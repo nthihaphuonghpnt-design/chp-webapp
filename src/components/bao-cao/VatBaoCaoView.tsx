@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
@@ -22,11 +23,13 @@ interface HoaDonXuatRow extends HoaDonXuatVatRow {
   so_hoa_don: string | null;
   khach_hang_ten: string;
   vat_percent: number | null;
+  updated_at: string;
 }
 interface HoaDonDauVaoRow extends HoaDonDauVaoVatRow {
   so_hoa_don: string | null;
   nha_cung_cap_ten: string;
   tong_tien_hang: number | null;
+  updated_at: string;
 }
 interface KyKeKhaiRow {
   ky: string;
@@ -79,10 +82,23 @@ export default function VatBaoCaoView({
     [hoaDonXuatList, hoaDonDauVaoList, granularity],
   );
 
+  // P1 muc 3 (2026-11-26): dem so hoa don dau vao con "Chua xac dinh" dieu
+  // kien khau tru theo tung ky — de ke toan khong bo sot (hien tai cac dong
+  // nay bi loai hoan toan khoi vatVaoTheoKy nen de xem dai nhu khong ton tai).
+  const chuaXacDinhTheoKy = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const h of hoaDonDauVaoList) {
+      if (h.chi_ho || h.dieu_kien_khau_tru !== "Chưa xác định") continue;
+      const ky = kyTuThang(kyThangHoaDonDauVao(h), granularity);
+      m.set(ky, (m.get(ky) ?? 0) + 1);
+    }
+    return m;
+  }, [hoaDonDauVaoList, granularity]);
+
   const danhSachKy = useMemo(() => {
-    const tatCa = new Set<string>([...vatRaTheoKy.keys(), ...vatVaoTheoKy.keys()]);
+    const tatCa = new Set<string>([...vatRaTheoKy.keys(), ...vatVaoTheoKy.keys(), ...chuaXacDinhTheoKy.keys()]);
     return Array.from(tatCa).sort();
-  }, [vatRaTheoKy, vatVaoTheoKy]);
+  }, [vatRaTheoKy, vatVaoTheoKy, chuaXacDinhTheoKy]);
 
   const tongHop = useMemo(() => tinhVatTheoKy(danhSachKy, vatRaTheoKy, vatVaoTheoKy), [danhSachKy, vatRaTheoKy, vatVaoTheoKy]);
 
@@ -261,6 +277,7 @@ export default function VatBaoCaoView({
               <th className="px-3 py-2 text-right font-medium">Khấu trừ từ kỳ trước</th>
               <th className="px-3 py-2 text-right font-medium">Phải nộp / được khấu trừ</th>
               <th className="px-3 py-2 text-right font-medium">Chuyển kỳ sau</th>
+              <th className="px-3 py-2 text-right font-medium">HĐ đầu vào chưa xác định</th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
@@ -279,6 +296,19 @@ export default function VatBaoCaoView({
                   </td>
                   <td className="px-3 py-2 text-right text-slate-700">{t.chuyenKySau.toLocaleString("en-US")}</td>
                   <td className="px-3 py-2 text-right">
+                    {(chuaXacDinhTheoKy.get(t.ky) ?? 0) > 0 ? (
+                      <Link
+                        href="/chi-phi/hoa-don-dau-vao"
+                        className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:underline"
+                        title="Vào Hóa đơn đầu vào, lọc Điều kiện khấu trừ = Chưa xác định để xử lý"
+                      >
+                        {chuaXacDinhTheoKy.get(t.ky)} hóa đơn
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-slate-300">0</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right">
                     <button
                       onClick={() => setKyMoRong((prev) => (prev === t.ky ? null : t.ky))}
                       className="text-xs font-medium text-blue-600"
@@ -289,10 +319,12 @@ export default function VatBaoCaoView({
                 </tr>
                 {granularity !== "nam" && (
                   <tr className="border-t border-slate-100 bg-slate-50/60">
-                    <td colSpan={7} className="px-3 py-2">
+                    <td colSpan={8} className="px-3 py-2">
                       <KeKhaiStatusBar
                         tongHopKy={t}
                         ghiNhan={kyKeKhaiMap.get(`${t.ky}|${granularity}`)}
+                        hoaDonXuat={hoaDonXuatCuaKy(t.ky)}
+                        hoaDonDauVao={hoaDonDauVaoCuaKy(t.ky)}
                         dangXuLy={dangXuLyKy === t.ky}
                         onDanhDau={() => handleDanhDauDaKeKhai(t)}
                         onBoSung={() => handleBoSung01Khbs(t)}
@@ -303,7 +335,7 @@ export default function VatBaoCaoView({
                 )}
                 {kyMoRong === t.ky && (
                   <tr className="border-t border-slate-100 bg-slate-50">
-                    <td colSpan={7} className="px-3 py-3">
+                    <td colSpan={8} className="px-3 py-3">
                       <ChiTietKy hoaDonXuat={hoaDonXuatCuaKy(t.ky)} hoaDonDauVao={hoaDonDauVaoCuaKy(t.ky)} vatRa={t.vatRa} vatVao={t.vatVaoDuDieuKien} />
                     </td>
                   </tr>
@@ -312,7 +344,7 @@ export default function VatBaoCaoView({
             ))}
             {tongHop.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                   Chưa có hóa đơn nào để tổng hợp VAT.
                 </td>
               </tr>
@@ -327,6 +359,8 @@ export default function VatBaoCaoView({
 function KeKhaiStatusBar({
   tongHopKy,
   ghiNhan,
+  hoaDonXuat,
+  hoaDonDauVao,
   dangXuLy,
   onDanhDau,
   onBoSung,
@@ -334,15 +368,30 @@ function KeKhaiStatusBar({
 }: {
   tongHopKy: TongHopVatKy;
   ghiNhan: KyKeKhaiRow | undefined;
+  hoaDonXuat: HoaDonXuatRow[];
+  hoaDonDauVao: HoaDonDauVaoRow[];
   dangXuLy: boolean;
   onDanhDau: () => void;
   onBoSung: () => void;
   onXuatXml: () => void;
 }) {
   const daKhop = ghiNhan ? soLieuKhopNhau(ghiNhan.so_lieu_da_khai, tongHopKy) : true;
+  // P1 muc 3 (2026-11-26): "hoa don nao da doi" chi suy doan duoc bang updated_at
+  // so voi ngay_ke_khai (khong co snapshot tung hoa don luc ke khai, chi co
+  // tong so lieu) — danh sach nay la GOI Y de ke toan tu kiem tra, khong chac
+  // chan 100% la nguyen nhan duy nhat gay lech so lieu.
+  const hoaDonDaDoi = useMemo(() => {
+    if (!ghiNhan || daKhop) return { xuat: [] as HoaDonXuatRow[], dauVao: [] as HoaDonDauVaoRow[] };
+    const moc = ghiNhan.ngay_ke_khai;
+    return {
+      xuat: hoaDonXuat.filter((h) => h.updated_at && h.updated_at.slice(0, 10) >= moc),
+      dauVao: hoaDonDauVao.filter((h) => h.updated_at && h.updated_at.slice(0, 10) >= moc),
+    };
+  }, [ghiNhan, daKhop, hoaDonXuat, hoaDonDauVao]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs">
+    <div className="flex flex-col gap-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2">
       {!ghiNhan && (
         <>
           <span className="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">Chưa kê khai</span>
@@ -370,6 +419,18 @@ function KeKhaiStatusBar({
       <button onClick={onXuatXml} className="ml-auto rounded border border-slate-300 bg-white px-2 py-1 font-medium text-slate-700">
         Xuất XML hỗ trợ 01/GTGT
       </button>
+    </div>
+    {ghiNhan && !daKhop && (hoaDonDaDoi.xuat.length > 0 || hoaDonDaDoi.dauVao.length > 0) && (
+      <div className="rounded border border-amber-200 bg-amber-50/60 p-2 text-amber-800">
+        <p className="mb-1 font-medium">Hóa đơn có khả năng đã đổi từ sau {ghiNhan.ngay_ke_khai} (gợi ý theo thời điểm sửa gần nhất, kế toán tự kiểm tra lại):</p>
+        {hoaDonDaDoi.xuat.length > 0 && (
+          <p>Hóa đơn xuất: {hoaDonDaDoi.xuat.map((h) => h.so_hoa_don || "(chưa có số)").join(", ")}</p>
+        )}
+        {hoaDonDaDoi.dauVao.length > 0 && (
+          <p>Hóa đơn đầu vào: {hoaDonDaDoi.dauVao.map((h) => h.so_hoa_don || "(chưa có số)").join(", ")}</p>
+        )}
+      </div>
+    )}
     </div>
   );
 }

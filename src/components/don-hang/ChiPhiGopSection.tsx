@@ -67,6 +67,10 @@ interface NewRowValues {
   don_gia: string;
   buy: string;
   sell: string;
+  /** VAT % cua gia ban (chi "chi_phi" khong chi_ho — phat_sinh_chi_phi.vat_percent
+   * chua co o thue_ngoai/phu_thu). Gia ban nhap la TRUOC VAT (P1 muc 2, 2026-11-26),
+   * he thong tu cong VAT luc hien/xuat hoa don — KHONG tu suy doan cho du lieu cu. */
+  vat_percent: string;
   noi_bo: boolean;
   chi_ho: boolean;
   ghi_chu: string;
@@ -95,6 +99,7 @@ function blankNewRow(loaiMacDinh: Loai, soLuongMacDinh?: number | null): NewRowV
     don_gia: "",
     buy: "",
     sell: "",
+    vat_percent: "",
     noi_bo: true,
     chi_ho: false,
     ghi_chu: "",
@@ -398,6 +403,7 @@ export default function ChiPhiGopSection({
           don_gia: row.don_gia ? Number(row.don_gia) : null,
           so_tien_da_chi: Number(row.buy),
           gia_ban_sell: row.sell ? Number(row.sell) : null,
+          vat_percent: row.vat_percent ? Number(row.vat_percent) : null,
           noi_bo: row.noi_bo,
           chi_ho: row.chi_ho,
           ghi_chu: row.ghi_chu || null,
@@ -413,11 +419,15 @@ export default function ChiPhiGopSection({
           ...(canChonNguonThanhToan ? { nguon_thanh_toan: row.nguon_thanh_toan || null, tam_ung_id: row.tam_ung_id || null } : {}),
           // Ke toan tu nhap + nguon la Tien mat/Tai khoan cong ty (khong phai
           // Tam ung nhan vien) — coi nhu da thanh toan du ngay luc nhap, tu
-          // chay vao So quy (giong het logic o duyet() ben duoi). Form nay
-          // chua co o VAT nen tong_tien (generated column) == so_tien_da_chi
-          // luc insert, dung Number(row.buy) truc tiep la chinh xac.
+          // chay vao So quy (giong het logic o duyet() ben duoi). tong_tien
+          // (generated column) = so_tien_da_chi + VAT (P1 muc 2) nen phai tra
+          // du CA VAT, khong chi so_tien_da_chi — tinh lai dung so tong.
           ...(isKeToan && (row.nguon_thanh_toan === "Tiền mặt" || row.nguon_thanh_toan === "Tài khoản công ty")
-            ? { so_tien_da_thanh_toan: Number(row.buy), phuong_thuc_thanh_toan: row.nguon_thanh_toan, tinh_trang_thanh_toan: "Đã đủ" }
+            ? {
+                so_tien_da_thanh_toan: Math.round(Number(row.buy) * (1 + (row.vat_percent ? Number(row.vat_percent) : 0) / 100)),
+                phuong_thuc_thanh_toan: row.nguon_thanh_toan,
+                tinh_trang_thanh_toan: "Đã đủ",
+              }
             : {}),
         })
         .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
@@ -493,6 +503,7 @@ export default function ChiPhiGopSection({
         don_gia: r.don_gia?.toString() ?? "",
         buy: r.so_tien_da_chi?.toString() ?? "",
         sell: r.gia_ban_sell?.toString() ?? "",
+        vat_percent: r.vat_percent?.toString() ?? "",
         noi_bo: r.noi_bo,
         chi_ho: r.chi_ho,
         ghi_chu: r.ghi_chu ?? "",
@@ -518,6 +529,7 @@ export default function ChiPhiGopSection({
         don_gia: r.don_gia?.toString() ?? "",
         buy: r.so_tien_da_chi?.toString() ?? "",
         sell: r.gia_ban_sell?.toString() ?? "",
+        vat_percent: "",
         noi_bo: false,
         chi_ho: r.chi_ho,
         ghi_chu: r.noi_dung ?? "",
@@ -543,6 +555,7 @@ export default function ChiPhiGopSection({
         don_gia: "",
         buy: "",
         sell: r.thanh_tien?.toString() ?? "",
+        vat_percent: "",
         noi_bo: false,
         chi_ho: false,
         ghi_chu: r.ghi_chu ?? "",
@@ -593,6 +606,7 @@ export default function ChiPhiGopSection({
           don_gia: editValues.don_gia ? Number(editValues.don_gia) : null,
           so_tien_da_chi: editValues.buy ? Number(editValues.buy) : null,
           gia_ban_sell: editValues.sell ? Number(editValues.sell) : null,
+          vat_percent: editValues.vat_percent ? Number(editValues.vat_percent) : null,
           noi_bo: editValues.noi_bo,
           chi_ho: editValues.chi_ho,
           ghi_chu: editValues.ghi_chu || null,
@@ -888,6 +902,15 @@ export default function ChiPhiGopSection({
         {canSeeSell && (
           <td className="px-2 py-1.5">
             <MoneyInput value={values.sell} onChange={(v) => set({ sell: v })} className={cls} />
+            {loai === "chi_phi" && !values.chi_ho && (
+              <input
+                type="number"
+                value={values.vat_percent}
+                onChange={(e) => set({ vat_percent: e.target.value })}
+                className={`${cls} mt-1`}
+                placeholder="VAT % (trước VAT)"
+              />
+            )}
           </td>
         )}
         <td className="px-2 py-1.5">
@@ -1035,8 +1058,20 @@ export default function ChiPhiGopSection({
               )}
               {canSeeSell && (
                 <div className="mb-2">
-                  <label className="mb-1 block text-xs text-slate-500">Giá bán / Thành tiền</label>
+                  <label className="mb-1 block text-xs text-slate-500">Giá bán / Thành tiền {r.loai === "chi_phi" && !r.chi_ho ? "(trước VAT)" : ""}</label>
                   <MoneyInput value={r.sell} onChange={(v) => capNhatDongMoi(r.key, { sell: v })} className={cls} />
+                </div>
+              )}
+              {canSeeSell && r.loai === "chi_phi" && !r.chi_ho && (
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-slate-500">VAT %</label>
+                  <input
+                    type="number"
+                    value={r.vat_percent}
+                    onChange={(e) => capNhatDongMoi(r.key, { vat_percent: e.target.value })}
+                    className={cls}
+                    placeholder="VD: 8 (để trống nếu không chịu VAT)"
+                  />
                 </div>
               )}
               {r.loai === "chi_phi" && (
@@ -1181,7 +1216,14 @@ export default function ChiPhiGopSection({
                       <td className="px-2 py-2 text-slate-500">{rv.soLuong ?? "—"}</td>
                       <td className="px-2 py-2 text-slate-500">{rv.donGia !== null ? fmt(rv.donGia) : "—"}</td>
                       <td className="px-2 py-2 text-slate-700">{rv.buy !== null ? fmt(rv.buy) : "—"}</td>
-                      {canSeeSell && <td className="px-2 py-2 text-slate-700">{rv.sell !== null ? fmt(rv.sell) : "—"}</td>}
+                      {canSeeSell && (
+                        <td className="px-2 py-2 text-slate-700">
+                          {rv.sell !== null ? fmt(rv.sell) : "—"}
+                          {rv.loai === "chi_phi" && !rv.chiHo && (rv.raw as PhatSinhChiPhi).vat_percent ? (
+                            <p className="text-xs text-slate-400">VAT {(rv.raw as PhatSinhChiPhi).vat_percent}%</p>
+                          ) : null}
+                        </td>
+                      )}
                       <td className="px-2 py-2 text-slate-500">
                         {rv.chiHo ? "Chi hộ" : rv.noiBo === null ? "—" : rv.noiBo ? "Nội bộ" : "—"}
                         {rv.chiHo && rv.soChungTuGoc && <p className="text-xs text-slate-400">CT gốc: {rv.soChungTuGoc}</p>}
@@ -1252,6 +1294,7 @@ export default function ChiPhiGopSection({
               <p className="text-slate-500">
                 {rv.doiTac} · Số tiền đã chi: {rv.buy !== null ? fmt(rv.buy) : "—"}
                 {canSeeSell && rv.sell !== null && ` · Giá bán: ${fmt(rv.sell)}`}
+                {canSeeSell && rv.loai === "chi_phi" && !rv.chiHo && (rv.raw as PhatSinhChiPhi).vat_percent ? ` · VAT: ${(rv.raw as PhatSinhChiPhi).vat_percent}%` : ""}
                 {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}`}
                 {rv.chiHo ? " · Chi hộ" : rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : "—"}`}
                 {rv.nguonThanhToan && ` · Nguồn: ${rv.nguonThanhToan}`}
@@ -1311,8 +1354,20 @@ export default function ChiPhiGopSection({
                   </div>
                   {canSeeSell && (
                     <div>
-                      <label className="mb-1 block text-xs text-slate-500">Giá bán</label>
+                      <label className="mb-1 block text-xs text-slate-500">Giá bán {rv.loai === "chi_phi" && !editValues.chi_ho ? "(trước VAT)" : ""}</label>
                       <MoneyInput value={editValues.sell} onChange={(v) => setEditValues((p) => (p ? { ...p, sell: v } : p))} className={cls} />
+                    </div>
+                  )}
+                  {canSeeSell && rv.loai === "chi_phi" && !editValues.chi_ho && (
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">VAT %</label>
+                      <input
+                        type="number"
+                        value={editValues.vat_percent}
+                        onChange={(e) => setEditValues((p) => (p ? { ...p, vat_percent: e.target.value } : p))}
+                        className={cls}
+                        placeholder="VD: 8 (để trống nếu không chịu VAT)"
+                      />
                     </div>
                   )}
                   {rv.loai !== "phu_thu" && (
