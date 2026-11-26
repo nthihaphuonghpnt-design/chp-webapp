@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/common/MoneyInput";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { ToKhaiHaiQuan } from "@/types/database";
 
 const LOAI_HINH = ["Nhập kinh doanh", "Nhập ủy thác", "Xuất kinh doanh", "Xuất ủy thác", "Tạm nhập tái xuất", "Khác"];
@@ -70,8 +71,15 @@ export default function ToKhaiSection({
     setShowForm(false);
   }
 
-  async function handleDelete(row: ToKhaiHaiQuan) {
-    if (!window.confirm("Xóa tờ khai này?")) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<ToKhaiHaiQuan | null>(null);
+
+  function handleDelete(row: ToKhaiHaiQuan) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: ToKhaiHaiQuan) {
     const { error } = await supabase.from("to_khai_hai_quan").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
     else window.alert(error.message);
@@ -143,6 +151,20 @@ export default function ToKhaiSection({
       </div>
 
       {showForm && <ToKhaiForm initial={editing} saving={saving} onCancel={() => setShowForm(false)} onSave={handleSave} />}
+
+      {choXoa && (
+        <ConfirmDialog
+          title="Xóa tờ khai này?"
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
+        />
+      )}
     </div>
   );
 }
