@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 interface NhanVien {
   id: string;
@@ -97,6 +98,10 @@ export default function PhieuQuyetToanView({
   const [driftDialog, setDriftDialog] = useState<{ phieu: PhieuRow; preview: XemTruoc } | null>(null);
   const [payDialog, setPayDialog] = useState<PhieuRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // window.prompt()/window.confirm() khong duoc trinh duyet nhung ho tro
+  // (xem HoaDonView.tsx muc 5e) — thay bang ConfirmDialog.
+  const [choXacNhanHuy, setChoXacNhanHuy] = useState<PhieuRow | null>(null);
+  const [choSuaPhuongThuc, setChoSuaPhuongThuc] = useState<PhieuRow | null>(null);
 
   async function reload() {
     const { data } = await supabase
@@ -146,12 +151,11 @@ export default function PhieuQuyetToanView({
     await reload();
   }
 
-  async function handleHuy(phieu: PhieuRow) {
-    const canh_bao =
-      phieu.trang_thai === "Đã duyệt"
-        ? "Phiếu đã duyệt — hủy sẽ GIẢI PHÓNG lại toàn bộ tạm ứng/chi phí đã khóa để có thể đưa vào phiếu khác. Chắc chắn hủy?"
-        : "Hủy phiếu nháp này?";
-    if (!window.confirm(canh_bao)) return;
+  function handleHuy(phieu: PhieuRow) {
+    setChoXacNhanHuy(phieu);
+  }
+
+  async function thucHienHuy(phieu: PhieuRow) {
     setBusy(phieu.id);
     const { error } = await supabase.rpc("huy_phieu_quyet_toan_tam_ung", { p_phieu_id: phieu.id });
     setBusy(null);
@@ -177,28 +181,16 @@ export default function PhieuQuyetToanView({
     await reload();
   }
 
-  async function handleSuaPhuongThuc(phieu: PhieuRow) {
-    const hienTai = phieu.phuong_thuc || "(chưa có)";
-    const moi = window.prompt(
-      `Phiếu "${phieu.so_phieu}" đang ghi nhận thanh toán qua "${hienTai}".\nSửa lại đúng phương thức thực tế — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":`,
-      hienTai === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
-    );
-    if (moi === null) return;
-    if (moi !== "Tiền mặt" && moi !== "Tài khoản công ty") {
-      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
-      return;
-    }
-    const lyDo = window.prompt("Lý do sửa phương thức thanh toán (bắt buộc)?");
-    if (lyDo === null) return;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi sửa phương thức.");
-      return;
-    }
+  function handleSuaPhuongThuc(phieu: PhieuRow) {
+    setChoSuaPhuongThuc(phieu);
+  }
+
+  async function xuLySuaPhuongThucConfirm(phieu: PhieuRow, values: Record<string, string>) {
     setBusy(phieu.id);
     const { error } = await supabase.rpc("sua_phuong_thuc_phieu_quyet_toan_tam_ung", {
       p_phieu_id: phieu.id,
-      p_phuong_thuc_moi: moi,
-      p_ly_do: lyDo,
+      p_phuong_thuc_moi: values.phuong_thuc_moi,
+      p_ly_do: values.ly_do,
     });
     setBusy(null);
     if (error) {
@@ -359,6 +351,52 @@ export default function PhieuQuyetToanView({
 
       {payDialog && (
         <PayDialog phieu={payDialog} onCancel={() => setPayDialog(null)} onConfirm={(pt) => handleThanhToan(payDialog, pt)} />
+      )}
+
+      {choXacNhanHuy && (
+        <ConfirmDialog
+          title="Hủy phiếu quyết toán"
+          message={
+            choXacNhanHuy.trang_thai === "Đã duyệt"
+              ? "Phiếu đã duyệt — hủy sẽ GIẢI PHÓNG lại toàn bộ tạm ứng/chi phí đã khóa để có thể đưa vào phiếu khác. Chắc chắn hủy?"
+              : "Hủy phiếu nháp này?"
+          }
+          confirmLabel="Hủy phiếu"
+          danger
+          onCancel={() => setChoXacNhanHuy(null)}
+          onConfirm={() => {
+            const phieu = choXacNhanHuy;
+            setChoXacNhanHuy(null);
+            void thucHienHuy(phieu);
+          }}
+        />
+      )}
+
+      {choSuaPhuongThuc && (
+        <ConfirmDialog
+          title={`Sửa phương thức thanh toán — ${choSuaPhuongThuc.so_phieu ?? ""}`}
+          message={`Đang ghi nhận thanh toán qua "${choSuaPhuongThuc.phuong_thuc || "(chưa có)"}".`}
+          fields={[
+            {
+              key: "phuong_thuc_moi",
+              label: "Phương thức mới",
+              type: "select",
+              defaultValue: choSuaPhuongThuc.phuong_thuc === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
+              options: [
+                { value: "Tiền mặt", label: "Tiền mặt" },
+                { value: "Tài khoản công ty", label: "Tài khoản công ty" },
+              ],
+            },
+            { key: "ly_do", label: "Lý do sửa", type: "textarea", required: true, placeholder: "Bắt buộc" },
+          ]}
+          confirmLabel="Lưu"
+          onCancel={() => setChoSuaPhuongThuc(null)}
+          onConfirm={(values) => {
+            const phieu = choSuaPhuongThuc;
+            setChoSuaPhuongThuc(null);
+            void xuLySuaPhuongThucConfirm(phieu, values);
+          }}
+        />
       )}
     </div>
   );
