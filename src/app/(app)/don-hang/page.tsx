@@ -118,6 +118,7 @@ export default async function DonHangPage() {
         khachHangList={khachHang ?? []}
         saleList={saleList ?? []}
         hienTruongList={hienTruongList ?? []}
+        canBulkAssign={canCreate || user?.phong_ban === "Kế toán"}
       />
     </div>
   );

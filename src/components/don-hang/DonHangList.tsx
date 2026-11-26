@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StatusBadge from "./StatusBadge";
+import { createClient } from "@/lib/supabase/client";
+
+const CHUA_GAN = "__chua_gan__";
 
 interface Person {
   id: string;
@@ -66,13 +69,19 @@ export default function DonHangList({
   khachHangList = [],
   saleList = [],
   hienTruongList = [],
+  canBulkAssign = false,
 }: {
   initialRows: Row[];
   khachHangList?: KhachHangOption[];
   saleList?: Person[];
   hienTruongList?: Person[];
+  /** P2 muc 12 (2026-11-27): Sale/Chung tu/Giam doc — cung quyen voi
+   * canManageDonHang, cho gan Sale hang loat cho cac don con "—". */
+  canBulkAssign?: boolean;
 }) {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+  const [rows, setRows] = useState(initialRows);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [khachHangFilter, setKhachHangFilter] = useState("");
@@ -81,13 +90,16 @@ export default function DonHangList({
   const [tuNgay, setTuNgay] = useState("");
   const [denNgay, setDenNgay] = useState("");
   const [onlyPending, setOnlyPending] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [ganSaleId, setGanSaleId] = useState("");
+  const [dangGan, setDangGan] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    const result = initialRows.filter((r) => {
+    const result = rows.filter((r) => {
       if (statusFilter && r.trang_thai !== statusFilter) return false;
       if (khachHangFilter && r.khach_hang_id !== khachHangFilter) return false;
-      if (saleFilter && r.sale_phu_trach_id !== saleFilter) return false;
+      if (saleFilter === CHUA_GAN ? !!r.sale_phu_trach_id : saleFilter && r.sale_phu_trach_id !== saleFilter) return false;
       if (hienTruongFilter && r.hien_truong_phu_trach_id !== hienTruongFilter) return false;
       if (tuNgay && r.ngay_len_don < tuNgay) return false;
       if (denNgay && r.ngay_len_don > denNgay) return false;
@@ -107,10 +119,36 @@ export default function DonHangList({
       if (pendingA !== pendingB) return pendingA - pendingB;
       return b.ngay_len_don.localeCompare(a.ngay_len_don);
     });
-  }, [initialRows, query, statusFilter, khachHangFilter, saleFilter, hienTruongFilter, tuNgay, denNgay, onlyPending]);
+  }, [rows, query, statusFilter, khachHangFilter, saleFilter, hienTruongFilter, tuNgay, denNgay, onlyPending]);
 
   const selectClass =
     "rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none";
+
+  function toggleChon(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleGanSaleHangLoat() {
+    if (!ganSaleId || selected.size === 0) return;
+    setDangGan(true);
+    const ids = Array.from(selected);
+    // Dung RPC rieng (khong UPDATE truc tiep) de khong phai mo rong RLS
+    // UPDATE cua don_hang cho Ke toan — xem migration 0123.
+    const { error } = await supabase.rpc("gan_sale_hang_loat", { p_don_hang_ids: ids, p_sale_id: ganSaleId });
+    setDangGan(false);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, sale_phu_trach_id: ganSaleId } : r)));
+    setSelected(new Set());
+    setGanSaleId("");
+  }
 
   return (
     <div>
@@ -143,6 +181,7 @@ export default function DonHangList({
           </select>
           <select value={saleFilter} onChange={(e) => setSaleFilter(e.target.value)} className={selectClass}>
             <option value="">Tất cả CS</option>
+            <option value={CHUA_GAN}>— Chưa gán CS —</option>
             {saleList.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.ten}
@@ -180,6 +219,32 @@ export default function DonHangList({
         </div>
       </div>
 
+      {canBulkAssign && selected.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 p-3 text-sm">
+          <span>
+            Đã chọn <strong>{selected.size}</strong> đơn —
+          </span>
+          <select value={ganSaleId} onChange={(e) => setGanSaleId(e.target.value)} className={selectClass}>
+            <option value="">-- Chọn CS --</option>
+            {saleList.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.ten}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleGanSaleHangLoat}
+            disabled={!ganSaleId || dangGan}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {dangGan ? "Đang gán..." : "Gán CS cho các đơn đã chọn"}
+          </button>
+          <button onClick={() => setSelected(new Set())} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
       {/* Mobile: cards */}
       <div className="flex flex-col gap-3 sm:hidden">
         {filtered.map((row) => (
@@ -216,6 +281,7 @@ export default function DonHangList({
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
+              {canBulkAssign && <th className="px-2 py-3"></th>}
               <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 font-medium">Số đơn</th>
               <th className="sticky left-[112px] z-10 bg-slate-50 px-4 py-3 font-medium">Khách hàng</th>
               <th className="px-4 py-3 font-medium">Loại</th>
@@ -233,6 +299,11 @@ export default function DonHangList({
                 className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
                 onClick={() => router.push(`/don-hang/${row.id}`)}
               >
+                {canBulkAssign && (
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleChon(row.id)} />
+                  </td>
+                )}
                 <td className="sticky left-0 z-10 bg-white px-4 py-3 font-medium text-blue-600">{row.so_don_hang}</td>
                 <td className="sticky left-[112px] z-10 bg-white px-4 py-3 text-slate-800">{customerName(row)}</td>
                 <td className="px-4 py-3 text-slate-800">{row.loai_don_hang ?? "—"}</td>
@@ -247,7 +318,7 @@ export default function DonHangList({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={canBulkAssign ? 9 : 8} className="px-4 py-8 text-center text-slate-400">
                   Chưa có đơn hàng nào.
                 </td>
               </tr>
