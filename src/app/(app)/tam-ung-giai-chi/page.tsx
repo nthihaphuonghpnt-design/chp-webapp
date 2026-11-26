@@ -43,6 +43,27 @@ export default async function TamUngGiaiChiPage({
       .order("ngay_ap_dung", { ascending: false }),
   ]);
 
+  // P1 muc 6 (2026-11-26): canh bao TRUOC khi duyet 1 khoan Tam ung (se tao
+  // dong Chi trong So quy) neu lam so du am — can TOAN BO so_quy (khong loc
+  // theo nguon_bang nhu soQuyRows o tren) + moc chot gan nhat de tinh dung
+  // so du HIEN TAI theo tung loai so, giong het logic trong SoQuyView.
+  const homNay = new Date().toISOString().slice(0, 10);
+  const [{ data: soQuyToanBo }, { data: chotSoQuy }] = await Promise.all([
+    supabase.from("so_quy").select("loai_so, loai_giao_dich, so_tien, ngay"),
+    supabase
+      .from("chot_so_du_dau_ky")
+      .select("doi_tuong_loai, ngay_ap_dung, so_du")
+      .in("doi_tuong_loai", ["so_quy_tien_mat", "so_quy_tai_khoan_cong_ty"])
+      .order("ngay_ap_dung", { ascending: false }),
+  ]);
+  const tonHienTaiMap: Record<string, number> = {};
+  for (const loaiSo of ["Tiền mặt", "Tài khoản công ty"] as const) {
+    const loaiChot = loaiSo === "Tiền mặt" ? "so_quy_tien_mat" : "so_quy_tai_khoan_cong_ty";
+    const chot = (chotSoQuy ?? []).find((c) => c.doi_tuong_loai === loaiChot && c.ngay_ap_dung <= homNay);
+    const rowsCuaSo = (soQuyToanBo ?? []).filter((r) => r.loai_so === loaiSo && (!chot || r.ngay >= chot.ngay_ap_dung));
+    tonHienTaiMap[loaiSo] = (chot?.so_du ?? 0) + rowsCuaSo.reduce((s, r) => s + (r.loai_giao_dich === "Thu" ? r.so_tien : -r.so_tien), 0);
+  }
+
   // Gop tong da chi theo tung nguoi + tung lo hang, de doi chieu voi tam ung
   const daChiTheoNguoiVaLo: Record<string, number> = {};
   for (const r of chiPhiRows ?? []) {
@@ -71,6 +92,7 @@ export default async function TamUngGiaiChiPage({
         daChiTheoNguoiVaLo={daChiTheoNguoiVaLo}
         soQuyList={soQuyRows ?? []}
         chotList={chotList ?? []}
+        tonHienTaiMap={tonHienTaiMap}
         currentUserId={user?.id}
         currentPhongBan={user?.phong_ban ?? ""}
         autoProposeDonHangId={autoProposeDonHangId}

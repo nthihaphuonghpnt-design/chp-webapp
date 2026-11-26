@@ -106,6 +106,7 @@ export default function TamUngGiaiChiView({
   currentPhongBan,
   autoProposeDonHangId,
   chotList = [],
+  tonHienTaiMap = {},
 }: {
   initialRows: Row[];
   nhanVienList: NhanVien[];
@@ -118,6 +119,7 @@ export default function TamUngGiaiChiView({
   /** Den tu nut "Ung tien nhanh" o trang chi tiet don hang (?don_hang_id=...) — tu mo san form de nghi tam ung voi don hang nay dien san. */
   autoProposeDonHangId?: string;
   chotList?: ChotSoDu[];
+  tonHienTaiMap?: Record<string, number>;
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -370,7 +372,7 @@ export default function TamUngGiaiChiView({
     }
   }
 
-  async function handleApprove(row: Row, trangThai: "Đã duyệt" | "Từ chối") {
+  async function thucHienDuyet(row: Row, trangThai: "Đã duyệt" | "Từ chối") {
     const { data, error } = await supabase
       .from("tam_ung_giai_chi")
       .update({ trang_thai: trangThai })
@@ -379,6 +381,28 @@ export default function TamUngGiaiChiView({
       .single();
     if (!error && data) setRows((prev) => prev.map((r) => (r.id === row.id ? (data as Row) : r)));
     else if (error) window.alert(error.message);
+  }
+
+  // P1 muc 6 (2026-11-26): canh bao TRUOC khi duyet 1 khoan Tam ung (tao dong
+  // Chi trong So quy) neu lam so du cua dung "Nguon tien" am — khong chan,
+  // chi hoi xac nhan (vd ung khan cap truoc khi nop them tien vao quy).
+  const [canhBaoAmQuy, setCanhBaoAmQuy] = useState<{ row: Row; soDuSauKhiDuyet: number } | null>(null);
+
+  function handleApprove(row: Row, trangThai: "Đã duyệt" | "Từ chối") {
+    if (
+      trangThai === "Đã duyệt" &&
+      row.loai === "Tạm ứng" &&
+      row.phuong_thuc &&
+      (row.phuong_thuc === "Tiền mặt" || row.phuong_thuc === "Tài khoản công ty")
+    ) {
+      const soDuHienTai = tonHienTaiMap[row.phuong_thuc] ?? 0;
+      const soDuSauKhiDuyet = soDuHienTai - row.so_tien;
+      if (soDuSauKhiDuyet < 0) {
+        setCanhBaoAmQuy({ row, soDuSauKhiDuyet });
+        return;
+      }
+    }
+    void thucHienDuyet(row, trangThai);
   }
 
   async function handleDelete(row: Row) {
@@ -903,6 +927,20 @@ export default function TamUngGiaiChiView({
           confirmLabel="Lưu mốc chốt"
           onCancel={() => setShowChotDauKy(false)}
           onConfirm={handleChotDauKy}
+        />
+      )}
+
+      {canhBaoAmQuy && (
+        <ConfirmDialog
+          title="Duyệt khoản này sẽ làm quỹ âm"
+          message={`Duyệt tạm ứng ${canhBaoAmQuy.row.so_tien.toLocaleString("en-US")} (${canhBaoAmQuy.row.phuong_thuc}) sẽ làm số dư còn lại ${canhBaoAmQuy.soDuSauKhiDuyet.toLocaleString("en-US")} (âm). Chỉ tiếp tục nếu chắc chắn (ví dụ ứng khẩn cấp trước khi nộp thêm tiền vào quỹ).`}
+          confirmLabel="Vẫn duyệt"
+          danger
+          onCancel={() => setCanhBaoAmQuy(null)}
+          onConfirm={() => {
+            void thucHienDuyet(canhBaoAmQuy.row, "Đã duyệt");
+            setCanhBaoAmQuy(null);
+          }}
         />
       )}
     </div>
