@@ -6,6 +6,7 @@ import { xuatExcelKeO, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } f
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 interface Option {
   id: string;
@@ -128,8 +129,15 @@ export default function BangGiaView({
     else if (error) window.alert(error.message);
   }
 
-  async function handleDelete(row: Row) {
-    if (!window.confirm("Xóa dòng giá này?")) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<Row | null>(null);
+
+  function handleDelete(row: Row) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: Row) {
     const { error } = await supabase.from("bang_gia_khach_hang").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
     else window.alert(error.message);
@@ -373,6 +381,20 @@ export default function BangGiaView({
           hangHoaList={hangHoaList}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title="Xóa dòng giá này?"
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
         />
       )}
     </div>

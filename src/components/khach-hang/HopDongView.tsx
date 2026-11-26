@@ -8,6 +8,7 @@ import SearchableSelect from "@/components/common/SearchableSelect";
 import FileAttachSection from "@/components/common/FileAttachSection";
 import QuickAddKhachHang from "@/components/common/QuickAddKhachHang";
 import QuickAddNhaCungCap from "@/components/common/QuickAddNhaCungCap";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { DinhKem } from "@/types/database";
 
 interface DoiTac {
@@ -159,8 +160,15 @@ export default function HopDongView({
     }
   }
 
-  async function handleDelete(row: Row) {
-    if (!window.confirm(`Xóa hợp đồng "${row.so_hop_dong ?? ""}"?`)) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<Row | null>(null);
+
+  function handleDelete(row: Row) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: Row) {
     const { error } = await supabase.from("hop_dong_khach_hang").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
     else window.alert(error.message);
@@ -467,6 +475,20 @@ export default function HopDongView({
           onNhaCungCapAdded={(row) => setNhaCungCapList((prev) => [...prev, row])}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title={`Xóa hợp đồng "${choXoa.so_hop_dong ?? ""}"?`}
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
         />
       )}
     </div>
