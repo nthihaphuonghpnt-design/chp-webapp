@@ -53,6 +53,26 @@ export default async function HoaDonPage() {
   // gia_ban_sell khong con doc truc tiep duoc tu 0061 — ghep lai qua RPC rieng.
   const chiPhiRowsDayDu = await ghepGiaBanChiPhi(supabase, chiPhiRows ?? []);
 
+  // P1 muc 5c/5d (2026-11-26): rieng cho "Rà soát hóa đơn ↔ lô bất thường" —
+  // can TOAN BO chi phi/phu thu cua tung lo (khong loc theo hoa_don_id, khac
+  // voi chiPhiRows/phuThuRows o tren vi nhieu lo co hoa don gan qua wizard
+  // khong set hoa_don_id tung dong) de so sanh dung tong gia ban/chi ho thuc
+  // te cua lo voi tong tien hoa don dang gan.
+  const donHangIdsCanRaSoat = Array.from(new Set((lienKetAll ?? []).map((l) => l.don_hang_id)));
+  const [{ data: chiPhiRaSoatRaw }, { data: phuThuRaSoat }] =
+    donHangIdsCanRaSoat.length > 0
+      ? await Promise.all([
+          supabase
+            .from("phat_sinh_chi_phi")
+            .select("id, don_hang_id, chi_ho, so_tien_da_chi, vat_percent")
+            .in("don_hang_id", donHangIdsCanRaSoat)
+            .neq("trang_thai", "Từ chối"),
+          supabase.from("phu_thu").select("don_hang_id, thanh_tien").in("don_hang_id", donHangIdsCanRaSoat),
+        ])
+      : [{ data: [] }, { data: [] }];
+  // gia_ban_sell cung khong doc truc tiep duoc o day (xem comment chiPhiRowsDayDu).
+  const chiPhiRaSoat = await ghepGiaBanChiPhi(supabase, chiPhiRaSoatRaw ?? []);
+
   return (
     <HoaDonView
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,6 +89,9 @@ export default async function HoaDonPage() {
       chiPhiRows={chiPhiRowsDayDu as any[]}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       phuThuRows={(phuThuRows ?? []) as any[]}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      chiPhiRaSoat={chiPhiRaSoat as any[]}
+      phuThuRaSoat={phuThuRaSoat ?? []}
       canEdit={canEdit}
       canHuy={canHuy}
       currentUserId={user?.id}

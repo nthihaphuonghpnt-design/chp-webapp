@@ -47,6 +47,17 @@ interface PhuThuDoiChieu {
   thanh_tien: number | null;
   don_hang: { so_don_hang: string } | { so_don_hang: string }[] | null;
 }
+interface ChiPhiRaSoatRow {
+  don_hang_id: string;
+  chi_ho: boolean;
+  so_tien_da_chi: number | null;
+  gia_ban_sell: number | null;
+  vat_percent: number | null;
+}
+interface PhuThuRaSoatRow {
+  don_hang_id: string;
+  thanh_tien: number | null;
+}
 
 type TrangThaiHoaDon = "Đã phát hành" | "Đã điều chỉnh" | "Đã thay thế" | "Đã hủy";
 type LoaiHoaDon = "Gốc" | "Điều chỉnh" | "Thay thế";
@@ -106,6 +117,8 @@ export default function HoaDonView({
   dinhKemRows,
   chiPhiRows,
   phuThuRows,
+  chiPhiRaSoat = [],
+  phuThuRaSoat = [],
   canEdit,
   canHuy,
   currentUserId,
@@ -117,6 +130,8 @@ export default function HoaDonView({
   dinhKemRows: DinhKem[];
   chiPhiRows: ChiPhiDoiChieu[];
   phuThuRows: PhuThuDoiChieu[];
+  chiPhiRaSoat?: ChiPhiRaSoatRow[];
+  phuThuRaSoat?: PhuThuRaSoatRow[];
   canEdit: boolean;
   canHuy: boolean;
   currentUserId?: string;
@@ -144,6 +159,55 @@ export default function HoaDonView({
   const [dialogHuy, setDialogHuy] = useState<Row | null>(null);
   const [doiChieuCong, setDoiChieuCong] = useState<{ dong: number; so: string; ketQua: string }[] | null>(null);
   const [loiFileCong, setLoiFileCong] = useState<string | null>(null);
+  // P1 muc 5c/5d: ra soat nhanh TOAN BO hoa don hien co (khong can upload file
+  // HDDT) — phat hien hoa don gan vao lo co tong tien lech qua lon so voi gia
+  // ban/chi ho cua chinh lo do, dieu tra duoc ngay ca voi hoa don da nhap tu
+  // truoc (nhu C25TAA-55 gan nham CHPNK2611007).
+  const [raSoatBatThuong, setRaSoatBatThuong] = useState<{ soHoaDon: string; khach: string; ketQua: string }[] | null>(null);
+
+  function chayRaSoatBatThuong() {
+    const ds: { soHoaDon: string; khach: string; ketQua: string }[] = [];
+    for (const r of rows) {
+      if (r.trang_thai === "Đã hủy" || r.trang_thai === "Đã thay thế") continue;
+      const donHangIds = lienKet.filter((l) => l.hoa_don_id === r.id).map((l) => l.don_hang_id);
+      if (donHangIds.length === 0) continue;
+      const soDon = donHangList.filter((d) => donHangIds.includes(d.id)).map((d) => d.so_don_hang).join(", ");
+      const canhBao = canhBaoLechHoaDon(r.tong_tien, donHangIds);
+      if (canhBao) {
+        ds.push({ soHoaDon: r.so_hoa_don ?? "(chưa có số)", khach: khName(one(r.khach_hang)), ketQua: `${canhBao} (lô: ${soDon})` });
+      }
+    }
+    setRaSoatBatThuong(ds);
+  }
+
+  /** P1 muc 5c/5d (2026-11-26): "claim" cua cac lo — CHI tinh phan dich vu
+   * (khong goiVAT, khong chi ho), vi chi ho thuong duoc hoan/thu rieng (qua
+   * tam ung, tam ung giai chi, hoac 1 hoa don khac), KHONG phai luc nao cung
+   * gop chung vao dung hoa don dich vu nay — gop chi ho vao se gay bao dong
+   * gia (hoa don dich vu < tong lo la BINH THUONG, vi lo thuong co nhieu hoa
+   * don/dot thu khac nhau). Chi canh bao 2 truong hop RO RANG BAT THUONG,
+   * khong doi xung:
+   *  (a) hoa don gan nhu 0 nhung lo co phat sinh dang ke — kieu C26TAA-47;
+   *  (b) hoa don LON HON NHIEU (>2 lan) toan bo dich vu+chi ho da ghi nhan
+   *      cua lo — kieu C25TAA-55/CHPNK2611007 (gan nham don).
+   * Hoa don < tong lo (do lo xuat nhieu hoa don/dot) KHONG bi bao — dung
+   * nghiep vu binh thuong, tranh bao dong gia lam ke toan mat long tin.
+   */
+  function canhBaoLechHoaDon(tongTienHoaDon: number, donHangIds: string[]): string | null {
+    const dichVu = chiPhiRaSoat
+      .filter((r) => donHangIds.includes(r.don_hang_id) && !r.chi_ho)
+      .reduce((s, r) => s + (r.gia_ban_sell ?? 0) * (1 + (r.vat_percent ?? 0) / 100), 0);
+    const chiHo = chiPhiRaSoat.filter((r) => donHangIds.includes(r.don_hang_id) && r.chi_ho).reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
+    const phuThu = phuThuRaSoat.filter((r) => donHangIds.includes(r.don_hang_id)).reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
+    const tongLo = dichVu + chiHo + phuThu;
+    if (tongLo >= 1000000 && tongTienHoaDon < 50000) {
+      return `Hóa đơn gần như 0 (${tongTienHoaDon.toLocaleString("en-US")}) nhưng lô đã ghi nhận ~${tongLo.toLocaleString("en-US")}`;
+    }
+    if (tongLo > 0 && tongTienHoaDon > tongLo * 2 && tongTienHoaDon - tongLo > 1000000) {
+      return `Tổng hóa đơn ${tongTienHoaDon.toLocaleString("en-US")} lớn hơn nhiều so với toàn bộ dịch vụ+chi hộ đã ghi nhận của lô (~${tongLo.toLocaleString("en-US")}) — kiểm tra lại có gán đúng đơn không`;
+    }
+    return null;
+  }
 
   async function doiChieuDanhSachHoaDon(file: File) {
     setLoiFileCong(null);
@@ -172,6 +236,14 @@ export default function HoaDonView({
           else if (khachHangList.find((k) => k.id === matched[0].khach_hang_id)?.ma_so_thue?.trim() !== invoice.mstNguoiMua) ketQua = "Sai khách hàng/MST";
           else if (Math.abs(matched[0].tong_tien - invoice.tongThanhToan) > 1) ketQua = "Lệch tổng thanh toán";
           else if (matched[0].trang_thai === "Đã hủy" || matched[0].trang_thai === "Đã thay thế") ketQua = "Trạng thái app cần kiểm tra";
+          else {
+            const donHangIds = lienKet.filter((l) => l.hoa_don_id === matched[0].id).map((l) => l.don_hang_id);
+            if (donHangIds.length > 0) {
+              const soDon = donHangList.filter((d) => donHangIds.includes(d.id)).map((d) => d.so_don_hang).join(", ");
+              const canhBao = canhBaoLechHoaDon(matched[0].tong_tien, donHangIds);
+              if (canhBao) ketQua = `Khớp số nhưng ${canhBao[0].toLowerCase()}${canhBao.slice(1)} (lô: ${soDon})`;
+            }
+          }
         }
         seen.add(key);
         return { dong: invoice.dong, so: invoice.soHoaDon, ketQua };
@@ -507,6 +579,9 @@ export default function HoaDonView({
               e.target.value = "";
             }} />
           </label>
+          <button onClick={chayRaSoatBatThuong} className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700">
+            Rà soát hóa đơn ↔ lô bất thường
+          </button>
           {canEdit && (
             <button
               onClick={() => {
@@ -530,6 +605,22 @@ export default function HoaDonView({
             <p key={`${item.dong}-${index}`} className="mt-1 text-amber-800">Dòng {item.dong} · HĐ {item.so}: {item.ketQua}</p>
           ))}
           {doiChieuCong.length > 100 && <p className="mt-1 text-slate-500">Hiển thị tối đa 100 dòng cần xử lý.</p>}
+        </div>
+      )}
+
+      {raSoatBatThuong && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm">
+          <h2 className="font-semibold text-amber-900">Rà soát hóa đơn ↔ lô bất thường</h2>
+          {raSoatBatThuong.length === 0 ? (
+            <p className="mt-1 text-amber-800">Không thấy hóa đơn nào lệch lớn so với giá bán/chi hộ của lô đang gắn.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-amber-800">{raSoatBatThuong.length} hóa đơn có tổng tiền lệch lớn so với lô đang gắn — kiểm tra lại có gán đúng đơn không trước khi tin số liệu công nợ.</p>
+              {raSoatBatThuong.map((item, index) => (
+                <p key={index} className="mt-1 text-amber-800">HĐ {item.soHoaDon} · {item.khach}: {item.ketQua}</p>
+              ))}
+            </>
+          )}
         </div>
       )}
 
