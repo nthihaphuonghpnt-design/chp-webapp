@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { DinhKem } from "@/types/database";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 export default function FileAttachSection({
   parentField,
@@ -77,8 +78,15 @@ export default function FileAttachSection({
     setUploading(false);
   }
 
-  async function handleDelete(row: DinhKem) {
-    if (!window.confirm(`Xóa file "${row.ten_file}"?`)) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<DinhKem | null>(null);
+
+  function handleDelete(row: DinhKem) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: DinhKem) {
     const { error: delErr } = await supabase.from("dinh_kem").delete().eq("id", row.id);
     if (delErr) {
       window.alert(`Xóa thất bại: ${delErr.message}`);
@@ -147,6 +155,20 @@ export default function FileAttachSection({
             </div>
           ))}
         </div>
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title={`Xóa file "${choXoa.ten_file}"?`}
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
+        />
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import { xuatExcelKeO, type ExcelColumn } from "@/lib/excel";
 import { createClient } from "@/lib/supabase/client";
 import { lookupTaxCode } from "@/lib/taxLookup";
 import MoneyInput from "@/components/common/MoneyInput";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 export type FieldType = "text" | "textarea" | "select" | "tel" | "email" | "number";
 
@@ -192,15 +193,21 @@ export default function DanhMucManager({
     }
   }
 
-  async function handleDelete(row: Row) {
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<{ row: Row; label: string } | null>(null);
+
+  function handleDelete(row: Row) {
     if (!canEdit) return;
     const primaryFieldConfig = fields.find((f) => f.key === primaryField);
     const label =
       primaryFieldConfig?.type === "select"
         ? optionLabel(primaryFieldConfig, row[primaryField])
         : String(row[primaryField] ?? "mục này");
-    if (!window.confirm(`Xóa hẳn "${label}"? Thao tác này không thể hoàn tác.`)) return;
+    setChoXoa({ row, label });
+  }
 
+  async function thucHienXoa(row: Row, label: string) {
     const { error: err } = await supabase.from(table).delete().eq("id", row.id);
     if (err) {
       if (err.code === "23503") {
@@ -526,6 +533,21 @@ export default function DanhMucManager({
             setError(null);
           }}
           onSubmit={handleSubmit}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title={`Xóa hẳn "${choXoa.label}"?`}
+          message="Thao tác này không thể hoàn tác."
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const { row, label } = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row, label);
+          }}
         />
       )}
     </div>
