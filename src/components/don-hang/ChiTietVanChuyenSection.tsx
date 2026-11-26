@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { ChiTietVanChuyen } from "@/types/database";
 
 interface DiaDiemOption {
@@ -89,8 +90,15 @@ export default function ChiTietVanChuyenSection({
     }
   }
 
-  async function handleDelete(row: ChiTietVanChuyen) {
-    if (!window.confirm("Xóa chặng vận chuyển này?")) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<ChiTietVanChuyen | null>(null);
+
+  function handleDelete(row: ChiTietVanChuyen) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: ChiTietVanChuyen) {
     const { error } = await supabase.from("chi_tiet_van_chuyen").delete().eq("id", row.id);
     if (!error) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
@@ -153,6 +161,20 @@ export default function ChiTietVanChuyenSection({
           goiYDiem={goiYDiem}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title="Xóa chặng vận chuyển này?"
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
         />
       )}
     </div>

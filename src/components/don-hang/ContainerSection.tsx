@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { DonHangContainer } from "@/types/database";
 
 interface Option {
@@ -64,8 +65,15 @@ export default function ContainerSection({
     }
   }
 
-  async function handleDelete(row: DonHangContainer) {
-    if (!window.confirm("Xóa container này?")) return;
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog.
+  const [choXoa, setChoXoa] = useState<DonHangContainer | null>(null);
+
+  function handleDelete(row: DonHangContainer) {
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: DonHangContainer) {
     const { error } = await supabase.from("don_hang_container").delete().eq("id", row.id);
     if (!error) setRows((prev) => prev.filter((r) => r.id !== row.id));
     else window.alert(error.message);
@@ -155,6 +163,20 @@ export default function ContainerSection({
           loaiContainerList={loaiContainerList}
           onCancel={() => setShowForm(false)}
           onSave={handleSave}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title="Xóa container này?"
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
         />
       )}
     </div>
