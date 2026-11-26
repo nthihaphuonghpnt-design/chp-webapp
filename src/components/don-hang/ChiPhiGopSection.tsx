@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect, { type SearchableOption } from "@/components/common/SearchableSelect";
 import MoneyInput from "@/components/common/MoneyInput";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { ChiTietVanChuyen, PhatSinhChiPhi, DonThueNgoai, PhuThu } from "@/types/database";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS } from "@/lib/giaBan";
 
@@ -391,6 +392,13 @@ export default function ChiPhiGopSection({
         window.alert("Cần chọn Loại chi phí và nhập Số tiền đã chi.");
         return;
       }
+      // P2 muc 11 (2026-11-27): dong khong phai noi bo (chi ho hoac chi phi
+      // tra ben ngoai) phai co NCC/Doi tac — de Bao cao cong no phai tra co
+      // du lieu (truoc gio hau nhu bo trong nen bao cao chi co 3 doi tac).
+      if (!row.noi_bo && !row.nha_cung_cap_id && !row.doi_tac_thue_ngoai_id) {
+        window.alert("Dòng không phải nội bộ cần chọn NCC/Đối tác (để Báo cáo công nợ phải trả có dữ liệu).");
+        return;
+      }
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
         .insert({
@@ -578,22 +586,23 @@ export default function ChiPhiGopSection({
   }
   const CANH_BAO_XUNG_DOT = "Dữ liệu dòng này vừa bị người khác sửa trong lúc bạn đang sửa. Tải lại trang để lấy bản mới nhất rồi sửa lại — thay đổi vừa nhập chưa được lưu.";
 
-  async function luuSua(rv: RowView) {
+  // P2 (2026-11-27): window.prompt() khong duoc trinh duyet nhung ho tro —
+  // thay bang ConfirmDialog (xem giai thich day du o HoaDonView.tsx muc 5e).
+  const [choLyDoSua, setChoLyDoSua] = useState<RowView | null>(null);
+
+  function luuSua(rv: RowView) {
     if (!editValues) return;
     // Da duyet -> Ke toan sua truc tiep phai nhap ly do, bat buoc o tang DB
-    // (enforce_phat_sinh_chi_phi_update/enforce_don_thue_ngoai_update, 0104) —
-    // hoi truoc o day de khong ghi de mat du lieu form neu nguoi dung huy,
-    // va de bao loi ro rang ngay tren UI thay vi lo message loi tho tu DB.
-    let lyDoSuaGanNhat: string | null = null;
+    // (enforce_phat_sinh_chi_phi_update/enforce_don_thue_ngoai_update, 0104).
     if ((rv.loai === "chi_phi" || rv.loai === "thue_ngoai") && rv.trangThai === "Đã duyệt") {
-      const lyDo = window.prompt(`"${LOAI_LABEL[rv.loai]}" này đã duyệt — phải nhập lý do khi sửa:`);
-      if (lyDo === null) return;
-      if (!lyDo.trim()) {
-        window.alert("Phải nhập lý do khi sửa dòng đã duyệt.");
-        return;
-      }
-      lyDoSuaGanNhat = lyDo;
+      setChoLyDoSua(rv);
+      return;
     }
+    void thucHienLuuSua(rv, null);
+  }
+
+  async function thucHienLuuSua(rv: RowView, lyDoSuaGanNhat: string | null) {
+    if (!editValues) return;
     if (rv.loai === "chi_phi") {
       const { data, error } = await supabase
         .from("phat_sinh_chi_phi")
@@ -663,8 +672,13 @@ export default function ChiPhiGopSection({
     setEditValues(null);
   }
 
-  async function xoaDong(rv: RowView) {
-    if (!window.confirm("Xóa dòng này?")) return;
+  const [choXacNhanXoa, setChoXacNhanXoa] = useState<RowView | null>(null);
+
+  function xoaDong(rv: RowView) {
+    setChoXacNhanXoa(rv);
+  }
+
+  async function thucHienXoa(rv: RowView) {
     const table = rv.loai === "chi_phi" ? "phat_sinh_chi_phi" : rv.loai === "thue_ngoai" ? "don_thue_ngoai" : "phu_thu";
     const { error } = await supabase.from(table).delete().eq("id", rv.raw.id);
     if (error) return window.alert(error.message);
@@ -1425,6 +1439,35 @@ export default function ChiPhiGopSection({
             </>
           )}
         </div>
+      )}
+
+      {choLyDoSua && (
+        <ConfirmDialog
+          title={`Sửa "${LOAI_LABEL[choLyDoSua.loai]}" đã duyệt`}
+          message="Dòng này đã duyệt — phải nhập lý do khi sửa."
+          fields={[{ key: "ly_do", label: "Lý do sửa", type: "textarea", required: true, placeholder: "Bắt buộc" }]}
+          confirmLabel="Lưu"
+          onCancel={() => setChoLyDoSua(null)}
+          onConfirm={(values) => {
+            const rv = choLyDoSua;
+            setChoLyDoSua(null);
+            void thucHienLuuSua(rv, values.ly_do);
+          }}
+        />
+      )}
+
+      {choXacNhanXoa && (
+        <ConfirmDialog
+          title="Xóa dòng này?"
+          danger
+          confirmLabel="Xóa"
+          onCancel={() => setChoXacNhanXoa(null)}
+          onConfirm={() => {
+            const rv = choXacNhanXoa;
+            setChoXacNhanXoa(null);
+            void thucHienXoa(rv);
+          }}
+        />
       )}
     </div>
   );
