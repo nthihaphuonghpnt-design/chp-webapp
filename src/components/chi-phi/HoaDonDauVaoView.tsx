@@ -8,6 +8,7 @@ import { ngayHienTaiVietNam } from "@/lib/ngayVietNam";
 import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import MoneyInput from "@/components/common/MoneyInput";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 export interface NhaCungCapOption {
   id: string;
@@ -217,14 +218,16 @@ export default function HoaDonDauVaoView({
     return !r.chi_ho && r.phuong_thuc_thanh_toan === "Tài khoản công ty" && !!r.nha_cung_cap_id && r.dieu_kien_khau_tru === "Chưa xác định";
   }
 
-  async function xacNhanDuDieuKienHangLoat() {
+  // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
+  // muc 5e) — thay bang ConfirmDialog (state choXacNhanDuDieuKien).
+  const [choXacNhanDuDieuKien, setChoXacNhanDuDieuKien] = useState(false);
+
+  function xacNhanDuDieuKienHangLoat() {
     if (selectedIds.size === 0) return;
-    if (
-      !window.confirm(
-        `Xác nhận "Đủ điều kiện khấu trừ" cho ${selectedIds.size} hóa đơn đã chọn? Kế toán cần tự đảm bảo các hóa đơn này đã kiểm tra đúng MST/tên công ty và có đủ hồ sơ/chứng từ.`,
-      )
-    )
-      return;
+    setChoXacNhanDuDieuKien(true);
+  }
+
+  async function thucHienXacNhanDuDieuKien() {
     setDangXuLyBulk(true);
     const ids = Array.from(selectedIds);
     const { data, error } = await supabase
@@ -445,27 +448,23 @@ export default function HoaDonDauVaoView({
     setEditingId(null);
   }
 
-  async function suaPhuongThucThanhToan(row: HoaDonDauVao) {
-    const hienTai = row.phuong_thuc_thanh_toan || "(chưa có)";
-    const moi = window.prompt(
-      `Khoản "${row.khoan_muc}" đang ghi nhận thanh toán qua "${hienTai}".\nSửa lại đúng phương thức thực tế — gõ đúng "Tiền mặt" hoặc "Tài khoản công ty":`,
-      hienTai === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
-    );
-    if (moi === null) return;
-    if (moi !== "Tiền mặt" && moi !== "Tài khoản công ty") {
-      window.alert('Phương thức không hợp lệ, phải đúng "Tiền mặt" hoặc "Tài khoản công ty".');
-      return;
-    }
-    const lyDo = window.prompt("Lý do sửa phương thức thanh toán (bắt buộc)?");
-    if (lyDo === null) return;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi sửa phương thức.");
-      return;
-    }
+  // window.prompt()/window.confirm() khong duoc trinh duyet nhung ho tro
+  // (xem HoaDonView.tsx muc 5e) — thay bang ConfirmDialog cho ca 3 ham duoi.
+  const [choSuaPhuongThuc, setChoSuaPhuongThuc] = useState<HoaDonDauVao | null>(null);
+  const [choDieuChinhGiaTri, setChoDieuChinhGiaTri] = useState<HoaDonDauVao | null>(null);
+  const [choXoa, setChoXoa] = useState<HoaDonDauVao | null>(null);
+  const [choXacNhanImport, setChoXacNhanImport] = useState<{ count: number; thucHien: () => Promise<void> } | null>(null);
+
+  function suaPhuongThucThanhToan(row: HoaDonDauVao) {
+    setChoSuaPhuongThuc(row);
+  }
+
+  async function xuLySuaPhuongThucConfirm(row: HoaDonDauVao, values: Record<string, string>) {
+    setChoSuaPhuongThuc(null);
     const { error } = await supabase.rpc("sua_phuong_thuc_thanh_toan_hoa_don_dau_vao", {
       p_hoa_don_id: row.id,
-      p_phuong_thuc_moi: moi,
-      p_ly_do: lyDo,
+      p_phuong_thuc_moi: values.phuong_thuc_moi,
+      p_ly_do: values.ly_do,
     });
     if (error) {
       window.alert(error.message);
@@ -475,35 +474,27 @@ export default function HoaDonDauVaoView({
     if (refetched) setRows((prev) => prev.map((r) => (r.id === row.id ? (refetched as HoaDonDauVao) : r)));
   }
 
-  async function dieuChinhGiaTri(row: HoaDonDauVao) {
-    const tongHangNhap = window.prompt(
-      `Khoản "${row.khoan_muc}" đang có tổng tiền hàng ${row.tong_tien_hang.toLocaleString("en-US")}, đã thanh toán ${(row.so_tien_da_thanh_toan ?? 0).toLocaleString("en-US")}.\nNhập ĐÚNG tổng tiền hàng mới (theo hóa đơn điều chỉnh của NCC):`,
-      String(row.tong_tien_hang),
-    );
-    if (tongHangNhap === null) return;
-    const tongHangMoi = Number(tongHangNhap.replace(/[^\d.]/g, ""));
+  function dieuChinhGiaTri(row: HoaDonDauVao) {
+    setChoDieuChinhGiaTri(row);
+  }
+
+  async function xuLyDieuChinhGiaTriConfirm(row: HoaDonDauVao, values: Record<string, string>) {
+    const tongHangMoi = Number(values.tong_tien_hang_moi.replace(/[^\d.]/g, ""));
     if (!Number.isFinite(tongHangMoi) || tongHangMoi < 0) {
       window.alert("Tổng tiền hàng không hợp lệ.");
       return;
     }
-    const thueNhap = window.prompt("Nhập ĐÚNG tiền thuế GTGT mới:", String(row.tien_thue_gtgt));
-    if (thueNhap === null) return;
-    const thueMoi = Number(thueNhap.replace(/[^\d.]/g, ""));
+    const thueMoi = Number(values.tien_thue_gtgt_moi.replace(/[^\d.]/g, ""));
     if (!Number.isFinite(thueMoi) || thueMoi < 0) {
       window.alert("Tiền thuế GTGT không hợp lệ.");
       return;
     }
-    const lyDo = window.prompt("Lý do điều chỉnh giá trị hóa đơn (bắt buộc)?");
-    if (lyDo === null) return;
-    if (!lyDo.trim()) {
-      window.alert("Phải nhập lý do khi điều chỉnh giá trị.");
-      return;
-    }
+    setChoDieuChinhGiaTri(null);
     const { data, error } = await supabase.rpc("dieu_chinh_gia_tri_hoa_don_dau_vao", {
       p_hoa_don_id: row.id,
       p_tong_tien_hang_moi: tongHangMoi,
       p_tien_thue_gtgt_moi: thueMoi,
-      p_ly_do: lyDo,
+      p_ly_do: values.ly_do,
     });
     if (error) {
       window.alert(error.message);
@@ -523,12 +514,15 @@ export default function HoaDonDauVaoView({
     if (refetched) setRows((prev) => prev.map((r) => (r.id === row.id ? (refetched as HoaDonDauVao) : r)));
   }
 
-  async function xoa(row: HoaDonDauVao) {
+  function xoa(row: HoaDonDauVao) {
     if (row.id.startsWith("new-")) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       return;
     }
-    if (!window.confirm(`Xóa hẳn "${row.khoan_muc}"? Thao tác này không thể hoàn tác.`)) return;
+    setChoXoa(row);
+  }
+
+  async function thucHienXoa(row: HoaDonDauVao) {
     const { error: err } = await supabase.from("hoa_don_dau_vao").delete().eq("id", row.id);
     if (err) {
       window.alert(`Không thể xóa: ${err.message}`);
@@ -800,19 +794,21 @@ export default function HoaDonDauVaoView({
       return;
     }
 
-    if (!window.confirm(`Đã kiểm tra ${records.length} dòng hóa đơn. Xác nhận nhập vào app?`)) {
-      setImporting(false);
-      return;
-    }
-
-    const { data, error: err } = await supabase.from("hoa_don_dau_vao").insert(records).select();
     setImporting(false);
-    if (err) {
-      setImportSummary({ success: 0, errors: [...errors, `Lỗi khi lưu: ${err.message}`] });
-      return;
-    }
-    setRows((prev) => [...((data as HoaDonDauVao[]) ?? []), ...prev]);
-    setImportSummary({ success: data?.length ?? 0, errors });
+    setChoXacNhanImport({
+      count: records.length,
+      thucHien: async () => {
+        setImporting(true);
+        const { data, error: err } = await supabase.from("hoa_don_dau_vao").insert(records).select();
+        setImporting(false);
+        if (err) {
+          setImportSummary({ success: 0, errors: [...errors, `Lỗi khi lưu: ${err.message}`] });
+          return;
+        }
+        setRows((prev) => [...((data as HoaDonDauVao[]) ?? []), ...prev]);
+        setImportSummary({ success: data?.length ?? 0, errors });
+      },
+    });
   }
 
   const thangOptions = Array.from(new Set(rows.map((r) => r.thang_phan_bo))).sort().reverse();
@@ -1237,6 +1233,93 @@ export default function HoaDonDauVaoView({
       <p className="mt-2 max-w-3xl text-xs text-slate-400">
         Chỉ khoản &ldquo;Định phí cố định&rdquo; không gắn đơn hàng mới được chia đều cho các lô trong tháng. VAT đã xác nhận đủ điều kiện khấu trừ không tính vào định phí; hóa đơn chưa xác minh tạm tính cả VAT. Hóa đơn &ldquo;Phát sinh&rdquo; hoặc đã gắn lô cần kế toán đối chiếu và phân bổ riêng, tránh tính chi phí hai lần. Đánh dấu &ldquo;Đã đủ&rdquo;/&ldquo;Một phần&rdquo; + chọn phương thức thanh toán để tự động ghi vào Sổ quỹ.
       </p>
+
+      {choXacNhanDuDieuKien && (
+        <ConfirmDialog
+          title="Xác nhận đủ điều kiện khấu trừ (hàng loạt)"
+          message={`Xác nhận "Đủ điều kiện khấu trừ" cho ${selectedIds.size} hóa đơn đã chọn? Kế toán cần tự đảm bảo các hóa đơn này đã kiểm tra đúng MST/tên công ty và có đủ hồ sơ/chứng từ.`}
+          confirmLabel="Xác nhận"
+          onCancel={() => setChoXacNhanDuDieuKien(false)}
+          onConfirm={() => {
+            setChoXacNhanDuDieuKien(false);
+            void thucHienXacNhanDuDieuKien();
+          }}
+        />
+      )}
+
+      {choSuaPhuongThuc && (
+        <ConfirmDialog
+          title={`Sửa phương thức thanh toán — ${choSuaPhuongThuc.khoan_muc}`}
+          message={`Đang ghi nhận thanh toán qua "${choSuaPhuongThuc.phuong_thuc_thanh_toan || "(chưa có)"}".`}
+          fields={[
+            {
+              key: "phuong_thuc_moi",
+              label: "Phương thức mới",
+              type: "select",
+              defaultValue: choSuaPhuongThuc.phuong_thuc_thanh_toan === "Tiền mặt" ? "Tài khoản công ty" : "Tiền mặt",
+              options: [
+                { value: "Tiền mặt", label: "Tiền mặt" },
+                { value: "Tài khoản công ty", label: "Tài khoản công ty" },
+              ],
+            },
+            { key: "ly_do", label: "Lý do sửa", type: "textarea", required: true, placeholder: "Bắt buộc" },
+          ]}
+          confirmLabel="Lưu"
+          onCancel={() => setChoSuaPhuongThuc(null)}
+          onConfirm={(values) => {
+            const row = choSuaPhuongThuc;
+            setChoSuaPhuongThuc(null);
+            void xuLySuaPhuongThucConfirm(row, values);
+          }}
+        />
+      )}
+
+      {choDieuChinhGiaTri && (
+        <ConfirmDialog
+          title={`Điều chỉnh giá trị — ${choDieuChinhGiaTri.khoan_muc}`}
+          message={`Đang có tổng tiền hàng ${choDieuChinhGiaTri.tong_tien_hang.toLocaleString("en-US")}, đã thanh toán ${(choDieuChinhGiaTri.so_tien_da_thanh_toan ?? 0).toLocaleString("en-US")}. Nhập ĐÚNG giá trị mới theo hóa đơn điều chỉnh của NCC.`}
+          fields={[
+            { key: "tong_tien_hang_moi", label: "Tổng tiền hàng mới", type: "text", required: true, defaultValue: String(choDieuChinhGiaTri.tong_tien_hang) },
+            { key: "tien_thue_gtgt_moi", label: "Tiền thuế GTGT mới", type: "text", required: true, defaultValue: String(choDieuChinhGiaTri.tien_thue_gtgt) },
+            { key: "ly_do", label: "Lý do điều chỉnh", type: "textarea", required: true, placeholder: "Bắt buộc" },
+          ]}
+          confirmLabel="Lưu"
+          onCancel={() => setChoDieuChinhGiaTri(null)}
+          onConfirm={(values) => {
+            const row = choDieuChinhGiaTri;
+            void xuLyDieuChinhGiaTriConfirm(row, values);
+          }}
+        />
+      )}
+
+      {choXoa && (
+        <ConfirmDialog
+          title={`Xóa hẳn "${choXoa.khoan_muc}"?`}
+          message="Thao tác này không thể hoàn tác."
+          confirmLabel="Xóa"
+          danger
+          onCancel={() => setChoXoa(null)}
+          onConfirm={() => {
+            const row = choXoa;
+            setChoXoa(null);
+            void thucHienXoa(row);
+          }}
+        />
+      )}
+
+      {choXacNhanImport && (
+        <ConfirmDialog
+          title="Nhập hóa đơn từ Excel"
+          message={`Đã kiểm tra ${choXacNhanImport.count} dòng hóa đơn. Xác nhận nhập vào app?`}
+          confirmLabel="Nhập vào app"
+          onCancel={() => setChoXacNhanImport(null)}
+          onConfirm={() => {
+            const thucHien = choXacNhanImport.thucHien;
+            setChoXacNhanImport(null);
+            void thucHien();
+          }}
+        />
+      )}
     </div>
   );
 }
