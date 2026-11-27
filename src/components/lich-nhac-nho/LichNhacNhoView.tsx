@@ -186,6 +186,25 @@ export default function LichNhacNhoView({
     else if (error) window.alert(error.message);
   }
 
+  // P2 muc 15 (2026-11-27): nut don hang loat cac viec qua han cua thang/
+  // phong ban dang xem — luoi an toan ben canh fix goc (tu dong dong khi don
+  // hang da xong buoc tuong ung, xem migration 0125), phong truong hop con
+  // sot (vd viec thu cong khong gan lo, hoac lo bi mo lai).
+  const [choXacNhanHoanThanhHangLoat, setChoXacNhanHoanThanhHangLoat] = useState(false);
+
+  const viecQuaHan = rows.filter((r) => r.trang_thai !== "Đã thực hiện" && daysUntil(r.ngay_du_kien) < 0);
+
+  async function thucHienHoanThanhHangLoat() {
+    const ids = viecQuaHan.map((r) => r.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("lich_nhac_nho").update({ trang_thai: "Đã thực hiện" }).in("id", ids);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, trang_thai: "Đã thực hiện" } : r)));
+  }
+
   // window.confirm() khong duoc trinh duyet nhung ho tro (xem HoaDonView.tsx
   // muc 5e) — thay bang ConfirmDialog.
   const [choXoa, setChoXoa] = useState<Row | null>(null);
@@ -405,6 +424,14 @@ export default function LichNhacNhoView({
             }}
           />
         </label>
+        {currentPhongBan === "Kế toán" && viecQuaHan.length > 0 && (
+          <button
+            onClick={() => setChoXacNhanHoanThanhHangLoat(true)}
+            className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700"
+          >
+            Hoàn thành {viecQuaHan.length} việc quá hạn (tháng này)
+          </button>
+        )}
       </div>
 
       {importMsg && <p className="mb-4 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">{importMsg}</p>}
@@ -546,6 +573,19 @@ export default function LichNhacNhoView({
             const row = choXoa;
             setChoXoa(null);
             void thucHienXoa(row);
+          }}
+        />
+      )}
+
+      {choXacNhanHoanThanhHangLoat && (
+        <ConfirmDialog
+          title="Hoàn thành hàng loạt việc quá hạn"
+          message={`Đánh dấu "Đã thực hiện" cho ${viecQuaHan.length} việc quá hạn trong tháng đang xem? Chỉ dùng khi chắc chắn các việc này thực tế đã xong (vd đơn hàng đã hoàn tất từ lâu).`}
+          confirmLabel="Hoàn thành tất cả"
+          onCancel={() => setChoXacNhanHoanThanhHangLoat(false)}
+          onConfirm={() => {
+            setChoXacNhanHoanThanhHangLoat(false);
+            void thucHienHoanThanhHangLoat();
           }}
         />
       )}
