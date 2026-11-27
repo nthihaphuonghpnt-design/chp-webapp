@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchableSelect from "@/components/common/SearchableSelect";
+import { docSaoKeVcb, type LoaiNghiepVu } from "@/lib/saoKeVcb";
 
 interface UngVien {
   bang: "phat_sinh_chi_phi" | "don_thue_ngoai" | "hoa_don_dau_vao" | "hoa_don_xuat";
@@ -23,7 +24,12 @@ interface DongSaoKe {
   daChon: string; // "bang:id" hoac "tam_ung_moi" hoac "" (bo qua)
   tamUngNhanVienId: string;
   tamUngDonHangId: string;
+  loaiNghiepVu?: LoaiNghiepVu;
+  /** Dong chuyen quy noi bo da co san trong app (cung ngay, so tien, chieu). */
+  daGhiChuyenQuy?: boolean;
 }
+
+const chieuChuyenQuy = (loai: "Thu" | "Chi") => (loai === "Chi" ? "Ngân hàng → Tiền mặt" : "Tiền mặt → Ngân hàng");
 
 const TEMPLATE_COLUMNS = ["Ngày (yyyy-mm-dd)", "Nội dung", "Loại (Thu/Chi)", "Số tiền"];
 
@@ -44,6 +50,7 @@ export default function DoiChieuSaoKeView({
   const [dangTai, setDangTai] = useState(false);
   const [dangApDung, setDangApDung] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tomTatFile, setTomTatFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleDownloadTemplate() {
@@ -129,6 +136,60 @@ export default function DoiChieuSaoKeView({
     // luon dung bat ke may nguoi dung o mui gio nao.
     const wb = XLSX.read(buf, { type: "array" });
     const sheet = wb.Sheets[wb.SheetNames[0]];
+    setTomTatFile(null);
+
+    const vcb = docSaoKeVcb(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true }));
+    if (vcb) {
+      if (loaiSo !== "Tài khoản công ty") {
+        setError('File sao kê ngân hàng chỉ đối chiếu với sổ "Tài khoản công ty". Chuyển sang sổ đó rồi nhập lại.');
+        setDongList([]);
+        setDangTai(false);
+        return;
+      }
+      // Chuyen quy da ghi: khop 1-1 theo ngay + so tien + chieu.
+      const { data: daCo, error: loiCq } = await supabase.from("dieu_chuyen_quy").select("ngay, so_tien, chieu");
+      if (loiCq) {
+        setError(`Không đọc được danh sách chuyển quỹ đã ghi: ${loiCq.message}`);
+        setDangTai(false);
+        return;
+      }
+      const conLaiDaCo = new Map<string, number>();
+      for (const r of daCo ?? []) {
+        const k = `${r.ngay}|${Math.round(Number(r.so_tien))}|${r.chieu}`;
+        conLaiDaCo.set(k, (conLaiDaCo.get(k) ?? 0) + 1);
+      }
+      const ds: DongSaoKe[] = [];
+      for (const [i, d] of vcb.dong.entries()) {
+        const laChuyenQuy = d.loaiNghiepVu === "Chuyển quỹ nội bộ";
+        const k = `${d.ngay}|${Math.round(d.soTien)}|${chieuChuyenQuy(d.loaiGiaoDich)}`;
+        const daGhi = laChuyenQuy && (conLaiDaCo.get(k) ?? 0) > 0;
+        if (daGhi) conLaiDaCo.set(k, conLaiDaCo.get(k)! - 1);
+        const ungVien = laChuyenQuy ? [] : await timUngVien(d.loaiGiaoDich, d.soTien);
+        ds.push({
+          stt: i + 1,
+          ngay: d.ngay,
+          noiDung: d.noiDung,
+          loaiGiaoDich: d.loaiGiaoDich,
+          soTien: d.soTien,
+          ungVien,
+          // File ngan hang gom ca giao dich da ghi tu truoc -> khong tu chon san, tranh ghi trung.
+          daChon: "",
+          tamUngNhanVienId: "",
+          tamUngDonHangId: "",
+          loaiNghiepVu: d.loaiNghiepVu,
+          daGhiChuyenQuy: daGhi,
+        });
+      }
+      const tong = (loai: "Thu" | "Chi") => Math.round(vcb.dong.filter((d) => d.loaiGiaoDich === loai).reduce((s, d) => s + d.soTien, 0)).toLocaleString("en-US");
+      const cuoi = vcb.dong.at(-1)?.soDuSau;
+      setTomTatFile(
+        `Sao kê VCB: ${vcb.dong.length} giao dịch · số dư đầu kỳ ${vcb.soDuDauKy?.toLocaleString("en-US") ?? "?"} · thu ${tong("Thu")} · chi ${tong("Chi")} · số dư cuối ${cuoi?.toLocaleString("en-US") ?? "?"}. Nhóm nghiệp vụ là gợi ý theo nội dung, không được lưu.`,
+      );
+      setDongList(ds);
+      setDangTai(false);
+      return;
+    }
+
     const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true });
 
     function excelDate(v: unknown): string {
@@ -191,6 +252,27 @@ export default function DoiChieuSaoKeView({
 
     for (const d of dongList) {
       if (!d.daChon) continue;
+
+      if (d.daChon === "chuyen_quy") {
+        // 1 dong dieu_chuyen_quy -> trigger tu tao du 2 dong So quy (2 chieu).
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+        const { error: err } = await supabase.from("dieu_chuyen_quy").insert({
+          ngay: d.ngay,
+          chieu: chieuChuyenQuy(d.loaiGiaoDich),
+          so_tien: d.soTien,
+          ghi_chu: d.noiDung || null,
+          nguoi_thuc_hien_id: nv?.id,
+        });
+        if (err) loiTungDong.push(`Dòng ${d.stt} (${d.noiDung}): ${err.message}`);
+        else {
+          thanhCong++;
+          daXongStt.add(d.stt);
+        }
+        continue;
+      }
 
       if (d.daChon === "tam_ung_moi") {
         if (!d.tamUngNhanVienId) {
@@ -370,8 +452,22 @@ export default function DoiChieuSaoKeView({
         </div>
       </div>
 
+      {tomTatFile && <p className="mb-2 text-xs text-slate-600">{tomTatFile}</p>}
+      {!dongList.length && error && <p className="text-sm text-red-600">{error}</p>}
+
       {dongList.length > 0 && (
         <>
+          {dongList.some((d) => d.loaiNghiepVu === "Chuyển quỹ nội bộ" && !d.daGhiChuyenQuy) && (
+            <button
+              type="button"
+              onClick={() =>
+                setDongList((prev) => prev.map((d) => (d.loaiNghiepVu === "Chuyển quỹ nội bộ" && !d.daGhiChuyenQuy ? { ...d, daChon: "chuyen_quy" } : d)))
+              }
+              className="mb-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+            >
+              Chọn tất cả dòng rút/nộp tiền mặt chưa ghi
+            </button>
+          )}
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
@@ -387,7 +483,10 @@ export default function DoiChieuSaoKeView({
                 {dongList.map((d) => (
                   <tr key={d.stt} className="border-t border-slate-100">
                     <td className="px-2 py-1.5">{d.ngay}</td>
-                    <td className="px-2 py-1.5">{d.noiDung}</td>
+                    <td className="px-2 py-1.5">
+                      {d.noiDung}
+                      {d.loaiNghiepVu && <p className="text-xs text-slate-400">{d.loaiNghiepVu}</p>}
+                    </td>
                     <td className="px-2 py-1.5">{d.loaiGiaoDich}</td>
                     <td className="px-2 py-1.5 text-right">{Math.round(d.soTien).toLocaleString("en-US")}</td>
                     <td className="px-2 py-1.5">
@@ -401,8 +500,12 @@ export default function DoiChieuSaoKeView({
                         {/* Giao dich Chi khong khop khoan no nao co the chinh la 1 lan
                             ung tien MOI cho nhan vien — xem ghi chu o xacNhanTatCa(). */}
                         {d.loaiGiaoDich === "Chi" && <option value="tam_ung_moi">+ Tạo tạm ứng mới cho nhân viên...</option>}
+                        {loaiSo === "Tài khoản công ty" && !d.daGhiChuyenQuy && (
+                          <option value="chuyen_quy">⇄ Chuyển quỹ nội bộ ({chieuChuyenQuy(d.loaiGiaoDich)})</option>
+                        )}
                       </select>
-                      {d.ungVien.length === 0 && d.daChon !== "tam_ung_moi" && (
+                      {d.daGhiChuyenQuy && <p className="mt-0.5 text-xs text-green-700">Chuyển quỹ này đã có trong app.</p>}
+                      {d.ungVien.length === 0 && !d.daGhiChuyenQuy && d.daChon !== "tam_ung_moi" && d.daChon !== "chuyen_quy" && (
                         <p className="mt-0.5 text-xs text-amber-600">Không tìm thấy khoản nào còn lại đúng số tiền này.</p>
                       )}
                       {d.daChon === "tam_ung_moi" && (

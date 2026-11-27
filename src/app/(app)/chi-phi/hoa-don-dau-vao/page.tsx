@@ -19,7 +19,7 @@ export default async function HoaDonDauVaoPage() {
   const [{ data: rows }, { data: nhaCungCapList }, { data: donHangList }] = await Promise.all([
     supabase.from("hoa_don_dau_vao").select("*").order("ngay_hoa_don", { ascending: false }),
     supabase.from("nha_cung_cap").select("id, ten, ma_so_thue, dia_chi").order("ten"),
-    supabase.from("don_hang").select("id, so_don_hang").order("so_don_hang", { ascending: false }),
+    supabase.from("don_hang").select("id, so_don_hang, so_bl_bk, don_hang_container(so_cont)").order("so_don_hang", { ascending: false }),
   ]);
 
   return (
@@ -32,7 +32,12 @@ export default async function HoaDonDauVaoPage() {
       <HoaDonDauVaoView
         initialRows={(rows ?? []) as HoaDonDauVao[]}
         nhaCungCapList={nhaCungCapList ?? []}
-        donHangList={donHangList ?? []}
+        donHangList={(donHangList ?? []).map((d) => ({
+          id: d.id,
+          so_don_hang: d.so_don_hang,
+          so_bl_bk: d.so_bl_bk,
+          so_cont: ((d.don_hang_container ?? []) as { so_cont: string | null }[]).map((c) => c.so_cont ?? "").filter(Boolean),
+        }))}
         canEdit={user.phong_ban === "Kế toán"}
       />
     </div>

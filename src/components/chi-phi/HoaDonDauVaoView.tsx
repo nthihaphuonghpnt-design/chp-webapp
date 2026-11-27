@@ -9,6 +9,7 @@ import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelC
 import { TK, tkTheoPhuongThuc, GHI_CHU_DINH_KHOAN_GOI_Y } from "@/lib/dinhKhoan";
 import MoneyInput from "@/components/common/MoneyInput";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import { chonSheetDanhSach, docDanhSachHoaDonDienTu, docNoiDungDongHang } from "@/lib/danhSachHoaDonDienTu";
 
 export interface NhaCungCapOption {
   id: string;
@@ -20,6 +21,8 @@ export interface NhaCungCapOption {
 export interface DonHangOption {
   id: string;
   so_don_hang: string;
+  so_bl_bk?: string | null;
+  so_cont?: string[];
 }
 
 export interface HoaDonDauVao {
@@ -178,6 +181,8 @@ export default function HoaDonDauVaoView({
   const [loaiLoc, setLoaiLoc] = useState("Tất cả");
   const [query, setQuery] = useState("");
   const [importing, setImporting] = useState(false);
+  const [nhapTuNgay, setNhapTuNgay] = useState(() => `${ngayHienTaiVietNam().slice(0, 4)}-01-01`);
+  const [xemCongNo, setXemCongNo] = useState(false);
   const [importSummary, setImportSummary] = useState<{ success: number; errors: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // P1 muc 3 (2026-11-26): loc + chon hang loat de "Xac nhan du dieu kien khau
@@ -206,6 +211,23 @@ export default function HoaDonDauVaoView({
       (ncMap.get(r.nha_cung_cap_id ?? "") ?? "").toLowerCase().includes(q)
     );
   });
+
+  const congNoNcc = (() => {
+    const m = new Map<string, { ten: string; tong: number; daTra: number; conNo: number; soHoaDon: string[] }>();
+    for (const r of rows) {
+      if (r.id.startsWith("new-") || r.tinh_trang_thanh_toan === "Đã đủ" || (r as { dang_hoat_dong?: boolean }).dang_hoat_dong === false) continue;
+      const conNo = (r.tong_tien_thanh_toan ?? 0) - (r.so_tien_da_thanh_toan ?? 0);
+      if (conNo <= 0) continue;
+      const key = r.nha_cung_cap_id ?? "";
+      const c = m.get(key) ?? { ten: ncMap.get(key) || "(chưa có NCC)", tong: 0, daTra: 0, conNo: 0, soHoaDon: [] };
+      c.tong += r.tong_tien_thanh_toan ?? 0;
+      c.daTra += r.so_tien_da_thanh_toan ?? 0;
+      c.conNo += conNo;
+      c.soHoaDon.push(r.so_hoa_don || "(chưa có số)");
+      m.set(key, c);
+    }
+    return Array.from(m.values()).sort((a, b) => b.conNo - a.conNo);
+  })();
 
   const tongTheoLoc = filteredRows.reduce((s, r) => s + (r.tong_tien_thanh_toan ?? 0), 0);
 
@@ -625,19 +647,154 @@ export default function HoaDonDauVaoView({
     });
   }
 
+  /** Nhap file thue mua vao: bo qua (khong chan ca file) hoa don da co/khong hop
+   * le, tu tao NCC theo MST, goi y lo theo so container / so van don. */
+  async function nhapFileThue(book: XLSX.WorkBook) {
+    let danhSach;
+    try {
+      danhSach = docDanhSachHoaDonDienTu(chonSheetDanhSach(book)!);
+    } catch (e) {
+      setImportSummary({ success: 0, errors: [e instanceof Error ? e.message : "Không đọc được file."] });
+      setImporting(false);
+      return;
+    }
+    const noiDungHang = docNoiDungDongHang(book);
+    const gon = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const khoaLo = donHangList.map((d) => ({
+      d,
+      ma: [d.so_bl_bk ?? "", ...(d.so_cont ?? [])].map(gon).filter((m) => m.length >= 8),
+    }));
+    const daCo = new Set(rows.map((r) => `${(r.so_hoa_don ?? "").trim()}|${r.ngay_hoa_don}|${Math.round(r.tong_tien_thanh_toan)}`));
+    const daCoTheoNcc = new Set(rows.map((r) => `${r.nha_cung_cap_id}|${(r.so_hoa_don ?? "").trim()}|${r.ngay_hoa_don}`));
+    const timNcc = (mst: string, ten: string) =>
+      ncList.find((n) => String(n.ma_so_thue ?? "").trim() === mst) ??
+      ncList.find((n) => !n.ma_so_thue && (n.ten ?? "").trim().toLowerCase() === ten.toLowerCase());
+
+    const boQua: string[] = [];
+    let soDaCo = 0;
+    let soTruocNgay = 0;
+    const chon: { h: (typeof danhSach)[number]; donHang: DonHangOption | null; ghiChuLo: string }[] = [];
+    for (const h of danhSach) {
+      const nhan = `Số ${h.soHoaDon} (${h.tenNguoiBan || h.mstNguoiBan})`;
+      if (h.ngayLap < nhapTuNgay) {
+        soTruocNgay++;
+        continue;
+      }
+      if (h.mstNguoiMua !== CONG_TY.mst || h.mstNguoiBan === CONG_TY.mst) {
+        boQua.push(`${nhan}: không phải hóa đơn mua vào của công ty.`);
+        continue;
+      }
+      if (h.trangThai && h.trangThai.toLowerCase() !== "hóa đơn mới") {
+        boQua.push(`${nhan}: trạng thái “${h.trangThai}”, cần đối chiếu và nhập tay.`);
+        continue;
+      }
+      if (h.donViTienTe && h.donViTienTe.toUpperCase() !== "VND") {
+        boQua.push(`${nhan}: ngoại tệ ${h.donViTienTe}, cần quy đổi tỷ giá và nhập tay.`);
+        continue;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(h.ngayLap) || !Number.isFinite(h.tongThanhToan) || !Number.isFinite(h.tienThue) || h.tongThanhToan < h.tienThue) {
+        boQua.push(`${nhan}: ngày hoặc số tiền không hợp lệ.`);
+        continue;
+      }
+      const ncc = timNcc(h.mstNguoiBan, h.tenNguoiBan);
+      if (daCo.has(`${h.soHoaDon}|${h.ngayLap}|${Math.round(h.tongThanhToan)}`) || (ncc && daCoTheoNcc.has(`${ncc.id}|${h.soHoaDon}|${h.ngayLap}`))) {
+        soDaCo++;
+        continue;
+      }
+      const noiDung = gon(noiDungHang.get(`${h.mstNguoiBan}|${h.soHoaDon}|${h.ngayLap}`) ?? "");
+      const khop = noiDung ? khoaLo.filter((k) => k.ma.some((m) => noiDung.includes(m))).map((k) => k.d) : [];
+      chon.push({
+        h,
+        donHang: khop.length === 1 ? khop[0] : null,
+        ghiChuLo: khop.length > 1 ? ` Dòng hàng khớp nhiều lô: ${khop.map((d) => d.so_don_hang).join(", ")} — cần phân bổ tay.` : "",
+      });
+    }
+
+    const thongKe = [
+      soDaCo ? `${soDaCo} hóa đơn đã có trong app` : "",
+      soTruocNgay ? `${soTruocNgay} hóa đơn trước ngày ${nhapTuNgay}` : "",
+    ].filter(Boolean).join("; ");
+    const ghiChuBoQua = [...(thongKe ? [`Không nhập: ${thongKe}.`] : []), ...boQua];
+    setImporting(false);
+    if (chon.length === 0) {
+      setImportSummary({ success: 0, errors: ["Không có hóa đơn mới để nhập.", ...ghiChuBoQua] });
+      return;
+    }
+    const nccMoi = new Map<string, { ten: string; ma_so_thue: string; dia_chi: string | null }>();
+    for (const { h } of chon) {
+      if (!timNcc(h.mstNguoiBan, h.tenNguoiBan)) nccMoi.set(h.mstNguoiBan, { ten: h.tenNguoiBan || h.mstNguoiBan, ma_so_thue: h.mstNguoiBan, dia_chi: h.diaChiNguoiBan || null });
+    }
+    const goiY = chon.filter((c) => c.donHang);
+    setImportSummary({
+      success: 0,
+      errors: [
+        `Xem trước: ${chon.length} hóa đơn mới, ${nccMoi.size} nhà cung cấp sẽ được tạo, ${goiY.length} hóa đơn gợi ý được lô (chưa lưu gì).`,
+        ...goiY.map((c) => `Gợi ý: số ${c.h.soHoaDon} (${c.h.tenNguoiBan}) → ${c.donHang!.so_don_hang}`),
+        ...ghiChuBoQua,
+      ],
+    });
+    setChoXacNhanImport({
+      count: chon.length,
+      thucHien: async () => {
+        setImporting(true);
+        const baoLoi = (m: string) => {
+          setImporting(false);
+          setImportSummary({ success: 0, errors: [m, ...ghiChuBoQua] });
+        };
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data: nv } = await supabase.from("nhan_vien").select("id").eq("auth_user_id", user?.id).single();
+        let dsNcc = ncList;
+        if (nccMoi.size > 0) {
+          const { data, error: loi } = await supabase.from("nha_cung_cap").insert(Array.from(nccMoi.values())).select("id, ten, ma_so_thue, dia_chi");
+          if (loi) return baoLoi(`Không tạo được nhà cung cấp: ${loi.message}`);
+          dsNcc = [...ncList, ...((data ?? []) as NhaCungCapOption[])];
+          setNcList(dsNcc);
+        }
+        const banGhi = chon.map(({ h, donHang, ghiChuLo }) => ({
+          mau_so_hoa_don: [h.kyHieuMau, h.kyHieu].filter(Boolean).join(" / ") || null,
+          so_hoa_don: h.soHoaDon,
+          ngay_hoa_don: h.ngayLap,
+          nha_cung_cap_id:
+            (dsNcc.find((n) => String(n.ma_so_thue ?? "").trim() === h.mstNguoiBan) ?? timNcc(h.mstNguoiBan, h.tenNguoiBan))?.id ?? null,
+          don_hang_id: donHang?.id ?? null,
+          khoan_muc: `Hóa đơn mua vào ${h.soHoaDon} — ${h.tenNguoiBan || h.mstNguoiBan}`,
+          loai_chi_phi: "Phát sinh",
+          thang_phan_bo: h.ngayLap.slice(0, 7),
+          // Gom ca chiet khau/phi vao tien hang de tong thanh toan dung bang hoa don.
+          tong_tien_hang: Math.round(h.tongThanhToan) - Math.round(h.tienThue),
+          tien_thue_gtgt: Math.round(h.tienThue),
+          ky_ke_khai: h.ngayLap.slice(0, 7),
+          dieu_kien_khau_tru: "Chưa xác định",
+          ghi_chu: `Nhập từ file thuế (${h.ketQuaKiemTra || "chưa có kết quả kiểm tra"}).${donHang ? " Lô do app gợi ý, cần kiểm tra." : ""}${ghiChuLo}`,
+          nguoi_nhap_id: nv?.id,
+        }));
+        // 1 lenh insert = 1 giao dich: loi thi khong hoa don nao duoc luu.
+        const { data, error: loi } = await supabase.from("hoa_don_dau_vao").insert(banGhi).select();
+        if (loi) return baoLoi(`Lỗi khi lưu hóa đơn: ${loi.message}`);
+        setImporting(false);
+        setRows((prev) => [...((data as HoaDonDauVao[]) ?? []), ...prev]);
+        setImportSummary({ success: data?.length ?? 0, errors: ghiChuBoQua });
+      },
+    });
+  }
+
   async function handleImportFile(file: File) {
     setImporting(true);
     setImportSummary(null);
 
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    // File tai tu cong thue / phan mem tai hoa don -> luong rieng. Doc lai khong
+    // cellDates de ngay khong bi lech mui gio.
+    const sachThue = XLSX.read(buf, { type: "array" });
+    if (chonSheetDanhSach(sachThue)) {
+      await nhapFileThue(sachThue);
+      return;
+    }
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
-    const portalHeaderIndex = grid.findIndex((line) => String(line[0]).trim() === "STT" && String(line[3]).trim() === "Số hóa đơn" && String(line[5]).includes("MST người bán"));
-    const portalRows = portalHeaderIndex < 0 ? [] : grid.slice(portalHeaderIndex + 1)
-      .map((line, index) => ({ line, rowNumber: XLSX.utils.decode_range(sheet["!ref"] ?? "A1").s.r + portalHeaderIndex + index + 2 }))
-      .filter(({ line }) => String(line[3] ?? "").trim() !== "");
-    const raw = portalHeaderIndex < 0 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" }) : [];
+    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
     const {
       data: { user },
@@ -658,60 +815,6 @@ export default function HoaDonDauVaoView({
 
     const records: Record<string, unknown>[] = [];
     const errors: string[] = [];
-
-    if (portalHeaderIndex >= 0) {
-      if (portalRows.length === 0) errors.push("File cổng hóa đơn chỉ có tiêu đề, chưa có hóa đơn để nhập.");
-      for (const { line, rowNumber } of portalRows) {
-        const cell = (index: number) => String(line[index] ?? "").trim();
-        const buyerTax = cell(7);
-        const sellerTax = cell(5);
-        const status = cell(17).toLowerCase();
-        const currency = cell(15).toUpperCase();
-        const ngayHoaDon = excelDate(line[4]);
-        if (buyerTax !== CONG_TY.mst || sellerTax === CONG_TY.mst) {
-          errors.push(`Dòng ${rowNumber}: không phải hóa đơn mua vào của công ty (MST người mua phải là ${CONG_TY.mst}).`);
-          continue;
-        }
-        if (status.includes("hủy") || status.includes("huỷ") || status.includes("thay thế") || status.includes("điều chỉnh")) {
-          errors.push(`Dòng ${rowNumber}: hóa đơn có trạng thái “${cell(17)}”, cần đối chiếu hóa đơn gốc trước khi ghi nhận.`);
-          continue;
-        }
-        if (currency && currency !== "VND") {
-          errors.push(`Dòng ${rowNumber}: hóa đơn ${currency} cần quy đổi và kiểm tra tỷ giá trước khi ghi nhận.`);
-          continue;
-        }
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(ngayHoaDon)) {
-          errors.push(`Dòng ${rowNumber}: ngày lập không hợp lệ.`);
-          continue;
-        }
-        const ncc = ncList.find((o) => String(o.ma_so_thue ?? "").trim() === sellerTax);
-        if (!ncc) {
-          errors.push(`Dòng ${rowNumber}: MST người bán ${sellerTax || "(trống)"} chưa có trong danh mục nhà cung cấp.`);
-          continue;
-        }
-        const amount = (index: number) => {
-          const value = line[index];
-          return typeof value === "number" ? value : Number(String(value ?? "0").replace(/[,.\s]/g, ""));
-        };
-        const tienHang = amount(10);
-        const tienThue = amount(11);
-        const thanhToan = amount(14);
-        if (![tienHang, tienThue, thanhToan].every(Number.isFinite) || tienHang < 0 || tienThue < 0 || Math.abs(tienHang + tienThue - thanhToan) > 1) {
-          errors.push(`Dòng ${rowNumber}: tiền hàng + thuế khác tổng thanh toán; cần kiểm tra chiết khấu/phí/điều chỉnh.`);
-          continue;
-        }
-        records.push({
-          mau_so_hoa_don: [cell(1), cell(2)].filter(Boolean).join(" / ") || null,
-          so_hoa_don: cell(3), ngay_hoa_don: ngayHoaDon,
-          nha_cung_cap_id: ncc.id, khoan_muc: `Hóa đơn mua vào ${cell(3)} — ${cell(6)}`,
-          loai_chi_phi: "Phát sinh", thang_phan_bo: ngayHoaDon.slice(0, 7),
-          tong_tien_hang: tienHang, tien_thue_gtgt: tienThue,
-          ky_ke_khai: ngayHoaDon.slice(0, 7), dieu_kien_khau_tru: "Chưa xác định",
-          ghi_chu: `Nhập từ danh sách HĐĐT. Trạng thái: ${cell(17) || "chưa có"}; kiểm tra: ${cell(18) || "chưa có"}. Kế toán cần đối chiếu hóa đơn gốc, phân loại khoản mục và kỳ kê khai.`,
-          nguoi_nhap_id: nv?.id,
-        });
-      }
-    }
 
     raw.forEach((rawRow, idx) => {
       const rowNum = idx + 2;
@@ -832,8 +935,12 @@ export default function HoaDonDauVaoView({
                 disabled={importing}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
               >
-                {importing ? "Đang nhập..." : "Nhập Excel"}
+                {importing ? "Đang nhập..." : "Nhập Excel / file thuế"}
               </button>
+              <label className="flex items-center gap-1 text-xs text-slate-500">
+                File thuế: lấy từ ngày
+                <input type="date" value={nhapTuNgay} onChange={(e) => setNhapTuNgay(e.target.value)} className="rounded border border-slate-300 px-2 py-1" />
+              </label>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -876,6 +983,41 @@ export default function HoaDonDauVaoView({
           )}
         </div>
       )}
+
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+        <button type="button" onClick={() => setXemCongNo((v) => !v)} className="font-medium text-blue-600">
+          {xemCongNo ? "▾" : "▸"} Công nợ phải trả theo nhà cung cấp (mọi tháng):{" "}
+          {fmt(congNoNcc.reduce((s, c) => s + c.conNo, 0))}
+        </button>
+        {xemCongNo && (
+          <>
+            <p className="mt-1 text-xs text-slate-500">
+              Tính từ hóa đơn đầu vào chưa ghi nhận trả đủ. Hóa đơn đã trả ngoài đời nhưng chưa bấm ghi nhận (ví dụ vừa nhập từ file thuế) vẫn nằm ở đây.
+            </p>
+            <table className="mt-2 w-full text-sm">
+              <thead className="text-left text-slate-500">
+                <tr>
+                  {["Nhà cung cấp", "Số HĐ còn nợ", "Tổng hóa đơn", "Đã trả", "Còn nợ", "Các hóa đơn"].map((h) => (
+                    <th key={h} className="px-2 py-1 font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {congNoNcc.map((c) => (
+                  <tr key={c.ten} className="border-t border-slate-100 align-top">
+                    <td className="px-2 py-1">{c.ten}</td>
+                    <td className="px-2 py-1">{c.soHoaDon.length}</td>
+                    <td className="px-2 py-1">{fmt(c.tong)}</td>
+                    <td className="px-2 py-1">{fmt(c.daTra)}</td>
+                    <td className="px-2 py-1 font-medium">{fmt(c.conNo)}</td>
+                    <td className="px-2 py-1 text-xs text-slate-500">{c.soHoaDon.join(", ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
         <select value={thangLoc} onChange={(e) => setThangLoc(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">

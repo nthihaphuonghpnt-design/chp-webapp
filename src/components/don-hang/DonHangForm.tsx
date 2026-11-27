@@ -262,7 +262,7 @@ export default function DonHangForm({
             />
           </Field>
           {masterData.coKhachDichVu && values.khach_hang_id && (
-            <Field label="Khách xuất HĐ dịch vụ" hint="Hóa đơn chi hộ luôn xuất cho khách hàng ở ô trên">
+            <Field label="Khách xuất HĐ dịch vụ (Công ty giao dịch)" hint="Hóa đơn chi hộ luôn xuất cho khách hàng ở ô trên">
               <select value={khachDichVuId} onChange={(e) => setKhachDichVuId(e.target.value)} className={inputClass}>
                 <option value="">Mặc định: {tenKhachDichVuMacDinh()}</option>
                 {masterData.khachHang.map((k) => (

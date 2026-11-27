@@ -9,7 +9,7 @@ import FileAttachSection from "@/components/common/FileAttachSection";
 import MoneyInput from "@/components/common/MoneyInput";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
-import { docDanhSachHoaDonDienTu } from "@/lib/danhSachHoaDonDienTu";
+import { chonSheetDanhSach, docDanhSachHoaDonDienTu } from "@/lib/danhSachHoaDonDienTu";
 import { khachMeCua, khachXuatDichVu, type NhomCoMe } from "@/lib/nhomKhach";
 import type { DinhKem } from "@/types/database";
 
@@ -238,7 +238,7 @@ export default function HoaDonView({
     setLoiFileCong(null);
     try {
       const book = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
-      const list = docDanhSachHoaDonDienTu(book.Sheets[book.SheetNames[0]]);
+      const list = docDanhSachHoaDonDienTu(chonSheetDanhSach(book) ?? book.Sheets[book.SheetNames[0]]);
       if (list.length === 0) {
         setDoiChieuCong([]);
         setLoiFileCong("File chỉ có tiêu đề, chưa có hóa đơn để đối chiếu.");
@@ -249,16 +249,23 @@ export default function HoaDonView({
         let ketQua = "Khớp số, khách hàng và tổng tiền";
         const key = `${invoice.kyHieuMau}|${invoice.kyHieu}|${invoice.soHoaDon}`;
         if (invoice.mstNguoiBan !== CONG_TY.mst) ketQua = "MST người bán không phải công ty";
-        else if (!invoice.mstNguoiMua || !khachHangList.some((k) => k.ma_so_thue?.trim() === invoice.mstNguoiMua)) ketQua = "Chưa xác định được khách hàng theo MST";
         else if (seen.has(key)) ketQua = "Trùng hóa đơn trong file";
         else if (!/^\d{4}-\d{2}-\d{2}$/.test(invoice.ngayLap)) ketQua = "Ngày lập không hợp lệ";
         else if (![invoice.tienTruocThue, invoice.tienThue, invoice.tienChietKhau, invoice.tienPhi, invoice.tongThanhToan].every(Number.isFinite)) ketQua = "Số tiền không hợp lệ";
         else if (invoice.donViTienTe && invoice.donViTienTe.toUpperCase() !== "VND") ketQua = "Ngoại tệ: cần đối chiếu tỷ giá";
         else if (invoice.trangThai.toLowerCase().includes("hủy") || invoice.trangThai.toLowerCase().includes("huỷ")) ketQua = "Hóa đơn hủy: kiểm tra trạng thái trên app";
         else {
-          const matched = rows.filter((r) => r.so_hoa_don?.trim() === invoice.soHoaDon && r.ngay_xuat === invoice.ngayLap);
-          if (matched.length !== 1) ketQua = matched.length === 0 ? "Chưa có trong app (hoặc sai ngày lập)" : "Trùng số và ngày lập trong app";
-          else if (khachHangList.find((k) => k.id === matched[0].khach_hang_id)?.ma_so_thue?.trim() !== invoice.mstNguoiMua) ketQua = "Sai khách hàng/MST";
+          const cungSo = (soApp: string | null) => {
+            const s = (soApp ?? "").trim().toUpperCase();
+            const so = invoice.soHoaDon.toUpperCase();
+            const kyHieu = invoice.kyHieu.toUpperCase();
+            return s === so || (!!kyHieu && s.replace(/[\s/]/g, "-").endsWith(`${kyHieu}-${so}`));
+          };
+          const matched = rows.filter((r) => cungSo(r.so_hoa_don) && r.ngay_xuat === invoice.ngayLap);
+          const mstApp = matched.length === 1 ? khachHangList.find((k) => k.id === matched[0].khach_hang_id)?.ma_so_thue?.trim() : "";
+          if (matched.length !== 1)
+            ketQua = matched.length === 0 ? `Chưa có trong app (hoặc sai ngày lập) — ${invoice.kyHieu}-${invoice.soHoaDon}, ${invoice.ngayLap}, tổng ${invoice.tongThanhToan.toLocaleString("en-US")}` : "Trùng số và ngày lập trong app";
+          else if (mstApp && mstApp !== invoice.mstNguoiMua) ketQua = "Sai khách hàng/MST";
           else if (Math.abs(matched[0].tong_tien - invoice.tongThanhToan) > 1) ketQua = "Lệch tổng thanh toán";
           else if (matched[0].trang_thai === "Đã hủy" || matched[0].trang_thai === "Đã thay thế") ketQua = "Trạng thái app cần kiểm tra";
           else {
@@ -268,6 +275,7 @@ export default function HoaDonView({
               const canhBao = canhBaoLechHoaDon(matched[0].tong_tien, donHangIds);
               if (canhBao) ketQua = `Khớp số nhưng ${canhBao[0].toLowerCase()}${canhBao.slice(1)} (lô: ${soDon})`;
             }
+            if (!mstApp && ketQua === "Khớp số, khách hàng và tổng tiền") ketQua = `Khớp số và tổng tiền; khách trong app chưa có MST (file: ${invoice.mstNguoiMua || "trống"})`;
           }
         }
         seen.add(key);
