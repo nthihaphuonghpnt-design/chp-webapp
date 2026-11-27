@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BaoCaoView from "@/components/bao-cao/BaoCaoView";
+import { taiHetDong } from "@/lib/taiHetDong";
 import { ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function BaoCaoPage() {
@@ -36,11 +37,14 @@ export default async function BaoCaoPage() {
     // Khong gate theo isKeToanOrGiamDoc: Sale can chinh du lieu nay de tinh "Doanh so
     // theo Sale" cua rieng minh — RLS (0040/0041) da tu gioi han Sale chi thay dong
     // chi phi cua don hang do minh phu trach, khong can chan them o day.
-    supabase
-      .from("phat_sinh_chi_phi")
-      .select(
-        "id, don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, so_tien_da_chi, chi_ho, noi_bo, vat_percent, hoa_don_id, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai",
-      ),
+    taiHetDong(() =>
+      supabase
+        .from("phat_sinh_chi_phi")
+        .select(
+          "id, don_hang_id, loai_chi_phi_id, nha_cung_cap_id, doi_tac_thue_ngoai_id, so_tien_da_chi, chi_ho, noi_bo, vat_percent, hoa_don_id, ngay_phat_sinh, tinh_trang_thanh_toan, so_tien_da_thanh_toan, trang_thai",
+        )
+        .order("id"),
+    ),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien, hoa_don_id"),
     isKeToanOrGiamDoc
       ? supabase.from("don_thue_ngoai").select("id, don_hang_id, doi_tac_thue_ngoai_id, so_tien_da_chi, chi_ho, hoa_don_id, so_tien_da_thanh_toan, ngay_thue, trang_thai")

@@ -21,10 +21,11 @@ async function ghepGiaBan<T extends { id: string }>(
   rows: T[]
 ): Promise<(T & { gia_ban_sell: number | null })[]> {
   if (rows.length === 0) return rows as (T & { gia_ban_sell: number | null })[];
-  const { data } = await supabase.rpc(rpcName, { p_ids: rows.map((r) => r.id) });
-  const map = new Map<string, number | null>(
-    ((data ?? []) as { id: string; gia_ban_sell: number | null }[]).map((d) => [d.id, d.gia_ban_sell])
-  );
+  const map = new Map<string, number | null>();
+  for (let i = 0; i < rows.length; i += 500) {
+    const { data } = await supabase.rpc(rpcName, { p_ids: rows.slice(i, i + 500).map((r) => r.id) });
+    for (const d of (data ?? []) as { id: string; gia_ban_sell: number | null }[]) map.set(d.id, d.gia_ban_sell);
+  }
   return rows.map((r) => ({ ...r, gia_ban_sell: map.get(r.id) ?? null }));
 }
 

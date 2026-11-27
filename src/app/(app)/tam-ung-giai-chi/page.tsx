@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import TamUngGiaiChiView from "@/components/tam-ung-giai-chi/TamUngGiaiChiView";
 import TamUngGiaiChiBulkExcelTools from "@/components/tam-ung-giai-chi/TamUngGiaiChiBulkExcelTools";
+import { taiHetDong } from "@/lib/taiHetDong";
 
 export default async function TamUngGiaiChiPage({
   searchParams,
@@ -24,12 +25,15 @@ export default async function TamUngGiaiChiPage({
       .select("id, ten_day_du, nhom_khach_hang:nhom_khach_hang_id(ten)")
       .eq("dang_hoat_dong", true)
       .order("ten_day_du"),
-    supabase
-      .from("phat_sinh_chi_phi")
-      .select("nguoi_nhap_id, don_hang_id, so_tien_da_chi")
-      .not("don_hang_id", "is", null)
-      .not("nguoi_nhap_id", "is", null)
-      .neq("trang_thai", "Từ chối"),
+    taiHetDong(() =>
+      supabase
+        .from("phat_sinh_chi_phi")
+        .select("nguoi_nhap_id, don_hang_id, so_tien_da_chi")
+        .not("don_hang_id", "is", null)
+        .not("nguoi_nhap_id", "is", null)
+        .neq("trang_thai", "Từ chối")
+        .order("id"),
+    ),
     // nguon_bang/nguon_id la lien ket kieu "polymorphic" (khong phai FK that
     // trong Postgres) nen phai truy van rieng roi ghep tay o phia component,
     // khong dung duoc cach Supabase tu join qua quan he FK.

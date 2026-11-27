@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BangLuongView from "@/components/chi-phi/BangLuongView";
 import { ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
+import { taiHetDong } from "@/lib/taiHetDong";
 
 export default async function BangLuongPage() {
   const supabase = await createClient();
@@ -34,9 +35,7 @@ export default async function BangLuongPage() {
       .order("ho_ten"),
     supabase.from("chi_phi_giao_nhan").select("don_hang_id, nhan_vien_id, thanh_tien, created_at"),
     supabase.from("don_hang").select("id, gia, ngay_len_don, sale_phu_trach_id"),
-    supabase
-      .from("phat_sinh_chi_phi")
-      .select("id, don_hang_id, so_tien_da_chi, noi_bo, chi_ho, trang_thai"),
+    taiHetDong(() => supabase.from("phat_sinh_chi_phi").select("id, don_hang_id, so_tien_da_chi, noi_bo, chi_ho, trang_thai").order("id")),
     supabase.from("phu_thu").select("don_hang_id, thanh_tien"),
     supabase.from("don_thue_ngoai").select("id, don_hang_id, so_tien_da_chi, chi_ho, trang_thai"),
     supabase.from("luong_da_tra").select("*"),
