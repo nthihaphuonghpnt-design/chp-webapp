@@ -21,7 +21,6 @@ export default async function KhachHangPage() {
       type: "select",
       options: (nhomList ?? []).map((n) => ({ value: n.id, label: n.ten })),
       hint: "Để trống nếu khách hàng độc lập, không thuộc nhóm nào. Chưa có nhóm cần thì bấm \"+\" tạo ngay tại đây.",
-      showInList: false,
       quickAddTable: "nhom_khach_hang",
     },
     { key: "dia_chi", label: "Địa chỉ", type: "text", showInList: false },
@@ -41,6 +40,7 @@ export default async function KhachHangPage() {
       searchField="ten_day_du"
       extraSearchFields={["ten_viet_tat", "ma_so_thue"]}
       taxLookup={{ taxField: "ma_so_thue", nameField: "ten_day_du", addressField: "dia_chi" }}
+      filterField="nhom_khach_hang_id"
     />
   );
 }

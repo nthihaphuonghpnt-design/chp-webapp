@@ -68,6 +68,10 @@ interface Props {
    * tren man hinh vi duoc gop truc tiep tu form, khong can doc lai tu DB.
    */
   selectColumns?: string;
+  /** Key cua 1 field type "select" dung lam bo loc rieng (vd "nhom_khach_hang_id")
+   * — hien 1 dropdown "Tat ca ..." ben canh o Tim kiem, loc chinh xac theo gia
+   * tri thay vi phai go dung text hien thi vao o tim kiem. */
+  filterField?: string;
 }
 
 export default function DanhMucManager({
@@ -82,9 +86,11 @@ export default function DanhMucManager({
   extraSearchFields,
   taxLookup,
   selectColumns,
+  filterField,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
+  const [filterValue, setFilterValue] = useState("");
   const [editing, setEditing] = useState<Row | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -100,7 +106,10 @@ export default function DanhMucManager({
   const primaryField = searchField ?? fields[0]?.key;
   const searchFieldsAll = [primaryField, ...(extraSearchFields ?? [])];
 
+  const filterFieldConfig = filterField ? fields.find((f) => f.key === filterField) : undefined;
+
   const filteredRows = rows.filter((r) => {
+    if (filterField && filterValue && String(r[filterField] ?? "") !== filterValue) return false;
     if (!query) return true;
     const q = query.toLowerCase();
     return searchFieldsAll.some((key) => {
@@ -396,12 +405,28 @@ export default function DanhMucManager({
         </div>
       )}
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Tìm kiếm..."
-        className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-      />
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Tìm kiếm..."
+          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none sm:flex-1"
+        />
+        {filterFieldConfig && (
+          <select
+            value={filterValue}
+            onChange={(e) => setFilterValue(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none sm:w-56"
+          >
+            <option value="">Tất cả {filterFieldConfig.label.toLowerCase()}</option>
+            {(filterFieldConfig.options ?? []).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
       {/* Mobile: card list */}
       <div className="flex flex-col gap-3 sm:hidden">
