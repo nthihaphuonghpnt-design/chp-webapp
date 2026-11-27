@@ -86,7 +86,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   // thuoc lan nhau — truoc day tach thanh nhieu buoc await noi tiep, moi
   // buoc cong them 1 vong round-trip mang, gay cham khi mo trang chi tiet
   // don hang.
-  const [chiPhiRowsDayDu, thueNgoaiRowsDayDu, { data: dinhPhiRows }, { count: soLoTrongThang }] = await Promise.all([
+  const [chiPhiRowsDayDu, thueNgoaiRowsDayDu, { data: dinhPhiRows }, { count: soLoTrongThang }, { data: bangGiaList }] = await Promise.all([
     ghepGiaBanChiPhi(supabase, chiPhiRows ?? []),
     ghepGiaBanThueNgoai(supabase, thueNgoaiRows ?? []),
     supabase.rpc("tong_dinh_phi_theo_thang"),
@@ -95,6 +95,15 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
       .select("id", { count: "exact", head: true })
       .gte("ngay_len_don", monthStart)
       .lt("ngay_len_don", nextMonthStart),
+    // P2 muc 10 (2026-11-27): goi y + canh bao gia ban luc nhap Chi phi phat
+    // sinh, dua theo Bang gia da thoa thuan voi dung khach hang cua lo nay.
+    order.khach_hang_id
+      ? supabase
+          .from("bang_gia_khach_hang")
+          .select("loai_chi_phi_id, hang_hoa_id, don_gia")
+          .eq("khach_hang_id", order.khach_hang_id)
+          .eq("dang_hoat_dong", true)
+      : Promise.resolve({ data: [] }),
   ]);
 
   // --- Cong no phai thu cua lo (P1 muc 1, 2026-11-26): CONG THUC DUY NHAT,
@@ -454,6 +463,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           nhanVienThueNgoaiTamUngOptions,
           congViecMap,
           donHangSoLuong: order.so_luong,
+          bangGiaList: bangGiaList ?? [],
+          donHangHangHoaId: order.hang_hoa_id,
         }}
         dinhKem={
           <DinhKemSection

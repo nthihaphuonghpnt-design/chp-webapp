@@ -55,6 +55,8 @@ interface ChiPhiGopProps {
   nhanVienThueNgoaiTamUngOptions: Option[];
   congViecMap: Record<string, string>;
   donHangSoLuong?: number | null;
+  bangGiaList?: { loai_chi_phi_id: string; hang_hoa_id: string | null; don_gia: number | null }[];
+  donHangHangHoaId?: string | null;
 }
 
 /** Gom cac muc cua trang chi tiet don hang thanh tab, thay vi xep doc 1 lan

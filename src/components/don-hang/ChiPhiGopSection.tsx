@@ -150,6 +150,8 @@ export default function ChiPhiGopSection({
   nhanVienThueNgoaiTamUngOptions,
   congViecMap,
   donHangSoLuong,
+  bangGiaList,
+  donHangHangHoaId,
   prefillChiTietVanChuyenId,
   onPrefillConsumed,
 }: {
@@ -168,6 +170,12 @@ export default function ChiPhiGopSection({
   congViecMap: Record<string, string>;
   /** So luong cua don hang (vd 2 Cont) — dien san vao "So luong" luc them dong moi. */
   donHangSoLuong?: number | null;
+  /** Bang gia da thoa thuan voi khach hang cua don nay (P2 muc 10, 2026-11-27)
+   * — dung de tu goi y + canh bao lech gia ban luc nhap dong "Chi phi phat sinh". */
+  bangGiaList?: { loai_chi_phi_id: string; hang_hoa_id: string | null; don_gia: number | null }[];
+  /** Mat hang cua chinh don hang nay — uu tien khop dong bang gia co cung mat
+   * hang truoc khi fallback ve dong "moi mat hang" (hang_hoa_id null). */
+  donHangHangHoaId?: string | null;
   /** Khi doi gia tri (khac null), tu mo 1 dong "them moi" voi chang nay da
    * chon san — dung cho nut "+ Thêm chi phí cho chặng này" o ChiTietVanChuyenSection. */
   prefillChiTietVanChuyenId?: string | null;
@@ -242,6 +250,29 @@ export default function ChiPhiGopSection({
   function changTen(id: string | null) {
     const c = chiTietVanChuyenList.find((c) => c.id === id);
     return c ? `${c.ngay_vc ?? "?"} · ${c.so_xe || c.tai_xe_cty_thue || "chặng"}` : null;
+  }
+
+  // P2 muc 10 (2026-11-27): Bang gia khach hang dang trong nen gia ban nhap
+  // tay tung don — tu goi y + canh bao lech gia khi nhap "Chi phi phat sinh".
+  // Khop dung mat hang cua don truoc, fallback ve dong "moi mat hang" (hang_hoa_id
+  // null) neu khong co dong rieng cho mat hang nay.
+  function timGiaBanKhopNhat(loaiChiPhiId: string): number | null {
+    if (!loaiChiPhiId || !bangGiaList || bangGiaList.length === 0) return null;
+    const ung = bangGiaList.filter((b) => b.loai_chi_phi_id === loaiChiPhiId);
+    if (ung.length === 0) return null;
+    const khopMatHang = donHangHangHoaId ? ung.find((b) => b.hang_hoa_id === donHangHangHoaId) : undefined;
+    const khopMoiMatHang = ung.find((b) => b.hang_hoa_id === null);
+    const chon = khopMatHang ?? khopMoiMatHang ?? ung[0];
+    return chon.don_gia ?? null;
+  }
+
+  function canhBaoLechGiaBan(loaiChiPhiId: string, sell: string): string | null {
+    const goiY = timGiaBanKhopNhat(loaiChiPhiId);
+    const nhap = Number(sell);
+    if (goiY == null || goiY <= 0 || !sell || Number.isNaN(nhap) || nhap <= 0) return null;
+    const lech = Math.abs(nhap - goiY) / goiY;
+    if (lech < 0.05) return null;
+    return `⚠ Bảng giá KH: ${fmt(goiY)} — giá vừa nhập lệch ${Math.round(lech * 100)}%.`;
   }
 
   // ---- Gop 3 nguon thanh 1 danh sach hien thi, loc theo quyen xem ----
@@ -916,6 +947,9 @@ export default function ChiPhiGopSection({
         {canSeeSell && (
           <td className="px-2 py-1.5">
             <MoneyInput value={values.sell} onChange={(v) => set({ sell: v })} className={cls} />
+            {loai === "chi_phi" && canhBaoLechGiaBan(values.loai_chi_phi_id, values.sell) && (
+              <p className="mt-1 text-xs font-medium text-amber-600">{canhBaoLechGiaBan(values.loai_chi_phi_id, values.sell)}</p>
+            )}
             {loai === "chi_phi" && !values.chi_ho && (
               <input
                 type="number"
@@ -999,7 +1033,18 @@ export default function ChiPhiGopSection({
               {r.loai === "chi_phi" && (
                 <div className="mb-2">
                   <label className="mb-1 block text-xs text-slate-500">Loại chi phí</label>
-                  <SearchableSelect options={loaiChiPhiOptions} value={r.loai_chi_phi_id} onChange={(v) => capNhatDongMoi(r.key, { loai_chi_phi_id: v })} />
+                  <SearchableSelect
+                    options={loaiChiPhiOptions}
+                    value={r.loai_chi_phi_id}
+                    onChange={(v) => {
+                      const patch: Partial<NewRowValues> = { loai_chi_phi_id: v };
+                      if (!r.sell) {
+                        const goiY = timGiaBanKhopNhat(v);
+                        if (goiY != null) patch.sell = String(goiY);
+                      }
+                      capNhatDongMoi(r.key, patch);
+                    }}
+                  />
                 </div>
               )}
               {r.loai === "chi_phi" && (
@@ -1074,6 +1119,9 @@ export default function ChiPhiGopSection({
                 <div className="mb-2">
                   <label className="mb-1 block text-xs text-slate-500">Giá bán / Thành tiền {r.loai === "chi_phi" && !r.chi_ho ? "(trước VAT)" : ""}</label>
                   <MoneyInput value={r.sell} onChange={(v) => capNhatDongMoi(r.key, { sell: v })} className={cls} />
+                  {r.loai === "chi_phi" && canhBaoLechGiaBan(r.loai_chi_phi_id, r.sell) && (
+                    <p className="mt-1 text-xs font-medium text-amber-600">{canhBaoLechGiaBan(r.loai_chi_phi_id, r.sell)}</p>
+                  )}
                 </div>
               )}
               {canSeeSell && r.loai === "chi_phi" && !r.chi_ho && (
