@@ -31,6 +31,7 @@ const NGUON_HREF: Record<string, string> = {
   phat_sinh_chi_phi: "/don-hang",
   don_thue_ngoai: "/don-hang",
   hoa_don_xuat: "/khach-hang/hoa-don",
+  thu_gop_thu_cong: "/khach-hang/hoa-don",
   hoa_don_dau_vao: "/chi-phi/hoa-don-dau-vao",
   luong_da_tra: "/chi-phi/bang-luong",
   phieu_quyet_toan_tam_ung: "/tam-ung-giai-chi/quyet-toan",
@@ -41,7 +42,7 @@ const NGUON_HREF: Record<string, string> = {
 // loaiSoHienTai: can rieng cho dieu_chuyen_quy vi ca 2 ben deu la TK tien
 // (111/112) — TK doi ung la TK tien CON LAI, khong phai 1 loai co dinh.
 function tkDoiUngGoiY(nguonBang: string, loaiSoHienTai: "Tiền mặt" | "Tài khoản công ty", tkNoRieng?: string): string {
-  if (nguonBang === "hoa_don_xuat") return TK.PHAI_THU_KHACH_HANG; // Thu: Co 131
+  if (nguonBang === "hoa_don_xuat" || nguonBang === "thu_gop_thu_cong") return TK.PHAI_THU_KHACH_HANG; // Thu: Co 131
   if (nguonBang === "tam_ung_giai_chi") return TK.TAM_UNG; // Chi: No 141
   if (nguonBang === "phieu_quyet_toan_tam_ung") return TK.TAM_UNG; // Tat toan so du TK 141 cua dot tam ung
   if (nguonBang === "luong_da_tra") return TK.PHAI_TRA_NGUOI_LAO_DONG; // Chi: No 334
@@ -64,6 +65,9 @@ const NGUON_LABEL: Record<string, string> = {
   phat_sinh_chi_phi: "Thanh toán chi phí",
   don_thue_ngoai: "Thanh toán thuê ngoài",
   hoa_don_xuat: "Thu tiền hóa đơn",
+  // Dong thu gop ghi tay (1 lan chuyen khoan cho nhieu hoa don) - khong gan
+  // trigger voi 1 hoa don nao nen sua hoa don khong lam mat dong nay.
+  thu_gop_thu_cong: "Thu gộp hóa đơn (ghi tay)",
   tam_ung_giai_chi: "Tạm ứng/Giải chi",
   hoa_don_dau_vao: "Hóa đơn đầu vào",
   luong_da_tra: "Trả lương",
