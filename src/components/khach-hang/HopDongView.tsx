@@ -93,6 +93,10 @@ export default function HopDongView({
   const [khFilter, setKhFilter] = useState("");
   const [nccFilter, setNccFilter] = useState("");
   const [chuaCoHopDongOnly, setChuaCoHopDongOnly] = useState(false);
+  // P2 muc 16 (2026-11-27): tach tab Khach hang / Nha cung cap — truoc gio
+  // gop chung 1 danh sach dai, kho phan biet, trong khi 2 doi tuong co quy
+  // trinh hop dong rat khac nhau (NCC mac dinh "Khong can hop dong").
+  const [tab, setTab] = useState<"khach_hang" | "nha_cung_cap">("khach_hang");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +107,7 @@ export default function HopDongView({
   const nccOptions = nhaCungCapList.map((n) => ({ value: n.id, label: n.ten ?? "" }));
 
   const filtered = rows
+    .filter((r) => (tab === "khach_hang" ? r.khach_hang_id !== null : r.nha_cung_cap_id !== null))
     .filter((r) => !chuaCoHopDongOnly || r.trang_thai_hop_dong === "Chưa có hợp đồng")
     .filter((r) => !khFilter || r.khach_hang_id === khFilter)
     .filter((r) => !nccFilter || r.nha_cung_cap_id === nccFilter)
@@ -360,6 +365,22 @@ export default function HopDongView({
         </div>
       </div>
 
+      <div className="mb-4 flex rounded-lg border border-slate-300 bg-white p-1 sm:w-fit">
+        {(["khach_hang", "nha_cung_cap"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => {
+              setTab(t);
+              setKhFilter("");
+              setNccFilter("");
+            }}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium sm:flex-none ${tab === t ? "bg-blue-600 text-white" : "text-slate-600"}`}
+          >
+            {t === "khach_hang" ? "Khách hàng" : "Nhà cung cấp"}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           value={query}
@@ -367,28 +388,15 @@ export default function HopDongView({
           placeholder="Tìm theo số hợp đồng, tên..."
           className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
         />
-        <div className="w-full sm:w-56">
-          <SearchableSelect
-            options={khOptions}
-            value={khFilter}
-            onChange={(v) => {
-              setKhFilter(v);
-              if (v) setNccFilter("");
-            }}
-            placeholder="Lọc theo khách hàng"
-          />
-        </div>
-        <div className="w-full sm:w-56">
-          <SearchableSelect
-            options={nccOptions}
-            value={nccFilter}
-            onChange={(v) => {
-              setNccFilter(v);
-              if (v) setKhFilter("");
-            }}
-            placeholder="Lọc theo nhà cung cấp"
-          />
-        </div>
+        {tab === "khach_hang" ? (
+          <div className="w-full sm:w-56">
+            <SearchableSelect options={khOptions} value={khFilter} onChange={setKhFilter} placeholder="Lọc theo khách hàng" />
+          </div>
+        ) : (
+          <div className="w-full sm:w-56">
+            <SearchableSelect options={nccOptions} value={nccFilter} onChange={setNccFilter} placeholder="Lọc theo nhà cung cấp" />
+          </div>
+        )}
         <label className="flex items-center gap-1.5 text-sm text-slate-600">
           <input type="checkbox" checked={chuaCoHopDongOnly} onChange={(e) => setChuaCoHopDongOnly(e.target.checked)} />
           Chỉ hiện chưa có hợp đồng
@@ -468,6 +476,7 @@ export default function HopDongView({
       {showForm && (
         <HopDongForm
           initial={editing}
+          defaultDoiTuong={tab}
           khachHangList={khachHangList}
           nhaCungCapList={nhaCungCapList}
           nhomKhachHangList={nhomKhachHangList}
@@ -497,6 +506,7 @@ export default function HopDongView({
 
 function HopDongForm({
   initial,
+  defaultDoiTuong,
   khachHangList,
   nhaCungCapList,
   nhomKhachHangList,
@@ -506,6 +516,7 @@ function HopDongForm({
   onSave,
 }: {
   initial: Row | null;
+  defaultDoiTuong: "khach_hang" | "nha_cung_cap";
   khachHangList: DoiTac[];
   nhaCungCapList: DoiTac[];
   nhomKhachHangList: { id: string; ten: string }[];
@@ -514,7 +525,7 @@ function HopDongForm({
   onCancel: () => void;
   onSave: (values: Record<string, string>) => void;
 }) {
-  const initialDoiTuong = initial?.nha_cung_cap_id ? "nha_cung_cap" : "khach_hang";
+  const initialDoiTuong = initial ? (initial.nha_cung_cap_id ? "nha_cung_cap" : "khach_hang") : defaultDoiTuong;
   const [values, setValues] = useState({
     doi_tuong: initialDoiTuong,
     doi_tuong_id: initial?.khach_hang_id ?? initial?.nha_cung_cap_id ?? "",

@@ -81,8 +81,11 @@ export default async function HomePage() {
             .eq("nguoi_nhap_id", user.id)
             .eq("trang_thai", "Chờ duyệt")
         : Promise.resolve({ data: null }),
+      // P2 muc 16 (2026-11-27): chi canh bao cho KHACH HANG thieu hop dong —
+      // Nha cung cap mac dinh "Khong can hop dong" (xem migration 0124), neu
+      // con gop ca NCC vao day se bao qua nhieu muc khong can thiet.
       trongCuaSo && isKtGd
-        ? supabase.from("hop_dong_khach_hang").select(hopDongCot).eq("trang_thai_hop_dong", "Chưa có hợp đồng")
+        ? supabase.from("hop_dong_khach_hang").select(hopDongCot).eq("trang_thai_hop_dong", "Chưa có hợp đồng").not("khach_hang_id", "is", null)
         : Promise.resolve({ data: null }),
       trongCuaSo && isKtGd
         ? supabase
