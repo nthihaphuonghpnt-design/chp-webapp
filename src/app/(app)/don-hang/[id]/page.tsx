@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageDonHang } from "@/lib/permissions";
+import { UngTienNhanhButton } from "@/components/tam-ung-giai-chi/TamUngGiaiChiView";
 import StatusBadge from "@/components/don-hang/StatusBadge";
 import ConfirmButtons from "@/components/don-hang/ConfirmButtons";
 import ContainerSection from "@/components/don-hang/ContainerSection";
@@ -116,25 +117,30 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   let soHoaDonCuaLo = "";
   let hoaDonGomNhieuDon = false;
   let dongCacDonKhac: DongPhaiThuInput[] = [];
+  let lienKetCuaHoaDon: { hoa_don_id: string; don_hang_id: string }[] = [];
+  const giaDonHangMap = new Map<string, number | null>([[id, order.gia]]);
   const hoaDonMap = new Map<string, HoaDonChoPhaiThuInput>();
   if (hoaDonIdsCuaLo.length > 0) {
     const [{ data: hoaDonRows }, { data: lienKetTatCa }] = await Promise.all([
-      supabase.from("hoa_don_xuat").select("id, so_hoa_don, so_tien_da_thu, trang_thai").in("id", hoaDonIdsCuaLo),
+      supabase.from("hoa_don_xuat").select("id, so_hoa_don, so_tien_da_thu, tong_tien, tien_chi_ho, trang_thai").in("id", hoaDonIdsCuaLo),
       supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id").in("hoa_don_id", hoaDonIdsCuaLo),
     ]);
     const hoaDonHopLe = (hoaDonRows ?? []).filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế");
     soHoaDonCuaLo = hoaDonHopLe.map((h) => h.so_hoa_don || "(chưa có số)").join(", ");
-    for (const h of hoaDonHopLe) hoaDonMap.set(h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu });
+    for (const h of hoaDonHopLe) hoaDonMap.set(h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu, tong_tien: h.tong_tien, tien_chi_ho: h.tien_chi_ho });
+    lienKetCuaHoaDon = lienKetTatCa ?? [];
     const donHangIdsKhac = Array.from(new Set((lienKetTatCa ?? []).map((l) => l.don_hang_id).filter((d) => d !== id)));
     hoaDonGomNhieuDon = donHangIdsKhac.length > 0;
     if (donHangIdsKhac.length > 0) {
       // Hoa don nay gom ca don hang khac — can lay chi phi/phu thu/thue ngoai
       // cua CAC DON DO de tinh dung ty le phan bo "Da thu" (tranh cong lap).
-      const [{ data: cpKhac }, { data: ptKhac }, { data: tnKhac }] = await Promise.all([
-        supabase.from("phat_sinh_chi_phi").select(PHAT_SINH_CHI_PHI_SAFE_COLS).in("don_hang_id", donHangIdsKhac),
+      const [{ data: cpKhac }, { data: ptKhac }, { data: tnKhac }, { data: donKhac }] = await Promise.all([
+        supabase.from("phat_sinh_chi_phi").select(PHAT_SINH_CHI_PHI_SAFE_COLS).in("don_hang_id", donHangIdsKhac).neq("trang_thai", "Từ chối"),
         supabase.from("phu_thu").select("don_hang_id, thanh_tien, hoa_don_id").in("don_hang_id", donHangIdsKhac),
-        supabase.from("don_thue_ngoai").select(DON_THUE_NGOAI_SAFE_COLS).in("don_hang_id", donHangIdsKhac),
+        supabase.from("don_thue_ngoai").select(DON_THUE_NGOAI_SAFE_COLS).in("don_hang_id", donHangIdsKhac).neq("trang_thai", "Từ chối"),
+        supabase.from("don_hang").select("id, gia").in("id", donHangIdsKhac),
       ]);
+      for (const d of donKhac ?? []) giaDonHangMap.set(d.id, d.gia);
       const [cpKhacDayDu, tnKhacDayDu] = await Promise.all([ghepGiaBanChiPhi(supabase, cpKhac ?? []), ghepGiaBanThueNgoai(supabase, tnKhac ?? [])]);
       dongCacDonKhac = [
         ...cpKhacDayDu.map((c) => ({ don_hang_id: c.don_hang_id, chi_ho: c.chi_ho, gia_ban_sell: c.gia_ban_sell, vat_percent: c.vat_percent, so_tien_da_chi: c.so_tien_da_chi, hoa_don_id: c.hoa_don_id })),
@@ -144,11 +150,11 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
     }
   }
   const dongCuaLoNay: DongPhaiThuInput[] = [
-    ...chiPhiRowsDayDu.map((c) => ({ don_hang_id: id, chi_ho: c.chi_ho, gia_ban_sell: c.gia_ban_sell, vat_percent: c.vat_percent, so_tien_da_chi: c.so_tien_da_chi, hoa_don_id: c.hoa_don_id })),
+    ...chiPhiRowsDayDu.filter((c) => c.trang_thai !== "Từ chối").map((c) => ({ don_hang_id: id, chi_ho: c.chi_ho, gia_ban_sell: c.gia_ban_sell, vat_percent: c.vat_percent, so_tien_da_chi: c.so_tien_da_chi, hoa_don_id: c.hoa_don_id })),
     ...(phuThuRows ?? []).map((p) => ({ don_hang_id: id, chi_ho: false, gia_ban_sell: p.thanh_tien, vat_percent: null, so_tien_da_chi: null, hoa_don_id: p.hoa_don_id })),
-    ...thueNgoaiRowsDayDu.map((t) => ({ don_hang_id: id, chi_ho: t.chi_ho, gia_ban_sell: t.gia_ban_sell, vat_percent: null, so_tien_da_chi: t.so_tien_da_chi, hoa_don_id: t.hoa_don_id })),
+    ...thueNgoaiRowsDayDu.filter((t) => t.trang_thai !== "Từ chối").map((t) => ({ don_hang_id: id, chi_ho: t.chi_ho, gia_ban_sell: t.gia_ban_sell, vat_percent: null, so_tien_da_chi: t.so_tien_da_chi, hoa_don_id: t.hoa_don_id })),
   ];
-  const congNoLo = tinhCongNoTheoLo([id], [...dongCuaLoNay, ...dongCacDonKhac], hoaDonMap, new Map([[id, order.gia]])).get(id)!;
+  const congNoLo = tinhCongNoTheoLo([id], [...dongCuaLoNay, ...dongCacDonKhac], hoaDonMap, giaDonHangMap, lienKetCuaHoaDon).get(id)!;
 
   const tongDinhPhiThang = ((dinhPhiRows ?? []) as { thang_nam: string; so_tien: number }[])
     .filter((r) => r.thang_nam === monthKey)
@@ -307,12 +313,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
         <Link href="/don-hang" className="text-sm font-medium text-blue-600">
           ← Danh sách đơn hàng
         </Link>
-        <Link
-          href={`/tam-ung-giai-chi?don_hang_id=${order.id}`}
-          className="ml-auto rounded-lg border border-blue-200 px-2.5 py-1 text-sm font-medium text-blue-600"
-        >
-          + Ứng tiền nhanh
-        </Link>
+        {user && <UngTienNhanhButton donHang={{ id: order.id, so_don_hang: order.so_don_hang }} nhanVien={{ id: user.id, ho_ten: user.ho_ten }} />}
         {canManageDonHang(user?.phong_ban) && (
           <Link href={`/don-hang/${order.id}/sua`} className="text-sm font-medium text-blue-600">
             Sửa thông tin
@@ -361,7 +362,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
               <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Công nợ phải thu của lô</p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
-                  <Info label="Dịch vụ (trước VAT)" value={congNoLo.dichVuTruocVat.toLocaleString("en-US")} />
+                  <Info label={congNoLo.tamTinh ? "Dịch vụ (tạm tính theo giá đơn)" : "Dịch vụ (trước VAT)"} value={congNoLo.dichVuTruocVat.toLocaleString("en-US")} />
                   <Info label="VAT" value={congNoLo.vat.toLocaleString("en-US")} />
                   <Info label="Chi hộ" value={congNoLo.chiHo.toLocaleString("en-US")} />
                   <Info label="Tổng phải thu" value={congNoLo.tongPhaiThu.toLocaleString("en-US")} />

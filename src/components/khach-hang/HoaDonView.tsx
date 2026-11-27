@@ -10,19 +10,39 @@ import MoneyInput from "@/components/common/MoneyInput";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { xuatExcelKeO, CONG_TY, CONG_TY_HEADER_LINES, taiLogoCongTy, type ExcelColumn } from "@/lib/excel";
 import { docDanhSachHoaDonDienTu } from "@/lib/danhSachHoaDonDienTu";
+import { khachMeCua, khachXuatDichVu, type NhomCoMe } from "@/lib/nhomKhach";
 import type { DinhKem } from "@/types/database";
+
+interface ThongTinHuy {
+  hoa_don_id: string;
+  ly_do: string | null;
+  luc: string;
+  nguoi: string | null;
+}
+
+type LoaiXuat = "Dịch vụ" | "Chi hộ" | "Gộp";
+const LOAI_XUAT: LoaiXuat[] = ["Dịch vụ", "Chi hộ", "Gộp"];
+
+/** Suy ra tu so tien: chi co chi ho / chi co dich vu / ca hai. */
+function loaiXuatCua(r: { tong_tien: number; tien_chi_ho: number | null }): LoaiXuat {
+  const chiHo = r.tien_chi_ho ?? 0;
+  if (!chiHo) return "Dịch vụ";
+  return Math.abs(r.tong_tien - chiHo) < 1 ? "Chi hộ" : "Gộp";
+}
 
 interface KhachHang {
   id: string;
   ma_so_thue: string | null;
   ten_day_du: string;
   ten_viet_tat: string | null;
+  nhom_khach_hang_id?: string | null;
   nhom_khach_hang_ten?: string | null;
 }
 interface DonHangOpt {
   id: string;
   so_don_hang: string;
   khach_hang_id: string | null;
+  khach_hang_dich_vu_id?: string | null;
 }
 interface LienKet {
   hoa_don_id: string;
@@ -122,7 +142,11 @@ export default function HoaDonView({
   canEdit,
   canHuy,
   currentUserId,
+  nhomList = [],
+  thongTinHuy = [],
 }: {
+  nhomList?: NhomCoMe[];
+  thongTinHuy?: ThongTinHuy[];
   initialRows: Row[];
   khachHangList: KhachHang[];
   donHangList: DonHangOpt[];
@@ -141,6 +165,7 @@ export default function HoaDonView({
   const [lienKet, setLienKet] = useState<LienKet[]>(lienKetAll);
   const [khFilter, setKhFilter] = useState("");
   const [ttFilter, setTtFilter] = useState("");
+  const [dsHuy, setDsHuy] = useState<ThongTinHuy[]>(thongTinHuy);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [doiChieuMoRong, setDoiChieuMoRong] = useState<string | null>(null);
@@ -287,9 +312,17 @@ export default function HoaDonView({
     return donHangList.filter((d) => ids.includes(d.id));
   }
 
+  // Hoa don Da huy/Da thay the khong con trang thai thu tien.
+  const hetHieuLuc = (r: Row) => r.trang_thai === "Đã hủy" || r.trang_thai === "Đã thay thế";
+  const nhomCua = (khachId: string) => khachHangList.find((k) => k.id === khachId)?.nhom_khach_hang_id ?? null;
+
   const filtered = rows
-    .filter((r) => !khFilter || r.khach_hang_id === khFilter)
-    .filter((r) => !ttFilter || r.trang_thai_thanh_toan === ttFilter);
+    .filter((r) => !khFilter || (khFilter.startsWith("nhom:") ? nhomCua(r.khach_hang_id) === khFilter.slice(5) : r.khach_hang_id === khFilter))
+    .filter((r) => {
+      if (!ttFilter) return true;
+      if (ttFilter === "Đã hủy" || ttFilter === "Đã thay thế") return r.trang_thai === ttFilter;
+      return !hetHieuLuc(r) && r.trang_thai_thanh_toan === ttFilter;
+    });
 
   // Chi 5 truong duoi day (trong truongLuonGhiDuoc ben duoi) con duoc ghi TRUC
   // TIEP tu client sau migration 0095 (hoa_don_xuat bi khoa update o tang
@@ -463,6 +496,7 @@ export default function HoaDonView({
       window.alert(error.message);
       return;
     }
+    setDsHuy((prev) => [...prev, { hoa_don_id: row.id, ly_do: values.ly_do, luc: new Date().toISOString(), nguoi: null }]);
     const updated = await refetchRow(row.id);
     if (updated) setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
   }
@@ -518,6 +552,9 @@ export default function HoaDonView({
   async function handleExportExcel() {
     const columns: ExcelColumn[] = [
       { header: "Khách hàng", key: "kh", width: 22 },
+      { header: "Nhóm khách hàng", key: "nhom", width: 18 },
+      { header: "Loại", key: "loai", width: 10 },
+      { header: "Trạng thái hóa đơn", key: "trangThaiHd", width: 16 },
       { header: "Số hóa đơn", key: "so", width: 14 },
       { header: "Ngày xuất", key: "ngay", width: 12 },
       { header: "Tổng trước thuế", key: "truocThue", width: 16 },
@@ -532,6 +569,9 @@ export default function HoaDonView({
     ];
     const rows = filtered.map((r) => [
       khName(one(r.khach_hang)),
+      nhomList.find((n) => n.id === nhomCua(r.khach_hang_id))?.ten ?? "",
+      loaiXuatCua(r),
+      r.trang_thai,
       r.so_hoa_don ?? "",
       r.ngay_xuat,
       r.tong_tien_truoc_thue ?? "",
@@ -539,7 +579,7 @@ export default function HoaDonView({
       r.tien_chi_ho ?? "",
       r.tien_vat,
       r.tong_tien,
-      r.trang_thai_thanh_toan,
+      hetHieuLuc(r) ? "" : r.trang_thai_thanh_toan,
       r.so_tien_da_thu ?? "",
       donHangCuaHoaDon(r.id).map((d) => d.so_don_hang).join(", "),
       r.ghi_chu ?? "",
@@ -627,15 +667,18 @@ export default function HoaDonView({
       <div className="mb-4 flex flex-wrap gap-2">
         <div className="w-56">
           <SearchableSelect
-            options={khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }))}
+            options={[
+              ...nhomList.map((n) => ({ value: `nhom:${n.id}`, label: `Nhóm: ${n.ten} (tất cả công ty)` })),
+              ...khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) })),
+            ]}
             value={khFilter}
             onChange={setKhFilter}
             placeholder="Tất cả khách hàng"
           />
         </div>
         <select value={ttFilter} onChange={(e) => setTtFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm">
-          <option value="">Tất cả trạng thái thu</option>
-          {TT_THU.map((v) => (
+          <option value="">Tất cả trạng thái</option>
+          {[...TT_THU, "Đã hủy", "Đã thay thế"].map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -646,6 +689,7 @@ export default function HoaDonView({
       <p className="mb-4 text-sm text-slate-600">
         Tổng tiền: <strong>{tongTien.toLocaleString("en-US")}</strong> · Đã thu: <strong>{tongDaThu.toLocaleString("en-US")}</strong> · Còn phải thu:{" "}
         <strong>{(tongTien - tongDaThu).toLocaleString("en-US")}</strong>
+        <span className="ml-1 text-xs text-slate-400">(không tính hóa đơn đã hủy/đã thay thế)</span>
       </p>
 
       {canEdit && selectedForThu.size > 0 && (
@@ -693,7 +737,9 @@ export default function HoaDonView({
               </span>
               <span className="flex gap-1">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TRANG_THAI_COLOR[row.trang_thai]}`}>{row.trang_thai}</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TT_COLOR[row.trang_thai_thanh_toan]}`}>{row.trang_thai_thanh_toan}</span>
+                {!hetHieuLuc(row) && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TT_COLOR[row.trang_thai_thanh_toan]}`}>{row.trang_thai_thanh_toan}</span>
+                )}
               </span>
             </div>
             <p className="text-slate-500">
@@ -707,6 +753,15 @@ export default function HoaDonView({
               <p className="text-slate-500">Đơn hàng: {donHangCuaHoaDon(row.id).map((d) => d.so_don_hang).join(", ")}</p>
             )}
             {row.ghi_chu && <p className="text-slate-500">{row.ghi_chu}</p>}
+            {row.trang_thai === "Đã hủy" &&
+              dsHuy
+                .filter((h) => h.hoa_don_id === row.id)
+                .map((h) => (
+                  <p key={h.luc} className="text-red-700">
+                    Hủy lúc {new Date(h.luc).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
+                    {h.nguoi ? ` bởi ${h.nguoi}` : ""} — Lý do: {h.ly_do || "(không ghi)"}
+                  </p>
+                ))}
             <FileAttachSection
               parentField="hoa_don_id"
               parentId={row.id}
@@ -789,6 +844,7 @@ export default function HoaDonView({
         <HoaDonForm
           initial={editing}
           khachHangList={khachHangList}
+          nhomList={nhomList}
           donHangList={donHangList}
           initialDonHangIds={editing ? donHangCuaHoaDon(editing.id).map((d) => d.id) : []}
           donHangDaCoHoaDon={(() => {
@@ -801,7 +857,7 @@ export default function HoaDonView({
               const hd = rows.find((r) => r.id === l.hoa_don_id);
               if (!hd || hd.trang_thai === "Đã hủy" || hd.trang_thai === "Đã thay thế") continue;
               const arr = map.get(l.don_hang_id) ?? [];
-              arr.push(hd.so_hoa_don || "(chưa có số)");
+              arr.push(`${hd.so_hoa_don || "(chưa có số)"} (${loaiXuatCua(hd)})`);
               map.set(l.don_hang_id, arr);
             }
             return map;
@@ -1110,6 +1166,7 @@ function DoiChieuBangKe({ cp, pt, row }: { cp: ChiPhiDoiChieu[]; pt: PhuThuDoiCh
 function HoaDonForm({
   initial,
   khachHangList,
+  nhomList,
   donHangList,
   initialDonHangIds,
   donHangDaCoHoaDon,
@@ -1118,6 +1175,7 @@ function HoaDonForm({
 }: {
   initial: Row | null;
   khachHangList: KhachHang[];
+  nhomList: NhomCoMe[];
   donHangList: DonHangOpt[];
   initialDonHangIds: string[];
   /** So hoa don KHAC (khong phai hoa don dang sua) da gan cho tung don hang —
@@ -1188,7 +1246,54 @@ function HoaDonForm({
   }, [selectedDonHang.join(",")]);
 
   const khOptions = khachHangList.map((k) => ({ value: k.id, label: khOptionLabel(k) }));
-  const donHangCuaKh = donHangList.filter((d) => !values.khach_hang_id || d.khach_hang_id === values.khach_hang_id);
+  const [loaiXuat, setLoaiXuat] = useState<LoaiXuat>(initial ? loaiXuatCua(initial) : "Dịch vụ");
+  const [ghiChuTuChon, setGhiChuTuChon] = useState<string | null>(null);
+
+  function donThuocKhach(d: DonHangOpt, khachId: string, loai: LoaiXuat) {
+    const dichVu = khachXuatDichVu(d, khachHangList, nhomList) === khachId;
+    const chiHo = d.khach_hang_id === khachId;
+    return loai === "Dịch vụ" ? dichVu : loai === "Chi hộ" ? chiHo : dichVu || chiHo;
+  }
+
+  // Chi liet ke don cua khach da chon (kem cac don da tick de con bo tick duoc).
+  const donHangCuaKh = donHangList.filter(
+    (d) => selectedDonHang.includes(d.id) || (!!values.khach_hang_id && donThuocKhach(d, values.khach_hang_id, loaiXuat)),
+  );
+
+  /** Dat khach + loai cung luc: tu chuyen sang cong ty me khi xuat dich vu, bo tick don khong con thuoc khach. */
+  function datKhachVaLoai(khachId: string, loai: LoaiXuat) {
+    let khachMoi = khachId;
+    let ghiChu: string | null = null;
+    if (loai === "Dịch vụ" && khachId) {
+      const me = khachMeCua(khachId, khachHangList, nhomList);
+      if (me && khachHangList.some((k) => k.id === me)) {
+        khachMoi = me;
+        ghiChu = `Hóa đơn dịch vụ xuất cho công ty mẹ của nhóm: đã đổi từ ${khOptionTen(khachId)}.`;
+      }
+    }
+    if (loai === "Chi hộ" && selectedDonHang.length > 0) {
+      const khachCuaDon = new Set(donHangList.filter((d) => selectedDonHang.includes(d.id)).map((d) => d.khach_hang_id));
+      const duyNhat = khachCuaDon.size === 1 ? Array.from(khachCuaDon)[0] : null;
+      if (duyNhat && duyNhat !== khachId) {
+        khachMoi = duyNhat;
+        ghiChu = "Hóa đơn chi hộ: đã tự chọn khách của đơn hàng đã tick.";
+      }
+    }
+    setLoaiXuat(loai);
+    setGhiChuTuChon(ghiChu);
+    setValues((prev) => ({
+      ...prev,
+      khach_hang_id: khachMoi,
+      ...(loai === "Dịch vụ" ? { tien_chi_ho: "" } : {}),
+      ...(loai === "Chi hộ" ? { tong_tien_truoc_thue: "", vat_percent: "" } : {}),
+    }));
+    setSelectedDonHang((prev) =>
+      prev.filter((id) => {
+        const d = donHangList.find((x) => x.id === id);
+        return !d || !khachMoi || donThuocKhach(d, khachMoi, loai);
+      }),
+    );
+  }
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 
   const HOA_DON_STEPS = ["Khách hàng & đơn hàng", "Dòng tiền & VAT", "Thanh toán", "Xem trước"] as const;
@@ -1279,19 +1384,42 @@ function HoaDonForm({
         {step === 0 && (
           <div className="flex flex-col gap-3">
             <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Loại hóa đơn</label>
+              <select
+                value={loaiXuat}
+                onChange={(e) => datKhachVaLoai(values.khach_hang_id, e.target.value as LoaiXuat)}
+                className={cls}
+                disabled={khoaTruongTaiChinh}
+              >
+                {LOAI_XUAT.map((v) => (
+                  <option key={v} value={v}>
+                    {v === "Gộp" ? "Gộp (dịch vụ + chi hộ cùng 1 hóa đơn)" : v}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Khách hàng</label>
-              <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => set("khach_hang_id", v)} disabled={khoaTruongTaiChinh} />
+              <SearchableSelect options={khOptions} value={values.khach_hang_id} onChange={(v) => datKhachVaLoai(v, loaiXuat)} disabled={khoaTruongTaiChinh} />
+              {ghiChuTuChon && <p className="mt-1 text-xs text-blue-600">{ghiChuTuChon}</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Đơn hàng liên quan (có thể chọn nhiều)</label>
               <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200 p-2">
-                {donHangCuaKh.length === 0 && <p className="text-xs text-slate-400">Chọn khách hàng để xem đơn hàng.</p>}
+                {donHangCuaKh.length === 0 && (
+                  <p className="text-xs text-slate-400">
+                    {values.khach_hang_id ? `Không có đơn hàng nào xuất hóa đơn "${loaiXuat}" cho khách này.` : "Chọn khách hàng để xem đơn hàng."}
+                  </p>
+                )}
                 {donHangCuaKh.map((d) => {
                   const hoaDonKhac = donHangDaCoHoaDon.get(d.id);
                   return (
                     <label key={d.id} className="flex items-center gap-2 py-1 text-sm">
                       <input type="checkbox" checked={selectedDonHang.includes(d.id)} onChange={() => toggleDonHang(d.id)} />
                       {d.so_don_hang}
+                      {d.khach_hang_id && d.khach_hang_id !== values.khach_hang_id && (
+                        <span className="text-xs text-slate-400">({khOptionTen(d.khach_hang_id)})</span>
+                      )}
                       {hoaDonKhac && hoaDonKhac.length > 0 && (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">⚠ Đã có HĐ: {hoaDonKhac.join(", ")}</span>
                       )}
@@ -1327,8 +1455,8 @@ function HoaDonForm({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Tổng tiền trước thuế</label>
-              <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} disabled={khoaTruongTaiChinh} />
-              {goiYTong !== null && (
+              <MoneyInput value={values.tong_tien_truoc_thue} onChange={(v) => set("tong_tien_truoc_thue", v)} className={cls} disabled={khoaTruongTaiChinh || loaiXuat === "Chi hộ"} />
+              {goiYTong !== null && loaiXuat !== "Chi hộ" && (
                 <p className="mt-1 text-xs text-blue-600">
                   Gợi ý (đã bán cho khách, không gồm chi hộ): {goiYTong.toLocaleString("en-US")}
                   {values.tong_tien_truoc_thue !== String(goiYTong) && (
@@ -1347,12 +1475,12 @@ function HoaDonForm({
                 value={values.vat_percent}
                 onChange={(e) => set("vat_percent", e.target.value)}
                 className={cls}
-                disabled={khoaTruongTaiChinh}
+                disabled={khoaTruongTaiChinh || loaiXuat === "Chi hộ"}
               />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Tiền chi hộ</label>
-              <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} disabled={khoaTruongTaiChinh} />
+              <MoneyInput value={values.tien_chi_ho} onChange={(v) => set("tien_chi_ho", v)} className={cls} disabled={khoaTruongTaiChinh || loaiXuat === "Dịch vụ"} />
               <p className="mt-1 text-xs text-slate-400">Khoản thu hộ đúng số tiền, không tính VAT</p>
             </div>
             <div>
@@ -1418,6 +1546,7 @@ function HoaDonForm({
 
         {step === 3 && (
           <div className="flex flex-col gap-2 text-sm">
+            <ReviewRow label="Loại hóa đơn" value={loaiXuat} />
             <ReviewRow label="Khách hàng" value={values.khach_hang_id ? khOptionTen(values.khach_hang_id) : "—"} />
             <ReviewRow
               label="Đơn hàng liên quan"

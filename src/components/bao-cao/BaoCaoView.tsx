@@ -11,6 +11,7 @@ import {
   type DongPhaiThuInput,
   type HoaDonChoPhaiThuInput,
 } from "@/lib/baoCao";
+import { khachXuatDichVu, type NhomCoMe } from "@/lib/nhomKhach";
 import { khoangThangVietNam } from "@/lib/ngayVietNam";
 
 interface DonHang {
@@ -20,6 +21,7 @@ interface DonHang {
   trang_thai: string;
   sale_phu_trach_id: string | null;
   khach_hang_id: string | null;
+  khach_hang_dich_vu_id?: string | null;
   gia: number | null;
 }
 interface ChiPhi {
@@ -85,6 +87,7 @@ interface KhachHang {
   id: string;
   ten_day_du: string;
   ten_viet_tat: string | null;
+  nhom_khach_hang_id?: string | null;
 }
 interface NhanVien {
   id: string;
@@ -117,7 +120,9 @@ export default function BaoCaoView({
   nhanVienList,
   currentUserId,
   currentPhongBan,
+  nhomList = [],
 }: {
+  nhomList?: NhomCoMe[];
   donHangList: DonHang[];
   chiPhiList: ChiPhi[];
   phuThuList: PhuThu[];
@@ -218,7 +223,9 @@ export default function BaoCaoView({
   const congNoTheoLo = useMemo(() => {
     if (!isKeToanOrGiamDoc) return [];
     const hoaDonMap = new Map<string, HoaDonChoPhaiThuInput>(
-      hoaDonList.filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế").map((h) => [h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu }]),
+      hoaDonList
+        .filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế")
+        .map((h) => [h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu, tong_tien: h.tong_tien, tien_chi_ho: h.tien_chi_ho }]),
     );
     const dongList: DongPhaiThuInput[] = [
       ...chiPhiList
@@ -250,20 +257,33 @@ export default function BaoCaoView({
           hoa_don_id: t.hoa_don_id && hoaDonMap.has(t.hoa_don_id) ? t.hoa_don_id : null,
         })),
     ];
-    const giaDonHangMap = new Map(donHangTrongKy.map((d) => [d.id, d.gia]));
+    // Lay gia cua TOAN BO don (khong chi trong ky): hoa don gop co the gom lo ngoai ky.
+    const giaDonHangMap = new Map(donHangList.map((d) => [d.id, d.gia]));
     const ketQua = tinhCongNoTheoLo(
       donHangTrongKy.map((d) => d.id),
       dongList,
       hoaDonMap,
       giaDonHangMap,
+      hoaDonDonHangList,
     );
     return donHangTrongKy.map((d) => {
       const kq = ketQua.get(d.id)!;
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
       const hoaDonLienQuan = hoaDonList.filter((h) => hoaDonIds.includes(h.id) && h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế");
+      const khDichVuId = khachXuatDichVu(d, khachHangList, nhomList);
+      const phaiThuDichVu = kq.dichVuTruocVat + kq.vat;
       return {
         donHang: d,
         khTen: khTen(d.khach_hang_id),
+        khDichVuId,
+        khDichVuTen: khTen(khDichVuId),
+        // Tach 2 ben: dich vu + VAT (khach xuat HD dich vu) va chi ho (khach cua lo).
+        phaiThuDichVu,
+        daThuDichVu: kq.daThu - kq.daThuChiHo,
+        daThuChiHo: kq.daThuChiHo,
+        conDichVu: phaiThuDichVu - (kq.daThu - kq.daThuChiHo),
+        conChiHo: kq.chiHo - kq.daThuChiHo,
+        tamTinh: kq.tamTinh,
         dichVuTruocVat: kq.dichVuTruocVat,
         vat: kq.vat,
         chiHo: kq.chiHo,
@@ -295,9 +315,19 @@ export default function BaoCaoView({
     "Thu một phần": "bg-blue-100 text-blue-700",
     "Đã thu": "bg-green-100 text-green-700",
   };
+  // Gia tri loc: id khach hang, hoac "nhom:<id nhom>". Khop neu 1 trong 2 ben cua lo khop.
+  function khopBoLocKhach(id: string | null) {
+    if (!id) return false;
+    if (!khachHangLocDebit.startsWith("nhom:")) return id === khachHangLocDebit;
+    return khachHangList.find((k) => k.id === id)?.nhom_khach_hang_id === khachHangLocDebit.slice(5);
+  }
   const congNoTheoLoLoc = khachHangLocDebit
-    ? congNoTheoLo.filter((r) => r.donHang.khach_hang_id === khachHangLocDebit)
+    ? congNoTheoLo.filter((r) => khopBoLocKhach(r.donHang.khach_hang_id) || khopBoLocKhach(r.khDichVuId))
     : congNoTheoLo;
+  const tongLoc = congNoTheoLoLoc.reduce(
+    (s, r) => ({ phaiThu: s.phaiThu + r.tongPhaiThu, daThu: s.daThu + r.daThu, conDichVu: s.conDichVu + r.conDichVu, conChiHo: s.conChiHo + r.conChiHo }),
+    { phaiThu: 0, daThu: 0, conDichVu: 0, conChiHo: 0 },
+  );
 
   function handleExportDebit() {
     const wb = taoWorkbook();
@@ -305,8 +335,11 @@ export default function BaoCaoView({
       sheetName: "Debit theo lô",
       columns: [
         { header: "Số đơn", key: "soDon", width: 14 },
-        { header: "Khách hàng", key: "kh", width: 20 },
+        { header: "Khách HĐ chi hộ", key: "kh", width: 20 },
+        { header: "Khách HĐ dịch vụ", key: "khDv", width: 20 },
         { header: "Hóa đơn", key: "soHd", width: 18 },
+        { header: "Còn nợ dịch vụ + VAT", key: "conDv", width: 18, numFmt: "#,##0" },
+        { header: "Còn nợ chi hộ", key: "conCh", width: 16, numFmt: "#,##0" },
         { header: "VAT", key: "vat", width: 14, numFmt: "#,##0" },
         { header: "Chi hộ", key: "chiHo", width: 14, numFmt: "#,##0" },
         { header: "Tổng phải thu", key: "tongPhaiThu", width: 16, numFmt: "#,##0" },
@@ -317,7 +350,10 @@ export default function BaoCaoView({
       rows: congNoTheoLoLoc.map((r) => [
         r.donHang.so_don_hang,
         r.khTen,
+        r.khDichVuTen,
         r.soLuongHoaDon > 0 ? r.soHoaDon : "Chưa xuất HĐ",
+        r.conDichVu,
+        r.conChiHo,
         r.vat,
         r.chiHo,
         r.tongPhaiThu,
@@ -390,17 +426,35 @@ export default function BaoCaoView({
   // theo khach LUON bang tong cac lo cua khach do (yeu cau P1 muc 1 dong 26),
   // khong tu tinh rieng tu hoa don nhu truoc (de lech voi congNoTheoLo).
   const congNoPhaiThu = useMemo(() => {
-    const map = new Map<string, { ten: string; tongHoaDon: number; daThu: number; conPhaiThu: number }>();
-    for (const r of congNoTheoLo) {
-      const key = r.donHang.khach_hang_id ?? "khac";
-      if (!map.has(key)) map.set(key, { ten: r.khTen, tongHoaDon: 0, daThu: 0, conPhaiThu: 0 });
+    const map = new Map<string, { id: string; ten: string; tongHoaDon: number; daThu: number; conPhaiThu: number }>();
+    function cong(id: string | null, ten: string, phaiThu: number, daThu: number) {
+      const key = id ?? "khac";
+      if (!map.has(key)) map.set(key, { id: key, ten, tongHoaDon: 0, daThu: 0, conPhaiThu: 0 });
       const m = map.get(key)!;
-      m.tongHoaDon += r.tongPhaiThu;
-      m.daThu += r.daThu;
-      m.conPhaiThu += r.conPhaiThu;
+      m.tongHoaDon += phaiThu;
+      m.daThu += daThu;
+      m.conPhaiThu += phaiThu - daThu;
+    }
+    for (const r of congNoTheoLo) {
+      cong(r.khDichVuId, r.khDichVuTen, r.phaiThuDichVu, r.daThuDichVu);
+      if (r.chiHo || r.daThuChiHo) cong(r.donHang.khach_hang_id, r.khTen, r.chiHo, r.daThuChiHo);
     }
     return Array.from(map.values());
   }, [congNoTheoLo]);
+
+  const congNoTheoNhom = nhomList
+    .map((n) => {
+      const ds = congNoPhaiThu.filter((r) => khachHangList.find((k) => k.id === r.id)?.nhom_khach_hang_id === n.id);
+      return {
+        id: n.id,
+        ten: n.ten,
+        soKhach: ds.length,
+        tongHoaDon: ds.reduce((s, r) => s + r.tongHoaDon, 0),
+        daThu: ds.reduce((s, r) => s + r.daThu, 0),
+        conPhaiThu: ds.reduce((s, r) => s + r.conPhaiThu, 0),
+      };
+    })
+    .filter((n) => n.soKhach > 0);
 
   // --- 6) Cong no phai tra (NCC tu chi phi noi bo, + doi tac tu thue ngoai) ---
   // Loai "Tu choi" — cung ly do nhu chiPhiTrongKy o tren; con dung lai cho (7)
@@ -659,6 +713,11 @@ export default function BaoCaoView({
                   className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                 >
                   <option value="">Tất cả khách hàng</option>
+                  {nhomList.map((n) => (
+                    <option key={n.id} value={`nhom:${n.id}`}>
+                      Nhóm: {n.ten}
+                    </option>
+                  ))}
                   {khachHangList.map((k) => (
                     <option key={k.id} value={k.id}>
                       {k.ten_viet_tat || k.ten_day_du}
@@ -670,6 +729,10 @@ export default function BaoCaoView({
                 Xuất Excel (Debit)
               </button>
             </div>
+            <p className="mb-2 text-sm text-slate-600">
+              Đang lọc: Tổng phải thu <strong>{fmt(tongLoc.phaiThu)}</strong> · Đã thu <strong>{fmt(tongLoc.daThu)}</strong> · Còn nợ dịch vụ + VAT{" "}
+              <strong>{fmt(tongLoc.conDichVu)}</strong> · Còn nợ chi hộ <strong>{fmt(tongLoc.conChiHo)}</strong>
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
@@ -690,8 +753,14 @@ export default function BaoCaoView({
                             {r.donHang.so_don_hang}
                           </Link>
                         </td>
-                        <td className="px-3 py-2">{r.khTen}</td>
-                        <td className="px-3 py-2">{fmt(r.dichVuTruocVat)}</td>
+                        <td className="px-3 py-2">
+                          {r.khTen}
+                          {r.khDichVuId !== r.donHang.khach_hang_id && <p className="text-xs text-slate-400">HĐ dịch vụ: {r.khDichVuTen}</p>}
+                        </td>
+                        <td className="px-3 py-2">
+                          {fmt(r.dichVuTruocVat)}
+                          {r.tamTinh && <p className="text-xs text-amber-600">tạm tính theo giá đơn</p>}
+                        </td>
                         <td className="px-3 py-2">{fmt(r.vat)}</td>
                         <td className="px-3 py-2">{fmt(r.chiHo)}</td>
                         <td className="px-3 py-2">{fmt(r.tongPhaiThu)}</td>
@@ -706,7 +775,14 @@ export default function BaoCaoView({
                           )}
                         </td>
                         <td className="px-3 py-2">{fmt(r.daThu)}</td>
-                        <td className="px-3 py-2 font-medium">{fmt(r.conPhaiThu)}</td>
+                        <td className="px-3 py-2 font-medium">
+                          {fmt(r.conPhaiThu)}
+                          {r.khDichVuId !== r.donHang.khach_hang_id && (
+                            <p className="text-xs font-normal text-slate-400">
+                              DV {fmt(r.conDichVu)} · Chi hộ {fmt(r.conChiHo)}
+                            </p>
+                          )}
+                        </td>
                         <td className="px-3 py-2">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TRANG_THAI_DEBIT_COLOR[trangThaiDebit(r)]}`}>
                             {trangThaiDebit(r)}
@@ -736,6 +812,15 @@ export default function BaoCaoView({
               rows={chiPhiTheoLoai.map((r) => [r.ten, fmt(r.buy), fmt(r.sell), r.chiHo > 0 ? fmt(r.chiHo) : "—"])}
             />
           </Section>
+
+          {congNoTheoNhom.length > 0 && (
+            <Section title="Công nợ phải thu (theo nhóm khách hàng, các lô lên đơn trong kỳ đang chọn)">
+              <SimpleTable
+                cols={["Nhóm", "Số khách có số liệu", "Tổng phải thu", "Đã thu", "Còn phải thu"]}
+                rows={congNoTheoNhom.map((r) => [r.ten, String(r.soKhach), fmt(r.tongHoaDon), fmt(r.daThu), fmt(r.conPhaiThu)])}
+              />
+            </Section>
+          )}
 
           <Section title="Công nợ phải thu (theo khách hàng)">
             <SimpleTable

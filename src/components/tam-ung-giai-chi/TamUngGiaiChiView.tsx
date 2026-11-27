@@ -95,6 +95,85 @@ function monthRange() {
 const TAM_UNG_SELECT_COLS =
   "*, nhan_vien:nhan_vien_id(ho_ten), nguoi_de_nghi:nguoi_de_nghi_id(ho_ten), don_hang:don_hang_id(so_don_hang), khach_hang:khach_hang_id(ten_day_du)";
 
+function taoPayload(values: Record<string, string>): Record<string, unknown> {
+  return {
+    loai: values.loai,
+    ngay_thuc_hien: values.ngay_thuc_hien,
+    doi_tuong: values.doi_tuong,
+    nhan_vien_id: values.doi_tuong === "Nhân viên" ? values.nhan_vien_id || null : null,
+    ten_tai_xe: values.doi_tuong === "Tài xế" ? values.ten_tai_xe || null : null,
+    khach_hang_id: values.doi_tuong === "Khách hàng" ? values.khach_hang_id || null : null,
+    lan: values.lan ? Number(values.lan) : null,
+    so_tien: Number(values.so_tien),
+    muc_tam_ung_toi_da: values.muc_tam_ung_toi_da ? Number(values.muc_tam_ung_toi_da) : null,
+    so_phieu: values.so_phieu || null,
+    ghi_chu: values.ghi_chu || null,
+    trang_thai: values.trang_thai || "Đề nghị",
+    don_hang_id: values.don_hang_id || null,
+    tam_ung_goc_id: values.tam_ung_goc_id || null,
+    phuong_thuc: values.phuong_thuc || null,
+  };
+}
+
+/** Nut "Ung tien nhanh" o trang chi tiet don: mo hop thoai de nghi tam ung ngay tai cho. */
+export function UngTienNhanhButton({
+  donHang,
+  nhanVien,
+}: {
+  donHang: DonHangOpt;
+  nhanVien: NhanVien;
+}) {
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+  const [mo, setMo] = useState(false);
+  const [daGui, setDaGui] = useState(false);
+  const dangLuu = useRef(false);
+
+  async function luu(values: Record<string, string>) {
+    if (dangLuu.current) return;
+    dangLuu.current = true;
+    const { error } = await supabase.from("tam_ung_giai_chi").insert({ ...taoPayload(values), nguoi_de_nghi_id: nhanVien.id });
+    dangLuu.current = false;
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setMo(false);
+    setDaGui(true);
+    router.refresh();
+  }
+
+  return (
+    <>
+      {daGui && <span className="ml-auto text-xs text-green-700">Đã gửi đề nghị tạm ứng.</span>}
+      <button
+        type="button"
+        onClick={() => {
+          setDaGui(false);
+          setMo(true);
+        }}
+        className={`rounded-lg border border-blue-200 px-2.5 py-1 text-sm font-medium text-blue-600 ${daGui ? "" : "ml-auto"}`}
+      >
+        + Ứng tiền nhanh
+      </button>
+      {mo && (
+        <TamUngForm
+          initial={null}
+          proposing
+          khachTamUngMode={false}
+          giaiChiPrefill={{ nhan_vien_id: nhanVien.id, don_hang_id: donHang.id, tam_ung_goc_id: "", so_tien: "", ghi_chu: "" }}
+          nhanVienList={[nhanVien]}
+          donHangList={[donHang]}
+          khachHangList={[]}
+          currentUserId={nhanVien.id}
+          onCancel={() => setMo(false)}
+          onSave={luu}
+        />
+      )}
+    </>
+  );
+}
+
 export default function TamUngGiaiChiView({
   initialRows,
   nhanVienList,
@@ -205,9 +284,34 @@ export default function TamUngGiaiChiView({
       .reduce((s, r) => s + r.so_tien, 0);
   }
 
-  /** Con phai hoan = tam ung - da chi cho lo (neu co gan lo) - da hoan ung thuc te. */
+  // Chi chung tu cua 1 (nguoi, lo) chi duoc tru 1 LAN: chia cho cac khoan tam
+  // ung da duyet cua dung nguoi+lo do, cu truoc; phan chi vuot don vao khoan moi nhat.
+  const daChiPhanBo = useMemo(() => {
+    const nhom = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (r.loai !== "Tạm ứng" || r.trang_thai !== "Đã duyệt" || !r.nhan_vien_id || !r.don_hang_id) continue;
+      const key = `${r.nhan_vien_id}:${r.don_hang_id}`;
+      nhom.set(key, [...(nhom.get(key) ?? []), r]);
+    }
+    const ketQua = new Map<string, number>();
+    for (const [key, ds] of nhom) {
+      let conLai = daChiTheoNguoiVaLo[key] ?? 0;
+      const sapXep = [...ds].sort((a, b) => a.ngay_thuc_hien.localeCompare(b.ngay_thuc_hien) || a.id.localeCompare(b.id));
+      sapXep.forEach((r, i) => {
+        const daHoan = rows
+          .filter((x) => x.tam_ung_goc_id === r.id && x.loai === "Giải chi" && x.trang_thai === "Đã duyệt")
+          .reduce((s, x) => s + x.so_tien, 0);
+        const phan = i === sapXep.length - 1 ? conLai : Math.min(conLai, Math.max(0, r.so_tien - daHoan));
+        ketQua.set(r.id, phan);
+        conLai -= phan;
+      });
+    }
+    return ketQua;
+  }, [rows, daChiTheoNguoiVaLo]);
+
+  /** Con phai hoan = tam ung - phan chi chung tu duoc phan bo - da hoan ung thuc te. */
   function conPhaiHoan(row: Row): number {
-    const daChi = daChiChoLo(row) ?? 0;
+    const daChi = daChiPhanBo.get(row.id) ?? 0;
     return row.so_tien - daChi - daHoanChoTamUng(row);
   }
 
@@ -313,23 +417,7 @@ export default function TamUngGiaiChiView({
   }, [rows]);
 
   async function handleSave(values: Record<string, string>) {
-    const payload: Record<string, unknown> = {
-      loai: values.loai,
-      ngay_thuc_hien: values.ngay_thuc_hien,
-      doi_tuong: values.doi_tuong,
-      nhan_vien_id: values.doi_tuong === "Nhân viên" ? values.nhan_vien_id || null : null,
-      ten_tai_xe: values.doi_tuong === "Tài xế" ? values.ten_tai_xe || null : null,
-      khach_hang_id: values.doi_tuong === "Khách hàng" ? values.khach_hang_id || null : null,
-      lan: values.lan ? Number(values.lan) : null,
-      so_tien: Number(values.so_tien),
-      muc_tam_ung_toi_da: values.muc_tam_ung_toi_da ? Number(values.muc_tam_ung_toi_da) : null,
-      so_phieu: values.so_phieu || null,
-      ghi_chu: values.ghi_chu || null,
-      trang_thai: values.trang_thai || "Đề nghị",
-      don_hang_id: values.don_hang_id || null,
-      tam_ung_goc_id: values.tam_ung_goc_id || null,
-      phuong_thuc: values.phuong_thuc || null,
-    };
+    const payload = taoPayload(values);
 
     if (editing) {
       // Khoa lac quan: tranh am tham ghi de neu dong nay vua bi nguoi khac
@@ -391,7 +479,8 @@ export default function TamUngGiaiChiView({
   function handleApprove(row: Row, trangThai: "Đã duyệt" | "Từ chối") {
     if (
       trangThai === "Đã duyệt" &&
-      row.loai === "Tạm ứng" &&
+      // Tien RA: ung cho nhan vien/tai xe, hoac hoan tien cho khach.
+      (row.doi_tuong === "Khách hàng" ? row.loai === "Giải chi" : row.loai === "Tạm ứng") &&
       row.phuong_thuc &&
       (row.phuong_thuc === "Tiền mặt" || row.phuong_thuc === "Tài khoản công ty")
     ) {
@@ -460,7 +549,7 @@ export default function TamUngGiaiChiView({
         { header: "Tiền đầu kỳ", key: "dauKy", width: 14 },
         { header: "Tạm ứng trong kỳ", key: "tamUng", width: 16 },
         { header: "Giải chi trong kỳ", key: "giaiChi", width: 16 },
-        { header: "Tiền còn lại", key: "conLai", width: 14 },
+        { header: "Số dư theo phiếu ứng/giải chi", key: "conLai", width: 28 },
       ];
       const sumRows = summary.map((s) => [s.ten, s.dauKy, s.tamUng, s.giaiChi, s.conLai]);
       themSheetKeO(wb, { sheetName: "Tổng hợp", columns: sumCols, rows: sumRows });
@@ -607,7 +696,7 @@ export default function TamUngGiaiChiView({
             }}
             className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm"
           >
-            + Đề nghị tạm ứng
+            + Tôi đề nghị tạm ứng
           </button>
           {canGhiNhanKhachTamUng && (
             <button
@@ -637,7 +726,7 @@ export default function TamUngGiaiChiView({
                 }}
                 className="rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-medium text-blue-700"
               >
-                + Thêm tạm ứng (Kế toán)
+                + Ghi tạm ứng cho người khác (Kế toán)
               </button>
               <button
                 onClick={() => {
@@ -730,7 +819,7 @@ export default function TamUngGiaiChiView({
                 <th className="px-4 py-3 font-medium">Tiền đầu kỳ</th>
                 <th className="px-4 py-3 font-medium">Tạm ứng trong kỳ</th>
                 <th className="px-4 py-3 font-medium">Giải chi trong kỳ</th>
-                <th className="px-4 py-3 font-medium">Tiền còn lại</th>
+                <th className="px-4 py-3 font-medium">Số dư theo phiếu ứng/giải chi</th>
               </tr>
             </thead>
             <tbody>
@@ -756,6 +845,14 @@ export default function TamUngGiaiChiView({
             </tbody>
           </table>
         </div>
+      )}
+
+      {canSeeSummary && summary.length > 0 && (
+        <p className="-mt-4 mb-6 text-xs text-slate-500">
+          <strong>Số dư theo phiếu</strong> = tiền đầu kỳ + tạm ứng − giải chi trong kỳ, <u>chưa trừ</u> chi phí đã có chứng từ nhưng chưa quyết toán.{" "}
+          <strong>Còn phải hoàn</strong> (bảng dưới) = từng khoản ứng − chi phí có chứng từ của đúng lô − đã hoàn, tính trên toàn bộ thời gian. Hai số
+          khác nhau là bình thường; dùng &quot;Còn phải hoàn&quot; khi đòi hoàn ứng.
+        </p>
       )}
 
       {canSeeSummary && nhanVienDangNoTamUng.length > 0 && (
@@ -1039,7 +1136,7 @@ function TamUngForm({
                 : giaiChiPrefill
                   ? "Ghi nhận hoàn ứng"
                   : forcedLoai === "Tạm ứng"
-                    ? "Thêm tạm ứng (Kế toán)"
+                    ? "Ghi tạm ứng cho người khác (Kế toán)"
                     : forcedLoai === "Giải chi"
                       ? "Thêm giải chi (Kế toán)"
                       : "Thêm tạm ứng/giải chi"}
@@ -1047,7 +1144,7 @@ function TamUngForm({
         {khachTamUngMode && !initial && (
           <p className="mb-3 rounded-lg bg-purple-50 p-2 text-xs text-purple-800">
             Ghi nhận khoản khách hàng ứng trước tiền để làm hàng cho 1 lô cụ thể. Chọn đúng &quot;Đơn hàng liên
-            quan&quot; và &quot;Phương thức&quot; để tiền tự chạy vào Sổ quỹ.
+            quan&quot; và &quot;Nguồn tiền&quot; (nơi nhận tiền) để khoản này được ghi Thu vào Sổ quỹ khi duyệt.
           </p>
         )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1100,6 +1197,7 @@ function TamUngForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Lần</label>
             <input type="number" value={values.lan} onChange={(e) => set("lan", e.target.value)} className={cls} />
+            <p className="mt-1 text-xs text-slate-400">Không bắt buộc. Đây là lần ứng thứ mấy cho cùng một lô (1, 2, 3…).</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số tiền</label>
@@ -1108,19 +1206,25 @@ function TamUngForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Mức tạm ứng tối đa</label>
             <MoneyInput value={values.muc_tam_ung_toi_da} onChange={(v) => set("muc_tam_ung_toi_da", v)} className={cls} />
+            <p className="mt-1 text-xs text-slate-400">Không bắt buộc. Chỉ để ghi chú hạn mức, hệ thống không chặn theo số này.</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Số phiếu</label>
             <input value={values.so_phieu} onChange={(e) => set("so_phieu", e.target.value)} className={cls} />
+            <p className="mt-1 text-xs text-slate-400">Không bắt buộc. Số trên phiếu tạm ứng/phiếu chi bằng giấy.</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Nguồn tiền</label>
             <select value={values.phuong_thuc} onChange={(e) => set("phuong_thuc", e.target.value)} className={cls}>
               <option value="">-- Chọn --</option>
-              <option value="Tiền mặt">Tiền mặt quỹ công ty</option>
+              <option value="Tiền mặt">Tiền mặt (gồm chi/thu qua TK cá nhân dùng làm quỹ)</option>
               <option value="Tài khoản công ty">Tài khoản công ty</option>
-              <option value="Chuyển khoản cá nhân (không qua quỹ)">Chuyển khoản cá nhân (không qua quỹ)</option>
+              {/* Chi giu cho dong cu da chon gia tri nay, khong cho chon moi. */}
+              {initial?.phuong_thuc === "Chuyển khoản cá nhân (không qua quỹ)" && (
+                <option value="Chuyển khoản cá nhân (không qua quỹ)">Chuyển khoản cá nhân (không qua quỹ) — giá trị cũ</option>
+              )}
             </select>
+            <p className="mt-1 text-xs text-slate-400">Tiền đi ra/vào quỹ nào. Để trống thì khoản này không được ghi vào Sổ quỹ.</p>
             {values.phuong_thuc === "Chuyển khoản cá nhân (không qua quỹ)" && (
               <p className="mt-1 text-xs text-amber-600">Dòng này vẫn được theo dõi công nợ tạm ứng bình thường, nhưng sẽ KHÔNG tạo giao dịch trong Sổ quỹ công ty.</p>
             )}
@@ -1132,6 +1236,9 @@ function TamUngForm({
               value={values.don_hang_id}
               onChange={(v) => set("don_hang_id", v)}
             />
+            {!values.don_hang_id && (
+              <p className="mt-1 text-xs text-amber-600">Chưa chọn đơn hàng: khoản này sẽ không đối chiếu được với chi phí của lô. Chỉ để trống nếu không thuộc lô nào.</p>
+            )}
           </div>
           {!proposing && (
             <div>

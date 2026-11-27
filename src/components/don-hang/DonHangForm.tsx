@@ -7,6 +7,7 @@ import SearchableSelect from "@/components/common/SearchableSelect";
 import QuickAddSelect from "@/components/common/QuickAddSelect";
 import QuickAddKhachHang, { type KhachHangOption } from "@/components/common/QuickAddKhachHang";
 import MoneyInput from "@/components/common/MoneyInput";
+import { khachMeCua } from "@/lib/nhomKhach";
 import type { DonHang } from "@/types/database";
 
 interface Option {
@@ -23,8 +24,9 @@ interface DiaDiemOption {
 }
 
 interface MasterData {
-  khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null; nhom_khach_hang_ten?: string | null }[];
-  nhomKhachHang: { id: string; ten: string }[];
+  khachHang: { id: string; ten_day_du: string; ten_viet_tat: string | null; nhom_khach_hang_id?: string | null; nhom_khach_hang_ten?: string | null }[];
+  nhomKhachHang: { id: string; ten: string; khach_hang_me_id?: string | null }[];
+  coKhachDichVu?: boolean;
   loaiContainer: Option[];
   hangHoa: Option[];
   diaDiem: DiaDiemOption[];
@@ -66,6 +68,9 @@ export default function DonHangForm({
   const [step, setStep] = useState(0);
   const [showBoSung, setShowBoSung] = useState(false);
 
+  const [khachDichVuId, setKhachDichVuId] = useState(
+    (initial as (DonHang & { khach_hang_dich_vu_id?: string | null }) | null | undefined)?.khach_hang_dich_vu_id ?? "",
+  );
   const [values, setValues] = useState({
     khach_hang_id: initial?.khach_hang_id ?? "",
     loai_don_hang: initial?.loai_don_hang ?? "",
@@ -110,6 +115,11 @@ export default function DonHangForm({
   function khachHangLabel() {
     const kh = khachHangList.find((k) => k.id === values.khach_hang_id);
     return kh ? kh.ten_viet_tat || kh.ten_day_du || "—" : "—";
+  }
+  function tenKhachDichVuMacDinh() {
+    const me = khachMeCua(values.khach_hang_id, masterData.khachHang, masterData.nhomKhachHang);
+    const k = masterData.khachHang.find((x) => x.id === me);
+    return k ? `${k.ten_viet_tat || k.ten_day_du} (công ty mẹ của nhóm)` : khachHangLabel();
   }
   function optionLabel(list: Option[], id: string) {
     return list.find((o) => o.id === id)?.ten ?? "—";
@@ -166,6 +176,7 @@ export default function DonHangForm({
     if (payload.so_luong) payload.so_luong = Number(payload.so_luong);
     if (payload.so_kien) payload.so_kien = Number(payload.so_kien);
     if (payload.so_kg) payload.so_kg = Number(payload.so_kg);
+    if (masterData.coKhachDichVu) payload.khach_hang_dich_vu_id = khachDichVuId || null;
 
     if (initial) {
       const { error: err } = await supabase.from("don_hang").update(payload).eq("id", initial.id);
@@ -250,6 +261,18 @@ export default function DonHangForm({
               placeholder="Gõ tên khách hàng..."
             />
           </Field>
+          {masterData.coKhachDichVu && values.khach_hang_id && (
+            <Field label="Khách xuất HĐ dịch vụ" hint="Hóa đơn chi hộ luôn xuất cho khách hàng ở ô trên">
+              <select value={khachDichVuId} onChange={(e) => setKhachDichVuId(e.target.value)} className={inputClass}>
+                <option value="">Mặc định: {tenKhachDichVuMacDinh()}</option>
+                {masterData.khachHang.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.ten_viet_tat || k.ten_day_du}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Sale phụ trách" required hint="Người nhận hoa hồng của đơn này">
             <select
               required

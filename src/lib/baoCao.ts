@@ -74,6 +74,12 @@ export interface DongPhaiThuInput {
 export interface HoaDonChoPhaiThuInput {
   id: string;
   so_tien_da_thu: number | null;
+  tong_tien?: number | null;
+  tien_chi_ho?: number | null;
+}
+export interface LienKetHoaDonDonInput {
+  hoa_don_id: string;
+  don_hang_id: string;
 }
 export interface CongNoLoKetQua {
   dichVuTruocVat: number;
@@ -81,7 +87,11 @@ export interface CongNoLoKetQua {
   chiHo: number;
   tongPhaiThu: number;
   daThu: number;
+  /** Phan cua daThu thuoc chi ho (phan con lai la dich vu + VAT) */
+  daThuChiHo: number;
   conPhaiThu: number;
+  /** true = chua co dong gia ban nao, dich vu dang lay tam "Gia ban" cua don */
+  tamTinh: boolean;
 }
 
 function claimCuaDong(d: DongPhaiThuInput): number {
@@ -89,39 +99,86 @@ function claimCuaDong(d: DongPhaiThuInput): number {
   return (d.gia_ban_sell ?? 0) * (1 + (d.vat_percent ?? 0) / 100);
 }
 
+function giaTriCuaLo(dongCuaDon: DongPhaiThuInput[], giaDonHang: number | null) {
+  const dichVuRows = dongCuaDon.filter((d) => !d.chi_ho);
+  const dichVuTruocVatItemize = dichVuRows.reduce((s, d) => s + (d.gia_ban_sell ?? 0), 0);
+  const dichVuTruocVat = doanhThuVoiFallbackGiaDonHang(dichVuTruocVatItemize, giaDonHang);
+  // Dung fallback gia don hang (chua itemize dong nao) thi khong co VAT rieng de tinh.
+  const vat = dichVuTruocVatItemize > 0 ? dichVuRows.reduce((s, d) => s + (d.gia_ban_sell ?? 0) * (d.vat_percent ?? 0) / 100, 0) : 0;
+  const chiHo = dongCuaDon.filter((d) => d.chi_ho).reduce((s, d) => s + (d.so_tien_da_chi ?? 0), 0);
+  const tamTinh = dichVuTruocVatItemize <= 0 && dichVuTruocVat > 0;
+  return { dichVuTruocVat, vat, chiHo, tongPhaiThu: dichVuTruocVat + vat + chiHo, tamTinh };
+}
+
 /** Tinh cong no phai thu cho nhieu lo hang cung luc (hieu qua hon goi tung lo 1,
- * vi can gom claim theo hoa don tren TOAN BO du lieu truoc khi phan bo). */
+ * vi can gom claim theo hoa don tren TOAN BO du lieu truoc khi phan bo).
+ *
+ * lienKet (bang hoa_don_don_hang): hoa don nhap tay chi gan voi don qua bang
+ * nay, khong gan hoa_don_id tren tung dong — tien da thu cua chung duoc chia
+ * cho cac lo duoc gan theo ty le tong phai thu cua tung lo (chia deu neu tat
+ * ca bang 0). De chia dung, dongList/giaDonHangMap phai du ca cac lo gop chung. */
 export function tinhCongNoTheoLo(
   donHangIds: string[],
   dongList: DongPhaiThuInput[],
   hoaDonMap: Map<string, HoaDonChoPhaiThuInput>,
   giaDonHangMap: Map<string, number | null>,
+  lienKet: LienKetHoaDonDonInput[] = [],
 ): Map<string, CongNoLoKetQua> {
+  const dongTheoDon = new Map<string, DongPhaiThuInput[]>();
   const claimTheoHoaDon = new Map<string, number>();
   for (const d of dongList) {
+    const ds = dongTheoDon.get(d.don_hang_id);
+    if (ds) ds.push(d);
+    else dongTheoDon.set(d.don_hang_id, [d]);
     if (!d.hoa_don_id) continue;
     claimTheoHoaDon.set(d.hoa_don_id, (claimTheoHoaDon.get(d.hoa_don_id) ?? 0) + claimCuaDong(d));
   }
+  const giaTri = (donHangId: string) => giaTriCuaLo(dongTheoDon.get(donHangId) ?? [], giaDonHangMap.get(donHangId) ?? null);
+
+  // Hoa don khong co dong nao gan hoa_don_id -> chia theo lienKet.
+  const donTheoHoaDon = new Map<string, Set<string>>();
+  for (const l of lienKet) {
+    if (!hoaDonMap.has(l.hoa_don_id) || (claimTheoHoaDon.get(l.hoa_don_id) ?? 0) > 0) continue;
+    const set = donTheoHoaDon.get(l.hoa_don_id) ?? new Set<string>();
+    set.add(l.don_hang_id);
+    donTheoHoaDon.set(l.hoa_don_id, set);
+  }
+  const thuQuaLienKet = new Map<string, { tong: number; chiHo: number }>();
+  for (const [hid, set] of donTheoHoaDon) {
+    const hd = hoaDonMap.get(hid)!;
+    const daThuHd = hd.so_tien_da_thu ?? 0;
+    if (!daThuHd) continue;
+    const ids = Array.from(set);
+    const trongSo = ids.map((i) => Math.max(0, giaTri(i).tongPhaiThu));
+    const tongTrongSo = trongSo.reduce((a, b) => a + b, 0);
+    const tyLeChiHo = (hd.tong_tien ?? 0) > 0 ? Math.min(1, Math.max(0, (hd.tien_chi_ho ?? 0) / hd.tong_tien!)) : 0;
+    ids.forEach((donHangId, i) => {
+      const phan = daThuHd * (tongTrongSo > 0 ? trongSo[i] / tongTrongSo : 1 / ids.length);
+      const cu = thuQuaLienKet.get(donHangId) ?? { tong: 0, chiHo: 0 };
+      thuQuaLienKet.set(donHangId, { tong: cu.tong + phan, chiHo: cu.chiHo + phan * tyLeChiHo });
+    });
+  }
+
   const result = new Map<string, CongNoLoKetQua>();
   for (const donHangId of donHangIds) {
-    const dongCuaDon = dongList.filter((d) => d.don_hang_id === donHangId);
-    const dichVuRows = dongCuaDon.filter((d) => !d.chi_ho);
-    const dichVuTruocVatItemize = dichVuRows.reduce((s, d) => s + (d.gia_ban_sell ?? 0), 0);
-    const dichVuTruocVat = doanhThuVoiFallbackGiaDonHang(dichVuTruocVatItemize, giaDonHangMap.get(donHangId) ?? null);
-    // Dung fallback gia don hang (chua itemize dong nao) thi khong co VAT rieng de tinh.
-    const vat = dichVuTruocVatItemize > 0 ? dichVuRows.reduce((s, d) => s + (d.gia_ban_sell ?? 0) * (d.vat_percent ?? 0) / 100, 0) : 0;
-    const chiHo = dongCuaDon.filter((d) => d.chi_ho).reduce((s, d) => s + (d.so_tien_da_chi ?? 0), 0);
-    const tongPhaiThu = dichVuTruocVat + vat + chiHo;
+    const dongCuaDon = dongTheoDon.get(donHangId) ?? [];
+    const gt = giaTri(donHangId);
     const hoaDonIds = Array.from(new Set(dongCuaDon.map((d) => d.hoa_don_id).filter((x): x is string => !!x)));
-    let daThu = 0;
+    let daThu = thuQuaLienKet.get(donHangId)?.tong ?? 0;
+    let daThuChiHo = thuQuaLienKet.get(donHangId)?.chiHo ?? 0;
     for (const hid of hoaDonIds) {
       const hd = hoaDonMap.get(hid);
       if (!hd) continue;
-      const claimDon = dongCuaDon.filter((d) => d.hoa_don_id === hid).reduce((s, d) => s + claimCuaDong(d), 0);
+      const dongCuaHd = dongCuaDon.filter((d) => d.hoa_don_id === hid);
+      const claimDon = dongCuaHd.reduce((s, d) => s + claimCuaDong(d), 0);
+      const claimDonChiHo = dongCuaHd.filter((d) => d.chi_ho).reduce((s, d) => s + claimCuaDong(d), 0);
       const claimTong = claimTheoHoaDon.get(hid) ?? 0;
-      if (claimTong > 0) daThu += (claimDon / claimTong) * (hd.so_tien_da_thu ?? 0);
+      if (claimTong > 0) {
+        daThu += (claimDon / claimTong) * (hd.so_tien_da_thu ?? 0);
+        daThuChiHo += (claimDonChiHo / claimTong) * (hd.so_tien_da_thu ?? 0);
+      }
     }
-    result.set(donHangId, { dichVuTruocVat, vat, chiHo, tongPhaiThu, daThu, conPhaiThu: tongPhaiThu - daThu });
+    result.set(donHangId, { ...gt, daThu, daThuChiHo, conPhaiThu: gt.tongPhaiThu - daThu });
   }
   return result;
 }

@@ -24,7 +24,7 @@ export default async function HoaDonPage() {
         .order("ngay_xuat", { ascending: false }),
       supabase
         .from("khach_hang")
-        .select("id, ten_day_du, ten_viet_tat, ma_so_thue, nhom_khach_hang:nhom_khach_hang_id(ten)")
+        .select("id, ten_day_du, ten_viet_tat, ma_so_thue, nhom_khach_hang_id, nhom_khach_hang:nhom_khach_hang_id(ten)")
         .eq("dang_hoat_dong", true)
         .order("ten_day_du"),
       supabase.from("don_hang").select("id, so_don_hang, khach_hang_id").order("created_at", { ascending: false }).limit(500),
@@ -73,15 +73,33 @@ export default async function HoaDonPage() {
   // gia_ban_sell cung khong doc truc tiep duoc o day (xem comment chiPhiRowsDayDu).
   const chiPhiRaSoat = await ghepGiaBanChiPhi(supabase, chiPhiRaSoatRaw ?? []);
 
+  // Truy van rieng de trang van chay khi chua chay migration 0129 (loi -> null).
+  // nhat_ky_thao_tac chi Ke toan/Giam doc doc duoc (RLS) — phong khac nhan ve rong.
+  const [{ data: nhomList }, { data: donDichVuRieng }, { data: nhatKyHuy }] = await Promise.all([
+    supabase.from("nhom_khach_hang").select("*").order("ten"),
+    supabase.from("don_hang").select("id, khach_hang_dich_vu_id").not("khach_hang_dich_vu_id", "is", null),
+    supabase
+      .from("nhat_ky_thao_tac")
+      .select("dong_id, ly_do, created_at, nguoi:nguoi_thuc_hien_id(ho_ten)")
+      .eq("bang", "hoa_don_xuat")
+      .eq("hanh_dong", "huy_hoa_don_xuat"),
+  ]);
+  const dichVuRiengMap = new Map((donDichVuRieng ?? []).map((d) => [d.id, d.khach_hang_dich_vu_id as string]));
+
   return (
     <HoaDonView
+      nhomList={nhomList ?? []}
+      thongTinHuy={(nhatKyHuy ?? []).map((n) => {
+        const nguoi = (Array.isArray(n.nguoi) ? n.nguoi[0] : n.nguoi) as { ho_ten: string } | null;
+        return { hoa_don_id: n.dong_id as string, ly_do: n.ly_do as string | null, luc: n.created_at as string, nguoi: nguoi?.ho_ten ?? null };
+      })}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       initialRows={(rows ?? []) as any[]}
       khachHangList={(khachHangList ?? []).map((k) => {
         const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
-        return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, ma_so_thue: k.ma_so_thue, nhom_khach_hang_ten: nhom?.ten ?? null };
+        return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, ma_so_thue: k.ma_so_thue, nhom_khach_hang_id: k.nhom_khach_hang_id, nhom_khach_hang_ten: nhom?.ten ?? null };
       })}
-      donHangList={donHangList ?? []}
+      donHangList={(donHangList ?? []).map((d) => ({ ...d, khach_hang_dich_vu_id: dichVuRiengMap.get(d.id) ?? null }))}
       lienKetAll={lienKetAll ?? []}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dinhKemRows={(dinhKemRows ?? []) as any[]}

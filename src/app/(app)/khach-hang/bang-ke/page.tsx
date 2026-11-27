@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BangKeView from "@/components/khach-hang/BangKeView";
+import { khachXuatDichVu } from "@/lib/nhomKhach";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
 export default async function BangKePage({
@@ -130,8 +131,26 @@ export default async function BangKePage({
         (contMap[r.don_hang_id] ??= []).push(r.so_cont);
       }
     }
+    // Khach xuat HD dich vu cua tung lo (migration 0129; chua chay thi cac truy
+    // van nay khong co cot moi -> mac dinh chinh khach dang chon).
+    const [{ data: khachAll }, { data: nhomAll }, { data: donDichVuRieng }] = await Promise.all([
+      supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat, nhom_khach_hang_id"),
+      supabase.from("nhom_khach_hang").select("*"),
+      supabase.from("don_hang").select("id, khach_hang_dich_vu_id").eq("khach_hang_id", khach_hang).not("khach_hang_dich_vu_id", "is", null),
+    ]);
+    const dichVuRiengMap = new Map((donDichVuRieng ?? []).map((d) => [d.id, d.khach_hang_dich_vu_id as string]));
+    const khachDichVuCuaDon = (donHangId: string) => {
+      const id = khachXuatDichVu(
+        { khach_hang_id: khach_hang, khach_hang_dich_vu_id: dichVuRiengMap.get(donHangId) ?? null },
+        khachAll ?? [],
+        nhomAll ?? [],
+      )!;
+      const k = (khachAll ?? []).find((x) => x.id === id);
+      return { id, ten: k?.ten_viet_tat || k?.ten_day_du || "—" };
+    };
     donHangList = (donHang ?? []).map((d) => ({
       ...d,
+      khach_dich_vu: khachDichVuCuaDon(d.id),
       bien_so: bienSoMap[d.id] ?? [],
       so_to_khai: toKhaiMap[d.id] ?? [],
       so_cont: contMap[d.id] ?? [],

@@ -10,6 +10,9 @@ export default async function DonHangSuaPage({ params }: { params: Promise<{ id:
   const supabase = await createClient();
   const user = await getCurrentUser();
 
+  // O "Khach xuat HD dich vu" chi hien khi da chay migration 0129.
+  const { error: chuaCoCotDichVu } = await supabase.from("don_hang").select("khach_hang_dich_vu_id").limit(1);
+
   if (!canManageDonHang(user?.phong_ban)) {
     return (
       <div className="mx-auto max-w-xl px-4 py-10 text-center">
@@ -38,10 +41,10 @@ export default async function DonHangSuaPage({ params }: { params: Promise<{ id:
     supabase.from("don_hang").select("*").eq("id", id).single(),
     supabase
       .from("khach_hang")
-      .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang:nhom_khach_hang_id(ten)")
+      .select("id, ten_day_du, ten_viet_tat, nhom_khach_hang_id, nhom_khach_hang:nhom_khach_hang_id(ten)")
       .eq("dang_hoat_dong", true)
       .order("ten_day_du"),
-    supabase.from("nhom_khach_hang").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
+    supabase.from("nhom_khach_hang").select("*").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("loai_container").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("hang_hoa").select("id, ten").eq("dang_hoat_dong", true).order("ten"),
     supabase.from("dia_diem").select("id, ten, ma_dia_diem, dia_chi, khu_vuc").eq("dang_hoat_dong", true).order("ten"),
@@ -75,9 +78,10 @@ export default async function DonHangSuaPage({ params }: { params: Promise<{ id:
         masterData={{
           khachHang: (khachHang ?? []).map((k) => {
             const nhom = Array.isArray(k.nhom_khach_hang) ? k.nhom_khach_hang[0] : k.nhom_khach_hang;
-            return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_ten: nhom?.ten ?? null };
+            return { id: k.id, ten_day_du: k.ten_day_du, ten_viet_tat: k.ten_viet_tat, nhom_khach_hang_id: k.nhom_khach_hang_id, nhom_khach_hang_ten: nhom?.ten ?? null };
           }),
           nhomKhachHang: nhomKhachHang ?? [],
+          coKhachDichVu: !chuaCoCotDichVu,
           loaiContainer: loaiContainer ?? [],
           hangHoa: hangHoa ?? [],
           diaDiem: diaDiem ?? [],

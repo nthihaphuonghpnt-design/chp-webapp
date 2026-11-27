@@ -53,7 +53,7 @@ export default async function BaoCaoPage() {
     supabase.from("nha_cung_cap").select("id, ten"),
     supabase.from("doi_tac_thue_ngoai").select("id, ten"),
     supabase.from("loai_chi_phi").select("id, ten"),
-    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat"),
+    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat, nhom_khach_hang_id"),
     supabase.from("nhan_vien").select("id, ho_ten"),
   ]);
 
@@ -68,9 +68,17 @@ export default async function BaoCaoPage() {
   // nay), chi lay tong theo thang qua RPC.
   const { data: dinhPhiList } = await supabase.rpc("tong_dinh_phi_theo_thang");
 
+  // Truy van rieng de trang van chay khi chua chay migration 0129 (loi -> null).
+  const [{ data: nhomList }, { data: donDichVuRieng }] = await Promise.all([
+    supabase.from("nhom_khach_hang").select("*").order("ten"),
+    supabase.from("don_hang").select("id, khach_hang_dich_vu_id").not("khach_hang_dich_vu_id", "is", null),
+  ]);
+  const dichVuRiengMap = new Map((donDichVuRieng ?? []).map((d) => [d.id, d.khach_hang_dich_vu_id as string]));
+
   return (
     <BaoCaoView
-      donHangList={donHangList ?? []}
+      nhomList={nhomList ?? []}
+      donHangList={(donHangList ?? []).map((d) => ({ ...d, khach_hang_dich_vu_id: dichVuRiengMap.get(d.id) ?? null }))}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       chiPhiList={chiPhiListDayDu as any[]}
       phuThuList={phuThuList ?? []}

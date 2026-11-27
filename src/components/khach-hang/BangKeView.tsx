@@ -50,6 +50,7 @@ interface DonHangOpt {
    * chon tung dong), nen KHONG dung de loai don khoi bang, chi de canh bao
    * tranh xuat trung (P1 muc 4). */
   hoa_don_hien_co: string[];
+  khach_dich_vu?: { id: string; ten: string };
 }
 
 interface ChiPhiRow {
@@ -138,15 +139,22 @@ export default function BangKeView({
   const [denNgay, setDenNgay] = useState(() => new Date().toISOString().slice(0, 10));
   const locNgayDangBat = !donHangFilter;
 
+  const [anDonDaCoHd, setAnDonDaCoHd] = useState(true);
+  const donDaCoHd = new Set(donHangList.filter((d) => d.hoa_don_hien_co.length > 0).map((d) => d.id));
+  // Chon 1 don cu the thi luon hien du dong cua don do.
+  const hienDon = (donHangId: string) => (donHangFilter ? donHangId === donHangFilter : !anDonDaCoHd || !donDaCoHd.has(donHangId));
   const chiPhiRows = chiPhiRowsAll.filter(
-    (r) => (!donHangFilter || r.don_hang_id === donHangFilter) && (!locNgayDangBat || (r.ngay_phat_sinh >= tuNgay && r.ngay_phat_sinh <= denNgay)),
+    (r) => hienDon(r.don_hang_id) && (!locNgayDangBat || (r.ngay_phat_sinh >= tuNgay && r.ngay_phat_sinh <= denNgay)),
   );
   const phuThuRows = phuThuRowsAll.filter(
-    (r) => (!donHangFilter || r.don_hang_id === donHangFilter) && (!locNgayDangBat || (r.created_at.slice(0, 10) >= tuNgay && r.created_at.slice(0, 10) <= denNgay)),
+    (r) => hienDon(r.don_hang_id) && (!locNgayDangBat || (r.created_at.slice(0, 10) >= tuNgay && r.created_at.slice(0, 10) <= denNgay)),
   );
   const thueNgoaiRows = thueNgoaiRowsAll.filter(
-    (r) => (!donHangFilter || r.don_hang_id === donHangFilter) && (!locNgayDangBat || (r.ngay_thue >= tuNgay && r.ngay_thue <= denNgay)),
+    (r) => hienDon(r.don_hang_id) && (!locNgayDangBat || (r.ngay_thue >= tuNgay && r.ngay_thue <= denNgay)),
   );
+  const soDonBiAn = new Set(
+    [...chiPhiRowsAll, ...phuThuRowsAll, ...thueNgoaiRowsAll].map((r) => r.don_hang_id).filter((id) => donDaCoHd.has(id)),
+  ).size;
   const soDongNgoaiKhoangNgay = locNgayDangBat
     ? chiPhiRowsAll.filter((r) => r.ngay_phat_sinh < tuNgay || r.ngay_phat_sinh > denNgay).length +
       phuThuRowsAll.filter((r) => r.created_at.slice(0, 10) < tuNgay || r.created_at.slice(0, 10) > denNgay).length +
@@ -282,7 +290,6 @@ export default function BangKeView({
     // don_thue_ngoai chua co cot vat_percent rieng tung dong (giong phu_thu) —
     // chi ap dung VAT% chung o khung "Tao hoa don"; dong Chi ho khong tinh VAT.
     thueNgoaiGiaBan.filter((r) => chonThueNgoai.has(r.id)).reduce((s, r) => s + Math.round(((r.gia_ban_sell ?? 0) * vatChungNhapTay) / 100), 0);
-  const tongCong = tongTruocThue + tienVat + tongChiHo;
 
   const chiTietBangKe = useMemo(() => {
     const vat = Number(vatPercent) || 0;
@@ -498,13 +505,55 @@ export default function BangKeView({
 
   const [choXacNhanXuatHoaDon, setChoXacNhanXuatHoaDon] = useState(false);
 
+  // Khach xuat HD dich vu khac khach dang chon (cong ty me cua nhom) -> bat
+  // buoc tach 2 hoa don: dich vu cho cong ty me, chi ho cho khach dang chon.
+  const dongDuocChon = [
+    ...chiPhiRows.filter((r) => chonChiPhi.has(r.id)),
+    ...phuThuRows.filter((r) => chonPhuThu.has(r.id)),
+    ...thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)),
+  ];
+  const khachDichVuDaChon = Array.from(
+    new Map(
+      dongDuocChon
+        .map((r) => donHangMap.get(r.don_hang_id)?.khach_dich_vu)
+        .filter((k): k is { id: string; ten: string } => !!k)
+        .map((k) => [k.id, k]),
+    ).values(),
+  );
+  const phaiTach = donHangList.some((d) => d.khach_dich_vu && d.khach_dich_vu.id !== khachHangIdChon);
+  const [loaiXuatChon, setLoaiXuatChon] = useState<"Gộp" | "Dịch vụ" | "Chi hộ" | null>(null);
+  const loaiXuat = phaiTach ? (loaiXuatChon === "Chi hộ" ? "Chi hộ" : "Dịch vụ") : (loaiXuatChon ?? "Gộp");
+  const khachNhanHd =
+    loaiXuat === "Dịch vụ" && khachDichVuDaChon.length === 1
+      ? khachDichVuDaChon[0]
+      : { id: khachHangIdChon, ten: khachHangChiTiet?.ten_viet_tat || khachHangChiTiet?.ten_day_du || "" };
+  const hdTruocThue = loaiXuat === "Chi hộ" ? 0 : tongTruocThue;
+  const hdVat = loaiXuat === "Chi hộ" ? 0 : tienVat;
+  const hdChiHo = loaiXuat === "Dịch vụ" ? 0 : tongChiHo;
+  const hdTong = hdTruocThue + hdVat + hdChiHo;
+
+  function idDeXuat() {
+    const dungLoai = (chiHo: boolean) => (loaiXuat === "Gộp" ? true : loaiXuat === "Chi hộ" ? chiHo : !chiHo);
+    return {
+      chiPhiIds: chiPhiRows.filter((r) => chonChiPhi.has(r.id) && dungLoai(r.chi_ho)).map((r) => r.id),
+      phuThuIds: phuThuRows.filter((r) => chonPhuThu.has(r.id) && dungLoai(false)).map((r) => r.id),
+      thueNgoaiIds: thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id) && dungLoai(r.chi_ho)).map((r) => r.id),
+    };
+  }
+
   function handleXuatHoaDon() {
     if (!khachHangIdChon) return;
-    const chiPhiIds = chiPhiRows.filter((r) => chonChiPhi.has(r.id)).map((r) => r.id);
-    const phuThuIds = phuThuRows.filter((r) => chonPhuThu.has(r.id)).map((r) => r.id);
-    const thueNgoaiIds = thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)).map((r) => r.id);
+    const { chiPhiIds, phuThuIds, thueNgoaiIds } = idDeXuat();
     if (chiPhiIds.length === 0 && phuThuIds.length === 0 && thueNgoaiIds.length === 0) {
       window.alert("Chưa chọn dòng nào để xuất hóa đơn.");
+      return;
+    }
+    if (hdTong <= 0) {
+      window.alert("Tổng hóa đơn phải lớn hơn 0.");
+      return;
+    }
+    if (loaiXuat === "Dịch vụ" && khachDichVuDaChon.length > 1) {
+      window.alert("Các dòng đã chọn thuộc nhiều khách xuất hóa đơn dịch vụ khác nhau — xuất riêng từng nhóm đơn.");
       return;
     }
     setChoXacNhanXuatHoaDon(true);
@@ -512,9 +561,7 @@ export default function BangKeView({
 
   async function thucHienXuatHoaDon() {
     if (!khachHangIdChon) return;
-    const chiPhiIds = chiPhiRows.filter((r) => chonChiPhi.has(r.id)).map((r) => r.id);
-    const phuThuIds = phuThuRows.filter((r) => chonPhuThu.has(r.id)).map((r) => r.id);
-    const thueNgoaiIds = thueNgoaiRows.filter((r) => chonThueNgoai.has(r.id)).map((r) => r.id);
+    const { chiPhiIds, phuThuIds, thueNgoaiIds } = idDeXuat();
 
     setDangXuat(true);
 
@@ -523,13 +570,13 @@ export default function BangKeView({
     // Postgres tu rollback TOAN BO, khong con de lai hoa don "rong"/thieu du
     // lieu ma UI van bao thanh cong (xem migration 0068).
     const { error } = await supabase.rpc("xuat_hoa_don_tu_bang_ke", {
-      p_khach_hang_id: khachHangIdChon,
+      p_khach_hang_id: khachNhanHd.id,
       p_so_hoa_don: soHoaDon || null,
       p_ngay_xuat: new Date().toISOString().slice(0, 10),
-      p_tong_tien_truoc_thue: tongTruocThue,
-      p_vat_percent: vatPercent ? Number(vatPercent) : null,
-      p_tien_vat: tienVat,
-      p_tien_chi_ho: tongChiHo || 0,
+      p_tong_tien_truoc_thue: hdTruocThue,
+      p_vat_percent: loaiXuat !== "Chi hộ" && vatPercent ? Number(vatPercent) : null,
+      p_tien_vat: hdVat,
+      p_tien_chi_ho: hdChiHo || 0,
       p_chi_phi_ids: chiPhiIds,
       p_phu_thu_ids: phuThuIds,
       p_thue_ngoai_ids: thueNgoaiIds,
@@ -594,6 +641,13 @@ export default function BangKeView({
           </>
         )}
       </div>
+
+      {khachHangIdChon && !donHangFilter && soDonBiAn > 0 && (
+        <label className="mb-4 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
+          <input type="checkbox" checked={anDonDaCoHd} onChange={(e) => setAnDonDaCoHd(e.target.checked)} />
+          Ẩn {soDonBiAn} đơn đã có hóa đơn (còn dòng chưa gắn hóa đơn — chọn riêng từng đơn hoặc bỏ tick để xem)
+        </label>
+      )}
 
       {!khachHangIdChon && <p className="text-sm text-slate-400">Chọn khách hàng để xem bảng kê chi phí chưa xuất hóa đơn.</p>}
 
@@ -819,13 +873,29 @@ export default function BangKeView({
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Loại hóa đơn</label>
+                <select
+                  value={loaiXuat}
+                  onChange={(e) => setLoaiXuatChon(e.target.value as "Gộp" | "Dịch vụ" | "Chi hộ")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  {!phaiTach && <option value="Gộp">Gộp (dịch vụ + chi hộ)</option>}
+                  <option value="Dịch vụ">Chỉ dịch vụ</option>
+                  <option value="Chi hộ">Chỉ chi hộ</option>
+                </select>
+              </div>
             </div>
+            <p className="mt-2 text-sm text-slate-700">
+              Xuất cho: <strong>{khachNhanHd.ten}</strong>
+              {phaiTach && <span className="ml-1 text-xs text-slate-500">(khách thuộc nhóm: dịch vụ và chi hộ phải xuất thành 2 hóa đơn)</span>}
+            </p>
 
             <div className="mt-4 space-y-1 text-sm text-slate-600">
-              <p>Tổng giá bán trước thuế: <strong>{tongTruocThue.toLocaleString("en-US")}</strong></p>
-              <p>Tiền VAT: <strong>{tienVat.toLocaleString("en-US")}</strong></p>
-              <p>Tổng chi hộ: <strong>{tongChiHo.toLocaleString("en-US")}</strong></p>
-              <p className="text-base font-semibold text-slate-900">Tổng cộng hóa đơn: {tongCong.toLocaleString("en-US")}</p>
+              <p>Tổng giá bán trước thuế: <strong>{hdTruocThue.toLocaleString("en-US")}</strong></p>
+              <p>Tiền VAT: <strong>{hdVat.toLocaleString("en-US")}</strong></p>
+              <p>Tổng chi hộ: <strong>{hdChiHo.toLocaleString("en-US")}</strong></p>
+              <p className="text-base font-semibold text-slate-900">Tổng cộng hóa đơn: {hdTong.toLocaleString("en-US")}</p>
             </div>
 
             <button
@@ -842,7 +912,7 @@ export default function BangKeView({
       {choXacNhanXuatHoaDon && (
         <ConfirmDialog
           title="Xuất hóa đơn"
-          message={`Xuất hóa đơn với tổng cộng ${tongCong.toLocaleString("en-US")}?`}
+          message={`Xuất hóa đơn ${loaiXuat} cho ${khachNhanHd.ten} với tổng cộng ${hdTong.toLocaleString("en-US")}?`}
           confirmLabel="Xuất hóa đơn"
           onCancel={() => setChoXacNhanXuatHoaDon(false)}
           onConfirm={() => {
