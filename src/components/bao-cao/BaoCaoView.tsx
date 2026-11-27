@@ -137,6 +137,9 @@ export default function BaoCaoView({
   const defaultRange = monthRange();
   const [tuNgay, setTuNgay] = useState(defaultRange.start);
   const [denNgay, setDenNgay] = useState(defaultRange.end);
+  // P2 muc 13 (2026-11-27): man hinh "Debit" thay file doi_chieu_debit_Excel_vs_webapp.xlsx
+  // — loc rieng theo khach cho bang Cong no theo lo, khong anh huong cac bang khac.
+  const [khachHangLocDebit, setKhachHangLocDebit] = useState("");
 
   const isKeToanOrGiamDoc = currentPhongBan === "Kế toán" || currentPhongBan === "Giám đốc";
   const isSale = currentPhongBan === "Sale";
@@ -277,6 +280,54 @@ export default function BaoCaoView({
       };
     });
   }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, hoaDonDonHangList, hoaDonList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // P2 muc 13: "Trang thai" cua 1 lo theo dung 4 muc doc yeu cau — thay the
+  // viec Ke toan tu doi chieu tay voi file Excel rieng.
+  function trangThaiDebit(r: (typeof congNoTheoLo)[number]): string {
+    if (r.soLuongHoaDon === 0) return "Chưa xuất HĐ";
+    if (r.conPhaiThu <= 0) return "Đã thu";
+    if (r.daThu > 0) return "Thu một phần";
+    return "Đã xuất chưa thu";
+  }
+  const TRANG_THAI_DEBIT_COLOR: Record<string, string> = {
+    "Chưa xuất HĐ": "bg-slate-100 text-slate-600",
+    "Đã xuất chưa thu": "bg-amber-100 text-amber-700",
+    "Thu một phần": "bg-blue-100 text-blue-700",
+    "Đã thu": "bg-green-100 text-green-700",
+  };
+  const congNoTheoLoLoc = khachHangLocDebit
+    ? congNoTheoLo.filter((r) => r.donHang.khach_hang_id === khachHangLocDebit)
+    : congNoTheoLo;
+
+  function handleExportDebit() {
+    const wb = taoWorkbook();
+    themSheetKeO(wb, {
+      sheetName: "Debit theo lô",
+      columns: [
+        { header: "Số đơn", key: "soDon", width: 14 },
+        { header: "Khách hàng", key: "kh", width: 20 },
+        { header: "Hóa đơn", key: "soHd", width: 18 },
+        { header: "VAT", key: "vat", width: 14, numFmt: "#,##0" },
+        { header: "Chi hộ", key: "chiHo", width: 14, numFmt: "#,##0" },
+        { header: "Tổng phải thu", key: "tongPhaiThu", width: 16, numFmt: "#,##0" },
+        { header: "Đã thu", key: "daThu", width: 14, numFmt: "#,##0" },
+        { header: "Còn nợ", key: "conPhaiThu", width: 14, numFmt: "#,##0" },
+        { header: "Trạng thái", key: "trangThai", width: 18 },
+      ],
+      rows: congNoTheoLoLoc.map((r) => [
+        r.donHang.so_don_hang,
+        r.khTen,
+        r.soLuongHoaDon > 0 ? r.soHoaDon : "Chưa xuất HĐ",
+        r.vat,
+        r.chiHo,
+        r.tongPhaiThu,
+        r.daThu,
+        r.conPhaiThu,
+        trangThaiDebit(r),
+      ]),
+    });
+    taiWorkbook(wb, `debit-${tuNgay}-den-${denNgay}.xlsx`);
+  }
 
   // --- 3) Doanh so theo Sale ---
   const doanhSoTheoSale = useMemo(() => {
@@ -451,6 +502,7 @@ export default function BaoCaoView({
           { header: "Số hóa đơn", key: "soHd", width: 18 },
           { header: "Đã thu", key: "daThu", width: 14, numFmt: "#,##0" },
           { header: "Còn phải thu", key: "conPhaiThu", width: 14, numFmt: "#,##0" },
+          { header: "Trạng thái", key: "trangThai", width: 18 },
         ],
         rows: congNoTheoLo.map((r) => [
           r.donHang.so_don_hang,
@@ -462,6 +514,7 @@ export default function BaoCaoView({
           r.soLuongHoaDon > 0 ? r.soHoaDon : "Chưa xuất HĐ",
           r.daThu,
           r.conPhaiThu,
+          trangThaiDebit(r),
         ]),
       });
       themSheetKeO(wb, {
@@ -596,12 +649,32 @@ export default function BaoCaoView({
             </p>
           </Section>
 
-          <Section id="cong-no-theo-lo" title="Công nợ theo lô hàng (giá bán + chi hộ + hóa đơn)">
+          <Section id="cong-no-theo-lo" title="Công nợ theo lô hàng (Debit — thay file Excel đối chiếu)">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-500">Lọc theo khách hàng:</label>
+                <select
+                  value={khachHangLocDebit}
+                  onChange={(e) => setKhachHangLocDebit(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">Tất cả khách hàng</option>
+                  {khachHangList.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.ten_viet_tat || k.ten_day_du}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={handleExportDebit} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                Xuất Excel (Debit)
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    {["Số đơn", "Khách hàng", "Dịch vụ (trước VAT)", "VAT", "Chi hộ", "Tổng phải thu", "Hóa đơn", "Đã thu", "Còn phải thu"].map((h) => (
+                    {["Số đơn", "Khách hàng", "Dịch vụ (trước VAT)", "VAT", "Chi hộ", "Tổng phải thu", "Hóa đơn", "Đã thu", "Còn phải thu", "Trạng thái"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium">
                         {h}
                       </th>
@@ -609,7 +682,7 @@ export default function BaoCaoView({
                   </tr>
                 </thead>
                 <tbody>
-                  {congNoTheoLo.map((r) => {
+                  {congNoTheoLoLoc.map((r) => {
                     return (
                       <tr key={r.donHang.id} className="border-t border-slate-100">
                         <td className="px-3 py-2">
@@ -634,12 +707,17 @@ export default function BaoCaoView({
                         </td>
                         <td className="px-3 py-2">{fmt(r.daThu)}</td>
                         <td className="px-3 py-2 font-medium">{fmt(r.conPhaiThu)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TRANG_THAI_DEBIT_COLOR[trangThaiDebit(r)]}`}>
+                            {trangThaiDebit(r)}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })}
-                  {congNoTheoLo.length === 0 && (
+                  {congNoTheoLoLoc.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
+                      <td colSpan={10} className="px-3 py-6 text-center text-slate-400">
                         Không có đơn hàng trong khoảng thời gian này.
                       </td>
                     </tr>
