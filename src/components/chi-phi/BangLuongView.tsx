@@ -218,9 +218,18 @@ export default function BangLuongView({
       const giamTru = giamTruGiaCanh(thangLuong, nv.so_nguoi_phu_thuoc ?? 0);
       const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - giamTru);
       const thueTncn = tinhThueTNCN(thuNhapChiuThue, thangLuong);
-      const thucLanh = tongThuNhap - bhxhNv - thueTncn;
+      // P2 muc 14 (2026-11-27): BHXH tinh tren muc_dong_bhxh CO DINH, khong
+      // giam theo Cham cong — neu luong co dinh bi tru nhieu (vd thieu cham
+      // cong ca thang do chua quen dung tinh nang moi), BHXH+thue co the vuot
+      // qua tong thu nhap, ra "thuc lanh" am (vo ly, khong the tra so am).
+      // Giu nguyen cong thuc BHXH (nghia vu phap ly, khong doi theo cham cong)
+      // nhung CHAN hien thi/tra am — hien 0 + canh bao ro so thieu hut de Ke
+      // toan ra soat Cham cong (hoac xu ly rieng) truoc khi tra luong.
+      const thucLanhGoc = tongThuNhap - bhxhNv - thueTncn;
+      const thucLanh = Math.max(0, thucLanhGoc);
+      const thieuHutThucLanh = thucLanhGoc < 0 ? -thucLanhGoc : 0;
 
-      return { nv, phongBan: pb, luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, chiTietBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh };
+      return { nv, phongBan: pb, luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, chiTietBhxh, bhxhNv, bhxhCt, giamTru, thueTncn, thucLanh, thieuHutThucLanh };
     });
   }, [nhanVienList, chiPhiGiaoNhanList, donHangList, thangHoatDong, thangLuong, chamCongList, ngayLeSet, apDungChamCong]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -320,6 +329,7 @@ export default function BangLuongView({
       { header: "Giảm trừ gia cảnh", key: "giamTru", width: 16 },
       { header: `Thuế TNCN (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có ${TK.THUE_TNCN_PHAI_NOP})`, key: "thueTncn", width: 26 },
       { header: `Thực lãnh (Nợ ${TK.PHAI_TRA_NGUOI_LAO_DONG} / Có 111,112 — xem TK đối ứng thật ở Sổ quỹ)`, key: "thucLanh", width: 34 },
+      { header: "Thiếu hụt (BHXH/thuế vượt thu nhập — cần rà soát, không trả âm)", key: "thieuHutThucLanh", width: 34 },
     ];
     const rows = bangLuong.map((r) => [
       r.nv.ho_ten,
@@ -341,6 +351,7 @@ export default function BangLuongView({
       r.giamTru,
       r.thueTncn,
       r.thucLanh,
+      r.thieuHutThucLanh,
     ]);
     await xuatExcelKeO(`bang-luong-${thangLuong}.xlsx`, {
       sheetName: "Bảng lương",
@@ -421,7 +432,14 @@ export default function BangLuongView({
                 <td className="px-3 py-2">{fmt(r.bhxhNv)}</td>
                 <td className="px-3 py-2">{fmt(r.bhxhCt)}</td>
                 <td className="px-3 py-2">{fmt(r.thueTncn)}</td>
-                <td className="px-3 py-2 font-semibold text-slate-900">{fmt(r.thucLanh)}</td>
+                <td className="px-3 py-2 font-semibold text-slate-900">
+                  {fmt(r.thucLanh)}
+                  {r.thieuHutThucLanh > 0 && (
+                    <p className="mt-1 text-xs font-medium text-red-600">
+                      ⚠ BHXH/thuế vượt thu nhập {fmt(r.thieuHutThucLanh)} — có thể do thiếu Chấm công, cần rà soát trước khi trả lương.
+                    </p>
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   {daTraCuaThang(r.nv.id) ? (
                     <div className="space-y-1">
@@ -434,6 +452,8 @@ export default function BangLuongView({
                         </p>
                       )}
                     </div>
+                  ) : r.thieuHutThucLanh > 0 ? (
+                    <span className="text-xs font-medium text-red-600">Cần xử lý trước khi trả (xem cảnh báo)</span>
                   ) : r.thucLanh > 0 ? (
                     <button
                       onClick={() => moFormTra(r.nv.id, r.thucLanh)}

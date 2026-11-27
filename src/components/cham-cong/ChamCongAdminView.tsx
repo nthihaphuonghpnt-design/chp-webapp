@@ -48,6 +48,16 @@ export default function ChamCongAdminView({
   const [editingNgay, setEditingNgay] = useState<string | null>(null);
   const [form, setForm] = useState({ trang_thai: "Đi làm", ly_do_dieu_chinh: "" });
   const [saving, setSaving] = useState(false);
+  // P2 muc 14 (2026-11-27): "sua/duyet cong hang loat" — thang dau dung tinh
+  // nang Cham cong, nhan vien chua quen vao cham nen gan nhu ca thang bi
+  // "Thieu cham cong", tung ngay 1 qua cham. Cho Ke toan danh dau hang loat
+  // (1 khoang ngay, 1 trang thai, 1 ly do) CHI cho cac ngay dang hien
+  // "Thieu cham cong" — khong dong len ngay da co du lieu that (Nghi khong
+  // phep...) de tranh xoa nham lich su.
+  const [bulkFor, setBulkFor] = useState<string | null>(null);
+  const [bulkForm, setBulkForm] = useState({ tuNgay: "", denNgay: "", trang_thai: "Đi làm", ly_do_dieu_chinh: "" });
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
   const ngayLeSet = useMemo(() => new Set(ngayLeList), [ngayLeList]);
 
   const [y, m] = thangNam.split("-").map(Number);
@@ -121,6 +131,52 @@ export default function ChamCongAdminView({
     setForm({ trang_thai: "Đi làm", ly_do_dieu_chinh: "" });
   }
 
+  function moBulkForm(nvId: string) {
+    setBulkFor(nvId);
+    setBulkMsg(null);
+    setBulkForm({
+      tuNgay: `${thangNam}-01`,
+      denNgay: `${thangNam}-${String(soNgayTrongThang).padStart(2, "0")}`,
+      trang_thai: "Đi làm",
+      ly_do_dieu_chinh: "",
+    });
+  }
+
+  async function handleLuuHangLoat() {
+    if (!bulkFor) return;
+    setBulkSaving(true);
+    setBulkMsg(null);
+    const ngayCanDanhDau = danhSachNgay(bulkForm.tuNgay, bulkForm.denNgay).filter((ngay) => {
+      const row = rows.find((r) => r.nhan_vien_id === bulkFor && r.ngay === ngay);
+      return trangThaiHienThi(ngay, row, ngayLeSet, homNay) === "Thiếu chấm công";
+    });
+    if (ngayCanDanhDau.length === 0) {
+      setBulkSaving(false);
+      setBulkMsg("Không có ngày nào đang \"Thiếu chấm công\" trong khoảng đã chọn.");
+      return;
+    }
+    const payload = ngayCanDanhDau.map((ngay) => ({
+      nhan_vien_id: bulkFor,
+      ngay,
+      trang_thai: bulkForm.trang_thai,
+      nguoi_dieu_chinh_id: currentNhanVienId ?? null,
+      ly_do_dieu_chinh: bulkForm.ly_do_dieu_chinh.trim(),
+      thoi_gian_dieu_chinh: new Date().toISOString(),
+    }));
+    const { data, error } = await supabase
+      .from("cham_cong")
+      .upsert(payload, { onConflict: "nhan_vien_id,ngay" })
+      .select("*, nguoi_dieu_chinh:nguoi_dieu_chinh_id(ho_ten)");
+    setBulkSaving(false);
+    if (error) {
+      setBulkMsg(`Lỗi: ${error.message}`);
+      return;
+    }
+    const moi = (data as ChamCongRow[]) ?? [];
+    setRows((prev) => [...prev.filter((r) => !moi.some((m) => m.id === r.id)), ...moi]);
+    setBulkMsg(`Đã đánh dấu "${bulkForm.trang_thai}" cho ${moi.length} ngày.`);
+  }
+
   const cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
 
   return (
@@ -159,9 +215,14 @@ export default function ChamCongAdminView({
                 ))}
                 <td className={`px-2 py-2 text-center font-medium ${thieu > 0 ? "text-amber-600" : "text-slate-300"}`}>{thieu || ""}</td>
                 <td className="px-2 py-2 text-right">
-                  <button onClick={() => setNhanVienIdChon(nv.id)} className="text-xs font-medium text-blue-600">
-                    Chi tiết / Điều chỉnh
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button onClick={() => setNhanVienIdChon(nv.id)} className="text-xs font-medium text-blue-600">
+                      Chi tiết / Điều chỉnh
+                    </button>
+                    <button onClick={() => moBulkForm(nv.id)} className="text-xs font-medium text-blue-600">
+                      Đánh dấu hàng loạt
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -236,6 +297,79 @@ export default function ChamCongAdminView({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {bulkFor && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
+          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-sm sm:rounded-2xl">
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">Đánh dấu hàng loạt</h2>
+            <p className="mb-4 text-xs text-slate-500">
+              {nhanVienList.find((n) => n.id === bulkFor)?.ho_ten} — chỉ áp dụng cho các ngày trong khoảng đang hiển thị
+              &quot;Thiếu chấm công&quot; (không đụng tới ngày đã có dữ liệu khác).
+            </p>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-500">Từ ngày</label>
+                  <input
+                    type="date"
+                    value={bulkForm.tuNgay}
+                    onChange={(e) => setBulkForm((p) => ({ ...p, tuNgay: e.target.value }))}
+                    className={cls}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-500">Đến ngày</label>
+                  <input
+                    type="date"
+                    value={bulkForm.denNgay}
+                    onChange={(e) => setBulkForm((p) => ({ ...p, denNgay: e.target.value }))}
+                    className={cls}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Trạng thái</label>
+                <select
+                  value={bulkForm.trang_thai}
+                  onChange={(e) => setBulkForm((p) => ({ ...p, trang_thai: e.target.value }))}
+                  className={cls}
+                >
+                  {TRANG_THAI_CHAM_CONG.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Lý do điều chỉnh (bắt buộc)</label>
+                <input
+                  value={bulkForm.ly_do_dieu_chinh}
+                  onChange={(e) => setBulkForm((p) => ({ ...p, ly_do_dieu_chinh: e.target.value }))}
+                  placeholder="VD: Tháng đầu dùng Chấm công, NV chưa kịp tự chấm"
+                  className={cls}
+                />
+              </div>
+              {bulkMsg && <p className="text-xs font-medium text-amber-700">{bulkMsg}</p>}
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setBulkFor(null)}
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                disabled={bulkSaving || !bulkForm.ly_do_dieu_chinh.trim() || !bulkForm.tuNgay || !bulkForm.denNgay}
+                onClick={handleLuuHangLoat}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {bulkSaving ? "Đang lưu..." : "Áp dụng"}
+              </button>
+            </div>
           </div>
         </div>
       )}
