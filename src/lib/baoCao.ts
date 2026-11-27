@@ -76,6 +76,7 @@ export interface HoaDonChoPhaiThuInput {
   so_tien_da_thu: number | null;
   tong_tien?: number | null;
   tien_chi_ho?: number | null;
+  tien_vat?: number | null;
 }
 export interface LienKetHoaDonDonInput {
   hoa_don_id: string;
@@ -133,7 +134,28 @@ export function tinhCongNoTheoLo(
     if (!d.hoa_don_id) continue;
     claimTheoHoaDon.set(d.hoa_don_id, (claimTheoHoaDon.get(d.hoa_don_id) ?? 0) + claimCuaDong(d));
   }
-  const giaTri = (donHangId: string) => giaTriCuaLo(dongTheoDon.get(donHangId) ?? [], giaDonHangMap.get(donHangId) ?? null);
+  const soLoCuaHoaDon = new Map<string, Set<string>>();
+  const hoaDonCuaLo = new Map<string, Set<string>>();
+  for (const l of lienKet) {
+    if (!hoaDonMap.has(l.hoa_don_id)) continue;
+    soLoCuaHoaDon.set(l.hoa_don_id, (soLoCuaHoaDon.get(l.hoa_don_id) ?? new Set<string>()).add(l.don_hang_id));
+    hoaDonCuaLo.set(l.don_hang_id, (hoaDonCuaLo.get(l.don_hang_id) ?? new Set<string>()).add(l.hoa_don_id));
+  }
+
+  /** "Gia ban" chung cua don thuong la so DA GOM VAT. Neu dung bang phan dich vu
+   * cua cac hoa don rieng cua lo (khong gop lo khac) thi tach VAT theo hoa don —
+   * tong phai thu khong doi. */
+  function giaTri(donHangId: string) {
+    const gt = giaTriCuaLo(dongTheoDon.get(donHangId) ?? [], giaDonHangMap.get(donHangId) ?? null);
+    if (!gt.tamTinh) return gt;
+    const ids = Array.from(hoaDonCuaLo.get(donHangId) ?? []);
+    if (ids.length === 0 || ids.some((i) => soLoCuaHoaDon.get(i)!.size > 1)) return gt;
+    const hds = ids.map((i) => hoaDonMap.get(i)!);
+    const dichVuGomVat = hds.reduce((s, h) => s + (h.tong_tien ?? 0) - (h.tien_chi_ho ?? 0), 0);
+    const vatHd = hds.reduce((s, h) => s + (h.tien_vat ?? 0), 0);
+    if (vatHd <= 0 || Math.abs(dichVuGomVat - gt.dichVuTruocVat) > 1) return gt;
+    return { ...gt, dichVuTruocVat: gt.dichVuTruocVat - vatHd, vat: vatHd, tamTinh: false };
+  }
 
   // Hoa don khong co dong nao gan hoa_don_id -> chia theo lienKet.
   const donTheoHoaDon = new Map<string, Set<string>>();

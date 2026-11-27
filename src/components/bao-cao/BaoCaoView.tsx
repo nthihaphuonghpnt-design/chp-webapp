@@ -67,6 +67,7 @@ interface HoaDon {
   ngay_xuat: string;
   tong_tien: number;
   tien_chi_ho: number | null;
+  tien_vat?: number | null;
   so_tien_da_thu: number | null;
   trang_thai_thanh_toan: string;
   trang_thai: "Đã phát hành" | "Đã điều chỉnh" | "Đã thay thế" | "Đã hủy";
@@ -88,6 +89,7 @@ interface KhachHang {
   ten_day_du: string;
   ten_viet_tat: string | null;
   nhom_khach_hang_id?: string | null;
+  dang_hoat_dong?: boolean | null;
 }
 interface NhanVien {
   id: string;
@@ -101,7 +103,7 @@ function monthRange() {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString("en-US");
+  return Math.round(n).toLocaleString("en-US");
 }
 
 export default function BaoCaoView({
@@ -213,7 +215,9 @@ export default function BaoCaoView({
       const giaoNhan = chiPhiGiaoNhanList.filter((g) => g.don_hang_id === d.id).reduce((s, g) => s + (g.thanh_tien ?? 0), 0);
       const dinhPhi = dinhPhiPhanBoChoDon(d);
       const lnTruocHoaHong = sell - buy - thueNgoaiBuy - giaoNhan - dinhPhi;
-      return { donHang: d, sell, buy, thueNgoaiBuy, giaoNhan, dinhPhi, chiHo, soKhoanChoDuyet, lnTruocHoaHong, hoaHongSale: lnTruocHoaHong * 0.4, lnCongTy: lnTruocHoaHong * 0.6 };
+      // Chi tinh hoa hong khi lo co Sale phu trach.
+      const hoaHongSale = d.sale_phu_trach_id ? lnTruocHoaHong * 0.4 : 0;
+      return { donHang: d, sell, buy, thueNgoaiBuy, giaoNhan, dinhPhi, chiHo, soKhoanChoDuyet, lnTruocHoaHong, hoaHongSale, lnCongTy: lnTruocHoaHong - hoaHongSale };
     });
   }, [donHangTrongKy, chiPhiList, phuThuList, thueNgoaiList, chiPhiGiaoNhanList, isKeToanOrGiamDoc]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -225,7 +229,7 @@ export default function BaoCaoView({
     const hoaDonMap = new Map<string, HoaDonChoPhaiThuInput>(
       hoaDonList
         .filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế")
-        .map((h) => [h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu, tong_tien: h.tong_tien, tien_chi_ho: h.tien_chi_ho }]),
+        .map((h) => [h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu, tong_tien: h.tong_tien, tien_chi_ho: h.tien_chi_ho, tien_vat: h.tien_vat }]),
     );
     const dongList: DongPhaiThuInput[] = [
       ...chiPhiList
@@ -266,6 +270,14 @@ export default function BaoCaoView({
       giaDonHangMap,
       hoaDonDonHangList,
     );
+    // Gia tri DA LEN HOA DON cua tung lo: cung cach phan bo, thay "da thu" bang tong hoa don.
+    const daXuat = tinhCongNoTheoLo(
+      donHangTrongKy.map((d) => d.id),
+      dongList,
+      new Map(Array.from(hoaDonMap, ([k, h]) => [k, { ...h, so_tien_da_thu: h.tong_tien ?? 0 }])),
+      giaDonHangMap,
+      hoaDonDonHangList,
+    );
     return donHangTrongKy.map((d) => {
       const kq = ketQua.get(d.id)!;
       const hoaDonIds = hoaDonDonHangList.filter((l) => l.don_hang_id === d.id).map((l) => l.hoa_don_id);
@@ -284,6 +296,7 @@ export default function BaoCaoView({
         conDichVu: phaiThuDichVu - (kq.daThu - kq.daThuChiHo),
         conChiHo: kq.chiHo - kq.daThuChiHo,
         tamTinh: kq.tamTinh,
+        daLenHoaDon: daXuat.get(d.id)!.daThu,
         dichVuTruocVat: kq.dichVuTruocVat,
         vat: kq.vat,
         chiHo: kq.chiHo,
@@ -343,6 +356,7 @@ export default function BaoCaoView({
         { header: "VAT", key: "vat", width: 14, numFmt: "#,##0" },
         { header: "Chi hộ", key: "chiHo", width: 14, numFmt: "#,##0" },
         { header: "Tổng phải thu", key: "tongPhaiThu", width: 16, numFmt: "#,##0" },
+        { header: "Đã lên hóa đơn", key: "daLenHd", width: 16, numFmt: "#,##0" },
         { header: "Đã thu", key: "daThu", width: 14, numFmt: "#,##0" },
         { header: "Còn nợ", key: "conPhaiThu", width: 14, numFmt: "#,##0" },
         { header: "Trạng thái", key: "trangThai", width: 18 },
@@ -357,6 +371,7 @@ export default function BaoCaoView({
         r.vat,
         r.chiHo,
         r.tongPhaiThu,
+        r.daLenHoaDon,
         r.daThu,
         r.conPhaiThu,
         trangThaiDebit(r),
@@ -408,7 +423,9 @@ export default function BaoCaoView({
   );
   const chiPhiTheoLoai = useMemo(() => {
     const map = new Map<string, { ten: string; buy: number; sell: number; chiHo: number }>();
-    for (const c of chiPhiTrongKy) {
+    const loTrongKy = new Set(donHangTrongKy.map((d) => d.id));
+    for (const c of chiPhiList) {
+      if (c.trang_thai === "Từ chối" || !loTrongKy.has(c.don_hang_id)) continue;
       const key = c.loai_chi_phi_id ?? "khac";
       const ten = loaiChiPhiList.find((l) => l.id === c.loai_chi_phi_id)?.ten ?? "Khác";
       if (!map.has(key)) map.set(key, { ten, buy: 0, sell: 0, chiHo: 0 });
@@ -419,7 +436,7 @@ export default function BaoCaoView({
       m.chiHo += p.chiHo;
     }
     return Array.from(map.values());
-  }, [chiPhiTrongKy, loaiChiPhiList]);
+  }, [chiPhiList, donHangTrongKy, loaiChiPhiList]);
 
   // --- 5) Cong no phai thu (theo khach hang) ---
   // Cong tu CHINH congNoTheoLo (2b) theo khach hang cua tung lo — dam bao tong
@@ -650,13 +667,13 @@ export default function BaoCaoView({
         />
       </Section>
 
-      <Section title="Doanh số theo Sale">
+      <Section title="Doanh số theo Sale (các lô lên đơn trong kỳ)">
         <SimpleTable cols={["Sale", "Doanh số"]} rows={doanhSoTheoSale.map((r) => [r.ten, fmt(r.sell)])} />
       </Section>
 
       {isKeToanOrGiamDoc && (
         <>
-          <Section title="Lợi nhuận theo lô hàng (tạm tính)">
+          <Section title="Lợi nhuận theo lô hàng (tạm tính, lô lên đơn trong kỳ)">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
@@ -676,7 +693,10 @@ export default function BaoCaoView({
                           {r.donHang.so_don_hang}
                         </Link>
                       </td>
-                      <td className="px-3 py-2">{fmt(r.sell)}</td>
+                      <td className="px-3 py-2">
+                        {fmt(r.sell)}
+                        {r.sell === 0 && <p className="text-xs font-medium text-amber-700">Chưa có giá bán</p>}
+                      </td>
                       <td className="px-3 py-2">{fmt(r.buy)}</td>
                       <td className="px-3 py-2">{fmt(r.thueNgoaiBuy)}</td>
                       <td className="px-3 py-2">{fmt(r.giaoNhan)}</td>
@@ -718,7 +738,10 @@ export default function BaoCaoView({
                       Nhóm: {n.ten}
                     </option>
                   ))}
-                  {khachHangList.map((k) => (
+                  {khachHangList
+                    // An khach ngung hoat dong, tru khi con lo trong ky.
+                    .filter((k) => k.dang_hoat_dong !== false || congNoTheoLo.some((r) => r.donHang.khach_hang_id === k.id || r.khDichVuId === k.id))
+                    .map((k) => (
                     <option key={k.id} value={k.id}>
                       {k.ten_viet_tat || k.ten_day_du}
                     </option>
@@ -768,6 +791,11 @@ export default function BaoCaoView({
                           {r.soLuongHoaDon > 0 ? (
                             <>
                               {r.soHoaDon}
+                              {Math.abs(r.tongPhaiThu - r.daLenHoaDon) > 1 && (
+                                <p className="text-xs text-amber-700">
+                                  Đã lên HĐ {fmt(r.daLenHoaDon)} · {r.tongPhaiThu > r.daLenHoaDon ? "chưa lên HĐ" : "HĐ vượt"} {fmt(Math.abs(r.tongPhaiThu - r.daLenHoaDon))}
+                                </p>
+                              )}
                               {r.gomNhieuDon && <span className="ml-1 text-amber-600" title="Hóa đơn này gồm nhiều đơn hàng — Đã thu đã được phân bổ theo tỷ lệ dịch vụ của từng đơn, không phải tiền thực nhận riêng cho đơn này">*</span>}
                             </>
                           ) : (
@@ -806,7 +834,7 @@ export default function BaoCaoView({
             </p>
           </Section>
 
-          <Section title="Báo cáo chi phí theo loại">
+          <Section title="Báo cáo chi phí theo loại (các lô lên đơn trong kỳ)">
             <SimpleTable
               cols={["Loại chi phí", "Số tiền đã chi", "Giá bán", "Chi hộ"]}
               rows={chiPhiTheoLoai.map((r) => [r.ten, fmt(r.buy), fmt(r.sell), r.chiHo > 0 ? fmt(r.chiHo) : "—"])}
@@ -822,21 +850,21 @@ export default function BaoCaoView({
             </Section>
           )}
 
-          <Section title="Công nợ phải thu (theo khách hàng)">
+          <Section title="Công nợ phải thu (theo khách hàng, các lô lên đơn trong kỳ)">
             <SimpleTable
               cols={["Khách hàng", "Tổng phải thu", "Đã thu", "Còn phải thu"]}
               rows={congNoPhaiThu.map((r) => [r.ten, fmt(r.tongHoaDon), fmt(r.daThu), fmt(r.conPhaiThu)])}
             />
           </Section>
 
-          <Section title="Công nợ phải trả (theo nhà cung cấp / đối tác thuê ngoài)">
+          <Section title="Công nợ phải trả (theo NCC/đối tác, khoản phát sinh trong kỳ)">
             <SimpleTable
               cols={["NCC/Đối tác", "Tổng nợ", "Đã trả", "Còn phải trả"]}
               rows={congNoPhaiTra.map((r) => [r.ten, fmt(r.tongNo), fmt(r.daTra), fmt(r.conPhaiTra)])}
             />
           </Section>
 
-          <Section title="Lợi nhuận theo đối tác thuê ngoài">
+          <Section title="Lợi nhuận theo đối tác thuê ngoài (ngày thuê trong kỳ)">
             <SimpleTable
               cols={["Đối tác", "Số tiền đã chi", "Giá bán", "Chênh lệch"]}
               rows={loiNhuanTheoDoiTac.map((r) => [r.ten, fmt(r.buy), fmt(r.sell), fmt(r.chenhLech)])}

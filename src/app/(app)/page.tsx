@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CONG_TY } from "@/lib/excel";
 import { homNayVN, laNhanVienVanPhong } from "@/lib/chamCong";
 import { trongCuaSoNhacCuoiThang } from "@/lib/nhacViec";
+import { khachMeCua } from "@/lib/nhomKhach";
 
 function loiChao() {
   const gio = new Date().getHours();
@@ -38,7 +39,7 @@ export default async function HomePage() {
     const isSale = user.phong_ban === "Sale";
     const isVanPhong = laNhanVienVanPhong(user.phong_ban);
     const trongVong30Ngay = new Date(new Date(`${homNay}T00:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
-    const hopDongCot = "so_hop_dong, khach_hang:khach_hang_id(ten_day_du), nha_cung_cap:nha_cung_cap_id(ten), trang_thai_hop_dong, ngay_het_han";
+    const hopDongCot = "khach_hang_id, so_hop_dong, khach_hang:khach_hang_id(ten_day_du), nha_cung_cap:nha_cung_cap_id(ten), trang_thai_hop_dong, ngay_het_han";
 
     // Chay song song toan bo truy van doc lap thay vi await tuan tu — trang
     // chu la trang tai dau tien moi lan dang nhap nen cang nhieu round-trip
@@ -133,7 +134,33 @@ export default async function HomePage() {
       congViecMucs.push({ nhan: "Chi phí / thuê ngoài chờ duyệt", href: "/don-hang", items: tenChiPhi });
     }
 
-    const hd = [...(hdChuaCo ?? []), ...(hdSapHetHan ?? [])];
+    // "Chua co hop dong": chi khach con phat sinh lo trong 6 thang; cong ty con
+    // cua nhom co cong ty me thi hop dong dat o cong ty me.
+    let chuaCoCanNhac = hdChuaCo ?? [];
+    if (chuaCoCanNhac.length > 0) {
+      const tuNgayLo = new Date(new Date(`${homNay}T00:00:00Z`).getTime() - 183 * 86400000).toISOString().slice(0, 10);
+      const [{ data: loGanDay, error: loiLo }, { data: khachNhom }, { data: nhomAll }] = await Promise.all([
+        supabase.from("don_hang").select("khach_hang_id").gte("ngay_len_don", tuNgayLo),
+        supabase.from("khach_hang").select("id, nhom_khach_hang_id"),
+        supabase.from("nhom_khach_hang").select("*"),
+      ]);
+      if (!loiLo) {
+        const coLo = new Set((loGanDay ?? []).map((d) => d.khach_hang_id));
+        // Cong ty me khong co lo rieng van can nhac neu cong ty con co lo.
+        const meCoLo = new Set<string>();
+        for (const id of coLo) {
+          const me = id ? khachMeCua(id, khachNhom ?? [], nhomAll ?? []) : null;
+          if (me) meCoLo.add(me);
+        }
+        chuaCoCanNhac = chuaCoCanNhac.filter((r) => {
+          const id = r.khach_hang_id as string;
+          if (khachMeCua(id, khachNhom ?? [], nhomAll ?? [])) return false;
+          return coLo.has(id) || meCoLo.has(id);
+        });
+      }
+    }
+
+    const hd = [...chuaCoCanNhac, ...(hdSapHetHan ?? [])];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tenHopDong = hd.map((r: any) => {
       const kh = Array.isArray(r.khach_hang) ? r.khach_hang[0] : r.khach_hang;

@@ -966,6 +966,9 @@ function ThuTienNhieuHoaDonForm({ rows, onCancel, onDone }: { rows: Row[]; onCan
   const [soTien, setSoTien] = useState(String(tongConLai));
   const [phuongThuc, setPhuongThuc] = useState("Tài khoản công ty");
   const [saving, setSaving] = useState(false);
+  // Xac nhan chenh lech gan voi dung so tien dang nhap: doi so tien la phai tick lai.
+  const [dongYLechVoi, setDongYLechVoi] = useState<string | null>(null);
+  const chenhLech = (Number(soTien) || 0) - tongConLai;
   const [err, setErr] = useState<string | null>(null);
 
   const phanBo = useMemo(() => {
@@ -985,6 +988,10 @@ function ThuTienNhieuHoaDonForm({ rows, onCancel, onDone }: { rows: Row[]; onCan
     const tong = Number(soTien);
     if (!tong || tong <= 0) {
       setErr("Nhập số tiền hợp lệ.");
+      return;
+    }
+    if (Math.abs(chenhLech) >= 1 && dongYLechVoi !== soTien) {
+      setErr("Số tiền thực nhận khác tổng còn phải thu của các hóa đơn đã chọn — kiểm tra lại, hoặc tick xác nhận chênh lệch.");
       return;
     }
     setSaving(true);
@@ -1047,6 +1054,21 @@ function ThuTienNhieuHoaDonForm({ rows, onCancel, onDone }: { rows: Row[]; onCan
             </div>
           ))}
         </div>
+
+        {Math.abs(chenhLech) >= 1 && (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>
+              Thực nhận {chenhLech > 0 ? "NHIỀU hơn" : "ÍT hơn"} tổng còn phải thu <strong>{Math.abs(chenhLech).toLocaleString("en-US")}</strong>.{" "}
+              {chenhLech > 0
+                ? "Kiểm tra xem có hóa đơn nào chưa chọn hoặc chưa nhập vào app; phần dư sẽ thành credit."
+                : "Hóa đơn mới nhất sẽ chỉ được thu một phần."}
+            </p>
+            <label className="mt-2 flex items-center gap-2">
+              <input type="checkbox" checked={dongYLechVoi === soTien} onChange={(e) => setDongYLechVoi(e.target.checked ? soTien : null)} />
+              Tôi đã kiểm tra và đồng ý ghi nhận với chênh lệch này
+            </label>
+          </div>
+        )}
 
         {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
 

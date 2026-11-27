@@ -108,7 +108,9 @@ export default function BangKeView({
   chiPhiRows: initialChiPhi,
   phuThuRows: initialPhuThu,
   thueNgoaiRows: initialThueNgoai,
+  donHangChonSan = "",
 }: {
+  donHangChonSan?: string;
   khachHangList: KhachHang[];
   khachHangIdChon: string;
   khachHangChiTiet: KhachHangChiTiet | null;
@@ -122,7 +124,7 @@ export default function BangKeView({
   const [chiPhiRowsAll, setChiPhiRows] = useState<ChiPhiRow[]>(initialChiPhi);
   const [phuThuRowsAll] = useState<PhuThuRow[]>(initialPhuThu);
   const [thueNgoaiRowsAll, setThueNgoaiRows] = useState<ThueNgoaiRow[]>(initialThueNgoai);
-  const [donHangFilter, setDonHangFilter] = useState("");
+  const [donHangFilter, setDonHangFilter] = useState(donHangChonSan);
   const [vatPercent, setVatPercent] = useState("");
   const [soHoaDon, setSoHoaDon] = useState("");
   const [dangXuat, setDangXuat] = useState(false);

@@ -46,14 +46,14 @@ export default async function BaoCaoPage() {
       ? supabase.from("don_thue_ngoai").select("id, don_hang_id, doi_tac_thue_ngoai_id, so_tien_da_chi, chi_ho, hoa_don_id, so_tien_da_thanh_toan, ngay_thue, trang_thai")
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc
-      ? supabase.from("hoa_don_xuat").select("id, khach_hang_id, so_hoa_don, ngay_xuat, tong_tien, tien_chi_ho, so_tien_da_thu, trang_thai_thanh_toan, trang_thai")
+      ? supabase.from("hoa_don_xuat").select("id, khach_hang_id, so_hoa_don, ngay_xuat, tong_tien, tien_chi_ho, tien_vat, so_tien_da_thu, trang_thai_thanh_toan, trang_thai")
       : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc ? supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id") : Promise.resolve({ data: [] }),
     isKeToanOrGiamDoc ? supabase.from("chi_phi_giao_nhan").select("don_hang_id, thanh_tien") : Promise.resolve({ data: [] }),
     supabase.from("nha_cung_cap").select("id, ten"),
     supabase.from("doi_tac_thue_ngoai").select("id, ten"),
     supabase.from("loai_chi_phi").select("id, ten"),
-    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat, nhom_khach_hang_id"),
+    supabase.from("khach_hang").select("id, ten_day_du, ten_viet_tat, nhom_khach_hang_id, dang_hoat_dong"),
     supabase.from("nhan_vien").select("id, ho_ten"),
   ]);
 

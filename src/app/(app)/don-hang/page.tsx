@@ -60,6 +60,31 @@ export default async function DonHangPage() {
 
   const canCreate = canManageDonHang(user?.phong_ban);
 
+  // Danh dau don da co chi phi nhung chua co to khai/container. Lay theo trang
+  // 1000 dong de khong bi cat ngam.
+  async function donHangIdCuaBang(bang: "phat_sinh_chi_phi" | "to_khai_hai_quan") {
+    const ids = new Set<string>();
+    for (let tu = 0; ; tu += 1000) {
+      const { data, error } = await supabase.from(bang).select("don_hang_id").order("id").range(tu, tu + 999);
+      if (error) return null;
+      for (const r of data ?? []) if (r.don_hang_id) ids.add(r.don_hang_id);
+      if ((data ?? []).length < 1000) return ids;
+    }
+  }
+  // Chi cac phong thay duoc TOAN BO chi phi/to khai moi danh dau (tranh bao sai do RLS).
+  const [coChiPhi, coToKhai] = ["Kế toán", "Giám đốc"].includes(user?.phong_ban ?? "")
+    ? await Promise.all([donHangIdCuaBang("phat_sinh_chi_phi"), donHangIdCuaBang("to_khai_hai_quan")])
+    : [null, null];
+  const thieuDuLieuCua = (r: { id: string; loai_kich_co: string | null; don_hang_container: unknown }) => {
+    if (!coChiPhi || !coToKhai || !coChiPhi.has(r.id)) return "";
+    return [
+      r.loai_kich_co !== "Hàng lẻ" && ((r.don_hang_container ?? []) as unknown[]).length === 0 ? "cont" : null,
+      !coToKhai.has(r.id) ? "tờ khai" : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+  };
+
   const exportRows = (rows ?? []).map((r) => {
     const one = <T,>(v: T | T[] | null) => (Array.isArray(v) ? v[0] : v);
     const kh = one(r.khach_hang) as { ten_day_du: string; ten_viet_tat: string | null } | null;
@@ -114,7 +139,7 @@ export default async function DonHangPage() {
 
       <DonHangList
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        initialRows={(rows ?? []) as any[]}
+        initialRows={(rows ?? []).map((r) => ({ ...r, thieu_du_lieu: thieuDuLieuCua(r) })) as any[]}
         khachHangList={khachHang ?? []}
         saleList={saleList ?? []}
         hienTruongList={hienTruongList ?? []}

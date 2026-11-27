@@ -114,6 +114,7 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   // DON_THUE_NGOAI_SAFE_COLS, nen dung thang duoc, khong can zip lai voi rows goc.
   const { data: hoaDonLienKetRows } = await supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id").eq("don_hang_id", id);
   const hoaDonIdsCuaLo = (hoaDonLienKetRows ?? []).map((r) => r.hoa_don_id);
+  const hoaDonSoMap: Record<string, string> = {};
   let soHoaDonCuaLo = "";
   let hoaDonGomNhieuDon = false;
   let dongCacDonKhac: DongPhaiThuInput[] = [];
@@ -122,12 +123,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const hoaDonMap = new Map<string, HoaDonChoPhaiThuInput>();
   if (hoaDonIdsCuaLo.length > 0) {
     const [{ data: hoaDonRows }, { data: lienKetTatCa }] = await Promise.all([
-      supabase.from("hoa_don_xuat").select("id, so_hoa_don, so_tien_da_thu, tong_tien, tien_chi_ho, trang_thai").in("id", hoaDonIdsCuaLo),
+      supabase.from("hoa_don_xuat").select("id, so_hoa_don, so_tien_da_thu, tong_tien, tien_chi_ho, tien_vat, trang_thai").in("id", hoaDonIdsCuaLo),
       supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id").in("hoa_don_id", hoaDonIdsCuaLo),
     ]);
     const hoaDonHopLe = (hoaDonRows ?? []).filter((h) => h.trang_thai !== "Đã hủy" && h.trang_thai !== "Đã thay thế");
     soHoaDonCuaLo = hoaDonHopLe.map((h) => h.so_hoa_don || "(chưa có số)").join(", ");
-    for (const h of hoaDonHopLe) hoaDonMap.set(h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu, tong_tien: h.tong_tien, tien_chi_ho: h.tien_chi_ho });
+    for (const h of hoaDonRows ?? []) hoaDonSoMap[h.id] = h.so_hoa_don || "(chưa có số)";
+    for (const h of hoaDonHopLe) hoaDonMap.set(h.id, { id: h.id, so_tien_da_thu: h.so_tien_da_thu, tong_tien: h.tong_tien, tien_chi_ho: h.tien_chi_ho, tien_vat: h.tien_vat });
     lienKetCuaHoaDon = lienKetTatCa ?? [];
     const donHangIdsKhac = Array.from(new Set((lienKetTatCa ?? []).map((l) => l.don_hang_id).filter((d) => d !== id)));
     hoaDonGomNhieuDon = donHangIdsKhac.length > 0;
@@ -186,7 +188,9 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   const tongChiPhiThueNgoai = thueNgoaiKhongChiHo.reduce((s, r) => s + (r.so_tien_da_chi ?? 0), 0);
 
   const loiNhuanTruocHoaHong = tongSell - tongBuyNoiBo - tongChiPhiGiaoNhan - tongChiPhiThueNgoai - dinhPhiPhanBo;
-  const chiPhiSale = loiNhuanTruocHoaHong * 0.4;
+  // Chi tinh hoa hong khi lo co Sale phu trach.
+  const coSale = !!order.sale_phu_trach_id;
+  const chiPhiSale = coSale ? loiNhuanTruocHoaHong * 0.4 : 0;
   const loiNhuanCongTy = loiNhuanTruocHoaHong - chiPhiSale;
 
   const loiNhuanTruocDinhPhi = loiNhuanTruocHoaHong + dinhPhiPhanBo;
@@ -293,6 +297,13 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   // Sale cung duoc nhap to khai day du (khong chi ho so/trang thai) — nhieu
   // lo khong do Chung tu xu ly nen Chung tu khong nhap to khai, Sale phai
   // tu lam thay theo yeu cau cua Bao Dung (2026-09-19).
+  const thieuDuLieu =
+    chiPhiHopLe.length + thueNgoaiHopLe.length > 0
+      ? [
+          order.loai_kich_co !== "Hàng lẻ" && (containerRows ?? []).length === 0 ? "container" : null,
+          (toKhaiRows ?? []).length === 0 ? "tờ khai" : null,
+        ].filter((x): x is string => !!x)
+      : [];
   const canEditToKhai = ["Chứng từ", "Sale"].includes(user?.phong_ban ?? "");
   const canEditContainer = canManageDonHang(user?.phong_ban);
   // Dinh/xoa ho so dinh kem cua don hang (va cua tung to khai) — rong hon
@@ -329,6 +340,38 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           phongBan={user?.phong_ban ?? ""}
         />
       </div>
+
+      {canSeeLoiNhuan && (
+        <div className="sticky top-0 z-20 mb-4 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:grid-cols-5">
+          <Info label={congNoLo.tamTinh ? "Doanh thu (tạm tính)" : "Doanh thu (giá bán)"} value={Math.round(tongSell).toLocaleString("en-US")} />
+          <Info label="Chi phí (gồm định phí)" value={Math.round(tongSell - loiNhuanTruocHoaHong).toLocaleString("en-US")} />
+          <Info label="LN trước hoa hồng" value={Math.round(loiNhuanTruocHoaHong).toLocaleString("en-US")} />
+          <Info label="Đã thu" value={Math.round(congNoLo.daThu).toLocaleString("en-US")} />
+          <Info label="Còn phải thu (gồm VAT, chi hộ)" value={Math.round(congNoLo.conPhaiThu).toLocaleString("en-US")} />
+        </div>
+      )}
+
+      {order.khach_hang_id && ["Sale", "Chứng từ", "Kế toán", "Giám đốc"].includes(user?.phong_ban ?? "") && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {user?.phong_ban === "Kế toán" && (
+            <Link
+              href={`/khach-hang/bang-ke?khach_hang=${order.khach_hang_id}&don_hang=${order.id}`}
+              className="rounded-lg border border-blue-200 px-2.5 py-1 text-sm font-medium text-blue-600"
+            >
+              Tạo hóa đơn từ lô này
+            </Link>
+          )}
+          <Link href="/khach-hang/hoa-don" className="rounded-lg border border-green-200 px-2.5 py-1 text-sm font-medium text-green-700">
+            Hóa đơn & Thu tiền
+          </Link>
+        </div>
+      )}
+
+      {thieuDuLieu.length > 0 && (
+        <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          Lô đã phát sinh chi phí nhưng chưa nhập: {thieuDuLieu.join(", ")}. Bổ sung ở các tab bên dưới nếu lô này có.
+        </p>
+      )}
 
       <CongViecHoanThanhSection
         donHangId={order.id}
@@ -466,6 +509,8 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           donHangSoLuong: order.so_luong,
           bangGiaList: bangGiaList ?? [],
           donHangHangHoaId: order.hang_hoa_id,
+          hoaDonSoMap,
+          nhanVienTenMap: Object.fromEntries(nhanVienTenMap),
         }}
         dinhKem={
           <DinhKemSection
@@ -501,19 +546,19 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
                 <Info label="Tổng số tiền đã chi (nội bộ)" value={tongBuyNoiBo.toLocaleString("en-US")} />
                 <Info label="Chi phí giao nhận/chuyến" value={tongChiPhiGiaoNhan.toLocaleString("en-US")} />
                 <Info label="Chi phí thuê ngoài (Module E)" value={tongChiPhiThueNgoai.toLocaleString("en-US")} />
-                <Info label="Lợi nhuận trước định phí" value={loiNhuanTruocDinhPhi.toLocaleString("en-US")} />
+                <Info label="Lợi nhuận trước định phí" value={Math.round(loiNhuanTruocDinhPhi).toLocaleString("en-US")} />
                 <Info
                   label="Định phí phân bổ/lô"
-                  value={`${dinhPhiPhanBo.toLocaleString("en-US")} (${soLoTrongThang ?? 0} lô trong tháng ${monthKey})`}
+                  value={`${Math.round(dinhPhiPhanBo).toLocaleString("en-US")} (${soLoTrongThang ?? 0} lô trong tháng ${monthKey})`}
                 />
-                <Info label="Lợi nhuận trước hoa hồng" value={loiNhuanTruocHoaHong.toLocaleString("en-US")} />
+                <Info label="Lợi nhuận trước hoa hồng" value={Math.round(loiNhuanTruocHoaHong).toLocaleString("en-US")} />
                 <Info
-                  label={`Hoa hồng Sale (4/10)${salePhuTrach?.ho_ten ? ` — ${salePhuTrach.ho_ten}` : ""}`}
-                  value={chiPhiSale.toLocaleString("en-US")}
+                  label={coSale ? `Hoa hồng Sale (4/10)${salePhuTrach?.ho_ten ? ` — ${salePhuTrach.ho_ten}` : ""}` : "Hoa hồng Sale"}
+                  value={coSale ? Math.round(chiPhiSale).toLocaleString("en-US") : "Không tính (lô không có Sale)"}
                 />
               </div>
               <p className="mt-3 border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
-                Lợi nhuận công ty (6/10): {loiNhuanCongTy.toLocaleString("en-US")}
+                Lợi nhuận công ty{coSale ? " (6/10)" : ""}: {Math.round(loiNhuanCongTy).toLocaleString("en-US")}
               </p>
               <p className="mt-2 text-xs text-slate-400">
                 * Số liệu sơ bộ — tính cả các dòng chưa duyệt (Nháp/Chờ duyệt), kiểm tra lại trước khi

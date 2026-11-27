@@ -97,8 +97,21 @@ export default async function SoQuyPage() {
     donHangMap[phieuId] = { id: list[0].id, so_don_hang: nhan };
   }
 
+  // Dong thu tu hoa don: hien so hoa don + khach thay vi chi "Thu tien hoa don".
+  const hdIds = (rows ?? []).filter((r) => r.nguon_bang === "hoa_don_xuat").map((r) => r.nguon_id);
+  const { data: hdRows } =
+    hdIds.length > 0
+      ? await supabase.from("hoa_don_xuat").select("id, so_hoa_don, tong_tien, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat)").in("id", hdIds)
+      : { data: [] };
+  const hoaDonDetailMap: Record<string, string> = {};
+  for (const h of hdRows ?? []) {
+    const kh = (Array.isArray(h.khach_hang) ? h.khach_hang[0] : h.khach_hang) as { ten_day_du: string; ten_viet_tat: string | null } | null;
+    hoaDonDetailMap[h.id] = `HĐ ${h.so_hoa_don || "(chưa có số)"} · ${kh?.ten_viet_tat || kh?.ten_day_du || "—"} · tổng HĐ ${Number(h.tong_tien).toLocaleString("en-US")}`;
+  }
+
   return (
     <SoQuyView
+      hoaDonDetailMap={hoaDonDetailMap}
       initialRows={rows ?? []}
       tamUngDetailMap={tamUngDetailMap}
       donHangMap={donHangMap}

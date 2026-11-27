@@ -36,6 +36,7 @@ interface Row {
   hien_truong_phu_trach_id: string | null;
   khach_hang: { ten_day_du: string; ten_viet_tat: string | null } | { ten_day_du: string; ten_viet_tat: string | null }[] | null;
   don_hang_container: { so_cont: string | null }[] | null;
+  thieu_du_lieu?: string;
 }
 
 const STATUSES = ["Tiếp nhận", "Làm thủ tục", "Thông quan", "Giao hàng", "Hoàn tất"];
@@ -262,6 +263,7 @@ export default function DonHangList({
               <StatusBadge status={row.trang_thai} />
             </div>
             <p className="text-sm text-slate-600">{customerName(row)}</p>
+            {row.thieu_du_lieu && <p className="text-xs text-amber-700">⚠ Thiếu {row.thieu_du_lieu}</p>}
             <p className="mt-1 text-xs text-slate-400">
               {row.loai_don_hang} · {cargoSummary(row)} · {row.ngay_len_don}
             </p>
@@ -309,7 +311,10 @@ export default function DonHangList({
                   </td>
                 )}
                 <td className="sticky left-0 z-10 bg-white px-4 py-3 font-medium text-blue-600">{row.so_don_hang}</td>
-                <td className="sticky left-[112px] z-10 bg-white px-4 py-3 text-slate-800">{customerName(row)}</td>
+                <td className="sticky left-[112px] z-10 bg-white px-4 py-3 text-slate-800">
+                  {customerName(row)}
+                  {row.thieu_du_lieu && <p className="text-xs text-amber-700">⚠ Thiếu {row.thieu_du_lieu}</p>}
+                </td>
                 <td className="px-4 py-3 text-slate-800">{row.loai_don_hang ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-800">{cargoSummary(row)}</td>
                 <td className="px-4 py-3 text-slate-800">{row.ngay_len_don}</td>

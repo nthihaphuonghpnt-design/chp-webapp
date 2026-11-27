@@ -154,7 +154,12 @@ export default function ChiPhiGopSection({
   donHangHangHoaId,
   prefillChiTietVanChuyenId,
   onPrefillConsumed,
+  hoaDonSoMap = {},
+  nhanVienTenMap = {},
 }: {
+  /** id hoa don xuat -> so hoa don, de danh dau dong nao da len hoa don nao. */
+  hoaDonSoMap?: Record<string, string>;
+  nhanVienTenMap?: Record<string, string>;
   donHangId: string;
   initialChiPhiRows: PhatSinhChiPhi[];
   initialThueNgoaiRows: DonThueNgoai[];
@@ -790,6 +795,52 @@ export default function ChiPhiGopSection({
   const tongBuy = rows.filter((r) => r.noiBo).reduce((s, r) => s + (r.buy ?? 0), 0);
   const tongSell = rows.reduce((s, r) => s + (r.sell ?? 0), 0);
 
+  // An cot trong ca bang; khi dang sua thi hien du de nhap.
+  const hienDoiTac = !!editingKey || rows.some((r) => r.doiTac !== "—");
+  const hienChang = !!editingKey || rows.some((r) => !!r.chang);
+  const hienSoLuong = !!editingKey || rows.some((r) => r.soLuong !== null);
+  const hienDonGia = !!editingKey || rows.some((r) => r.donGia !== null);
+
+  /** Trang thai len hoa don + nguoi duyet cua 1 dong. */
+  function ghiChuDong(rv: RowView) {
+    const raw = rv.raw as { hoa_don_id?: string | null; nguoi_duyet_id?: string | null };
+    return {
+      hoaDon: raw.hoa_don_id ? `Đã vào HĐ ${hoaDonSoMap[raw.hoa_don_id] ?? ""}` : "Chưa gắn HĐ",
+      nguoiDuyet: raw.nguoi_duyet_id && rv.trangThai !== "Chờ duyệt" ? (nhanVienTenMap[raw.nguoi_duyet_id] ?? null) : null,
+    };
+  }
+
+  // Dat VAT hang loat cho dong gia ban cu chua co VAT %.
+  const dongThieuVat = chiPhiRows.filter(
+    (r) => !r.chi_ho && !r.vat_percent && !r.hoa_don_id && r.trang_thai !== "Từ chối" && (r.gia_ban_sell ?? 0) > 0,
+  );
+  const [hoiVatHangLoat, setHoiVatHangLoat] = useState(false);
+
+  async function datVatHangLoat(values: Record<string, string>) {
+    const vat = Number(values.vat);
+    if (!(vat > 0 && vat <= 100)) {
+      window.alert("VAT % không hợp lệ.");
+      return;
+    }
+    setHoiVatHangLoat(false);
+    let xong = 0;
+    for (const r of dongThieuVat) {
+      const { data, error } = await supabase
+        .from("phat_sinh_chi_phi")
+        .update({ vat_percent: vat, ...(r.trang_thai === "Đã duyệt" ? { ly_do_sua_gan_nhat: values.ly_do } : {}) })
+        .eq("id", r.id)
+        .eq("updated_at", r.updated_at)
+        .select(PHAT_SINH_CHI_PHI_SAFE_COLS)
+        .single();
+      if (error) {
+        window.alert(`Đã cập nhật ${xong}/${dongThieuVat.length} dòng, dừng vì: ${error.message}`);
+        return;
+      }
+      xong++;
+      setChiPhiRows((prev) => prev.map((x) => (x.id === r.id ? ({ ...data, gia_ban_sell: r.gia_ban_sell } as PhatSinhChiPhi) : x)));
+    }
+  }
+
   // ---- Nguon thanh toan + tam ung (chi Dieu phoi/Ke toan chon tay; Hien
   // truong/Chung tu de trigger tu dong gan — chi hien text "tu dong") ----
   function renderNguonThanhToanControls(
@@ -830,7 +881,7 @@ export default function ChiPhiGopSection({
     return (
       <div className="flex flex-col gap-1">
         <select value={values.nguon_thanh_toan} onChange={(e) => chonNguonThanhToan(e.target.value)} className={cls}>
-          <option value="">-- Chọn --</option>
+          <option value="">Chưa thanh toán (còn nợ NCC)</option>
           <option value="Tiền mặt">Tiền mặt</option>
           <option value="Tài khoản công ty">Tài khoản công ty</option>
           <option value="Tạm ứng nhân viên">Tạm ứng nhân viên</option>
@@ -1194,16 +1245,39 @@ export default function ChiPhiGopSection({
         </div>
       )}
 
+      {isKeToan && dongThieuVat.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setHoiVatHangLoat(true)}
+          className="mb-2 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800"
+        >
+          Đặt VAT cho {dongThieuVat.length} dòng giá bán chưa có VAT %
+        </button>
+      )}
+      {hoiVatHangLoat && (
+        <ConfirmDialog
+          title={`Đặt VAT % cho ${dongThieuVat.length} dòng`}
+          message="Chỉ làm khi Giá bán của các dòng này là giá CHƯA gồm VAT (nếu đã gồm VAT, công nợ sẽ bị tính thừa). Lưu ý: cùng ô VAT % này cũng làm đổi 'tổng tiền gồm thuế' của khoản đã chi. Không áp cho dòng Chi hộ và dòng đã vào hóa đơn."
+          fields={[
+            { key: "vat", label: "VAT %", type: "text", required: true, defaultValue: "8" },
+            { key: "ly_do", label: "Lý do (ghi vào các dòng đã duyệt)", type: "textarea", required: true, defaultValue: "Bổ sung VAT % cho dòng nhập cũ" },
+          ]}
+          confirmLabel="Áp dụng"
+          onCancel={() => setHoiVatHangLoat(false)}
+          onConfirm={datVatHangLoat}
+        />
+      )}
+
       {/* ---- Desktop: bang inline ---- */}
       <div className="hidden overflow-x-auto sm:block">
         <table className={`w-full text-sm ${canSeeSell ? "min-w-[1680px]" : "min-w-[1460px]"}`} style={{ tableLayout: "fixed" }}>
           <colgroup>
             <col style={{ width: 110 }} />
             <col style={{ width: 180 }} />
-            <col style={{ width: 190 }} />
-            <col style={{ width: 160 }} />
-            <col style={{ width: 80 }} />
-            <col style={{ width: 110 }} />
+            {hienDoiTac && <col style={{ width: 190 }} />}
+            {hienChang && <col style={{ width: 160 }} />}
+            {hienSoLuong && <col style={{ width: 80 }} />}
+            {hienDonGia && <col style={{ width: 110 }} />}
             <col style={{ width: 110 }} />
             {canSeeSell && <col style={{ width: 110 }} />}
             <col style={{ width: 130 }} />
@@ -1216,10 +1290,10 @@ export default function ChiPhiGopSection({
             <tr>
               <th className="px-2 py-2">Loại dòng</th>
               <th className="px-2 py-2">Loại chi phí / dịch vụ</th>
-              <th className="px-2 py-2">NCC / Đối tác</th>
-              <th className="px-2 py-2">Chặng</th>
-              <th className="px-2 py-2">SL</th>
-              <th className="px-2 py-2">Đơn giá</th>
+              {hienDoiTac && <th className="px-2 py-2">NCC / Đối tác</th>}
+              {hienChang && <th className="px-2 py-2">Chặng</th>}
+              {hienSoLuong && <th className="px-2 py-2">SL</th>}
+              {hienDonGia && <th className="px-2 py-2">Đơn giá</th>}
               <th className="px-2 py-2">Số tiền đã chi</th>
               {canSeeSell && <th className="px-2 py-2">Giá bán</th>}
               <th className="px-2 py-2">Nội bộ / Chi hộ</th>
@@ -1273,10 +1347,10 @@ export default function ChiPhiGopSection({
                     <>
                       <td className="px-2 py-2 text-xs font-medium text-slate-500">{LOAI_LABEL[rv.loai]}</td>
                       <td className="px-2 py-2 font-medium text-slate-900">{rv.ten}</td>
-                      <td className="px-2 py-2 text-slate-600">{rv.doiTac}</td>
-                      <td className="px-2 py-2 text-slate-500">{rv.chang ?? "—"}</td>
-                      <td className="px-2 py-2 text-slate-500">{rv.soLuong ?? "—"}</td>
-                      <td className="px-2 py-2 text-slate-500">{rv.donGia !== null ? fmt(rv.donGia) : "—"}</td>
+                      {hienDoiTac && <td className="px-2 py-2 text-slate-600">{rv.doiTac}</td>}
+                      {hienChang && <td className="px-2 py-2 text-slate-500">{rv.chang ?? "—"}</td>}
+                      {hienSoLuong && <td className="px-2 py-2 text-slate-500">{rv.soLuong ?? "—"}</td>}
+                      {hienDonGia && <td className="px-2 py-2 text-slate-500">{rv.donGia !== null ? fmt(rv.donGia) : "—"}</td>}
                       <td className="px-2 py-2 text-slate-700">{rv.buy !== null ? fmt(rv.buy) : "—"}</td>
                       {canSeeSell && (
                         <td className="px-2 py-2 text-slate-700">
@@ -1296,6 +1370,8 @@ export default function ChiPhiGopSection({
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${rv.trangThai ? TRANG_THAI_COLOR[rv.trangThai] : "bg-slate-100 text-slate-400"}`}>
                           {rv.trangThai ?? "—"}
                         </span>
+                        {ghiChuDong(rv).nguoiDuyet && <p className="mt-1 text-xs text-slate-400">Duyệt: {ghiChuDong(rv).nguoiDuyet}</p>}
+                        <p className="mt-1 text-xs text-slate-500">{ghiChuDong(rv).hoaDon}</p>
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1330,7 +1406,7 @@ export default function ChiPhiGopSection({
 
             {rows.length === 0 && addingRows.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-2 py-6 text-center text-slate-400">
+                <td colSpan={9 + [hienDoiTac, hienChang, hienSoLuong, hienDonGia].filter(Boolean).length} className="px-2 py-6 text-center text-slate-400">
                   Chưa có dòng nào.
                 </td>
               </tr>
@@ -1360,6 +1436,8 @@ export default function ChiPhiGopSection({
                 {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}`}
                 {rv.chiHo ? " · Chi hộ" : rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : "—"}`}
                 {rv.nguonThanhToan && ` · Nguồn: ${rv.nguonThanhToan}`}
+                {` · ${ghiChuDong(rv).hoaDon}`}
+                {ghiChuDong(rv).nguoiDuyet && ` · Duyệt: ${ghiChuDong(rv).nguoiDuyet}`}
                 {rv.chiHo && rv.soChungTuGoc && ` · CT gốc: ${rv.soChungTuGoc}`}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">

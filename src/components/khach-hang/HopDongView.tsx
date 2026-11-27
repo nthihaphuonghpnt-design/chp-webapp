@@ -326,7 +326,13 @@ export default function HopDongView({
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Hợp đồng (Khách hàng &amp; Nhà cung cấp)</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Hợp đồng (Khách hàng &amp; Nhà cung cấp)</h1>
+          <p className="mt-1 max-w-xl text-xs text-slate-500">
+            Tick &quot;Không cần hợp đồng&quot; để bỏ khỏi nhắc nhở (ví dụ công ty con chỉ đứng tờ khai). Trang chủ chỉ nhắc khách có lô trong 6
+            tháng gần nhất; công ty con của nhóm đã khai Công ty mẹ được nhắc qua công ty mẹ.
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={handleExportExcel} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
             Xuất Excel
@@ -446,7 +452,7 @@ export default function HopDongView({
                       handleSetTrangThaiHopDong(row, e.target.checked ? "Không cần hợp đồng" : "Chưa có hợp đồng")
                     }
                   />
-                  Không cần hợp đồng (VD: công ty con chỉ đứng tờ khai, không ký hợp đồng riêng) — bỏ khỏi nhắc nhở
+                  Không cần hợp đồng
                 </label>
               )}
               {canEdit && (

@@ -77,6 +77,7 @@ export default function SoQuyView({
   tamUngDetailMap = {},
   donHangMap = {},
   tkNoMap = {},
+  hoaDonDetailMap = {},
   canEdit = false,
   nhanVienList = [],
   donHangOptions = [],
@@ -86,6 +87,7 @@ export default function SoQuyView({
   tamUngDetailMap?: Record<string, string>;
   donHangMap?: Record<string, { id: string; so_don_hang: string }>;
   tkNoMap?: Record<string, string>;
+  hoaDonDetailMap?: Record<string, string>;
   canEdit?: boolean;
   nhanVienList?: { id: string; ho_ten: string }[];
   donHangOptions?: { id: string; so_don_hang: string }[];
@@ -218,7 +220,7 @@ export default function SoQuyView({
         return [
           r.ngay,
           NGUON_LABEL[r.nguon_bang] ?? r.nguon_bang,
-          r.noi_dung ?? "",
+          [r.noi_dung, r.nguon_bang === "hoa_don_xuat" ? hoaDonDetailMap[r.nguon_id] : null].filter(Boolean).join(" — "),
           donHangMap[r.nguon_id]?.so_don_hang ?? "",
           r.loai_giao_dich === "Thu" ? r.so_tien : "",
           r.loai_giao_dich === "Chi" ? r.so_tien : "",
@@ -415,7 +417,12 @@ export default function SoQuyView({
                     <p className="text-xs text-slate-400">{tamUngDetailMap[r.nguon_id]}</p>
                   )}
                 </td>
-                <td className="px-3 py-2">{r.noi_dung ?? "—"}</td>
+                <td className="px-3 py-2">
+                  {r.noi_dung ?? "—"}
+                  {r.nguon_bang === "hoa_don_xuat" && hoaDonDetailMap[r.nguon_id] && (
+                    <p className="text-xs text-slate-500">{hoaDonDetailMap[r.nguon_id]}</p>
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   {donHangMap[r.nguon_id] ? (
                     <Link href={`/don-hang/${donHangMap[r.nguon_id].id}`} className="text-blue-600 hover:underline">

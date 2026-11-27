@@ -7,9 +7,9 @@ import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi
 export default async function BangKePage({
   searchParams,
 }: {
-  searchParams: Promise<{ khach_hang?: string }>;
+  searchParams: Promise<{ khach_hang?: string; don_hang?: string }>;
 }) {
-  const { khach_hang } = await searchParams;
+  const { khach_hang, don_hang } = await searchParams;
   const supabase = await createClient();
   const user = await getCurrentUser();
 
@@ -161,7 +161,8 @@ export default async function BangKePage({
   return (
     <BangKeView
       // remount khi đổi khách hàng để state nội bộ (danh sách chi phí đã chọn, filter đơn hàng...) reset đúng
-      key={khach_hang ?? "none"}
+      key={`${khach_hang ?? "none"}:${don_hang ?? ""}`}
+      donHangChonSan={don_hang ?? ""}
       khachHangList={khachHangList ?? []}
       khachHangIdChon={khach_hang ?? ""}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

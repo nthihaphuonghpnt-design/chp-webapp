@@ -195,10 +195,19 @@ export default function CreditView({
             {dsHienTai.map((s) => {
               const idDoiTuong = s.doi_tuong === "Khách hàng" ? s.khach_hang_id! : s.nha_cung_cap_id!;
               const canCanTru = s.doi_tuong === "Khách hàng" ? canCanTruKhachHang : canCanTruNcc;
+              const nguon = lichSuCua(s).filter((g) => g.loai === "Phát sinh");
               return (
                 <Fragment key={s.id}>
                   <tr className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-medium text-slate-900">{tenDoiTuong(s)}</td>
+                    <td className="px-3 py-2 font-medium text-slate-900">
+                      {tenDoiTuong(s)}
+                      {nguon.map((g) => (
+                        <p key={g.id} className="text-xs font-normal text-slate-500">
+                          Từ {one(g.hoa_don_xuat)?.so_hoa_don || one(g.hoa_don_dau_vao)?.so_hoa_don ? `HĐ ${one(g.hoa_don_xuat)?.so_hoa_don || one(g.hoa_don_dau_vao)?.so_hoa_don}` : "giao dịch không gắn số HĐ"} · {g.so_tien.toLocaleString("en-US")} · ghi ngày {new Date(g.created_at).toLocaleDateString("vi-VN")}
+                          {g.ly_do ? ` · ${g.ly_do}` : ""}
+                        </p>
+                      ))}
+                    </td>
                     <td className="px-3 py-2 text-right font-medium text-blue-700">{s.so_du.toLocaleString("en-US")}</td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex flex-wrap justify-end gap-2">

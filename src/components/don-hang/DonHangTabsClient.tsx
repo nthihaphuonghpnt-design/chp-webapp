@@ -41,6 +41,8 @@ interface ChiTietVanChuyenProps {
 }
 
 interface ChiPhiGopProps {
+  hoaDonSoMap?: Record<string, string>;
+  nhanVienTenMap?: Record<string, string>;
   donHangId: string;
   initialChiPhiRows: PhatSinhChiPhi[];
   initialThueNgoaiRows: DonThueNgoai[];

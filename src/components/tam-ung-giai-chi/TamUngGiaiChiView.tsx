@@ -231,6 +231,7 @@ export default function TamUngGiaiChiView({
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [showChotDauKy, setShowChotDauKy] = useState(false);
+  const [xemChiTietNv, setXemChiTietNv] = useState<string | null>(null);
 
   async function handleChotDauKy(values: Record<string, string>) {
     const soDu = Number(values.so_du);
@@ -871,7 +872,16 @@ export default function TamUngGiaiChiView({
             <tbody>
               {nhanVienDangNoTamUng.map((s) => (
                 <tr key={s.nhanVienId} className="border-t border-amber-100">
-                  <td className="px-4 py-2">{s.ten}</td>
+                  <td className="px-4 py-2">
+                    {s.ten}
+                    <button
+                      type="button"
+                      onClick={() => setXemChiTietNv((prev) => (prev === s.nhanVienId ? null : s.nhanVienId))}
+                      className="ml-2 text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      {xemChiTietNv === s.nhanVienId ? "Ẩn chi tiết" : "Chi tiết từng khoản"}
+                    </button>
+                  </td>
                   <td className="px-4 py-2 font-medium text-amber-800">{s.conPhaiHoanTong.toLocaleString("en-US")}</td>
                   <td className="px-4 py-2">{s.ngayCuNhat}</td>
                   <td className="px-4 py-2">{s.soNgayQuaHan} ngày</td>
@@ -882,6 +892,59 @@ export default function TamUngGiaiChiView({
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {canSeeSummary && xemChiTietNv && (
+        <div className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <p className="px-4 pt-3 text-xs font-medium text-slate-500">
+            Các khoản tạm ứng đã duyệt còn số dư (dương = còn phải hoàn, âm = chi vượt) — toàn bộ thời gian. &quot;Còn phải hoàn&quot; ở bảng trên chỉ cộng các số dương. Số dư đầu kỳ đã chốt không nằm trong danh sách này.
+          </p>
+          <table className="w-full text-sm">
+            <thead className="text-left text-slate-500">
+              <tr>
+                {["Ngày ứng", "Đơn hàng", "Đã ứng", "Trừ chi có chứng từ", "Đã hoàn", "Còn lại", "Ghi chú", ""].map((h, i) => (
+                  <th key={i} className="px-4 py-2 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows
+                .filter((r) => r.nhan_vien_id === xemChiTietNv && r.loai === "Tạm ứng" && r.trang_thai === "Đã duyệt" && r.doi_tuong === "Nhân viên" && conPhaiHoan(r) !== 0)
+                .sort((a, b) => a.ngay_thuc_hien.localeCompare(b.ngay_thuc_hien))
+                .map((r) => (
+                  <tr key={r.id} className="border-t border-slate-100 align-top">
+                    <td className="px-4 py-2">{r.ngay_thuc_hien}</td>
+                    <td className="px-4 py-2">{one(r.don_hang)?.so_don_hang ?? "(không gắn lô)"}</td>
+                    <td className="px-4 py-2">{r.so_tien.toLocaleString("en-US")}</td>
+                    <td className="px-4 py-2">{(daChiPhanBo.get(r.id) ?? 0).toLocaleString("en-US")}</td>
+                    <td className="px-4 py-2">{daHoanChoTamUng(r).toLocaleString("en-US")}</td>
+                    <td className="px-4 py-2 font-medium">{conPhaiHoan(r).toLocaleString("en-US")}</td>
+                    <td className="px-4 py-2 text-xs text-slate-500">{r.ghi_chu ?? ""}</td>
+                    <td className="px-4 py-2">
+                      {isKeToan && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditing(r);
+                              setProposing(false);
+                              setKhachTamUngMode(false);
+                              setGiaiChiPrefill(null);
+                              setKetoanForcedLoai(null);
+                              setShowForm(true);
+                            }}
+                            className="text-xs font-medium text-blue-600"
+                          >
+                            Sửa
+                          </button>
+                          <button onClick={() => handleDelete(r)} className="text-xs font-medium text-red-600">Xóa</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>

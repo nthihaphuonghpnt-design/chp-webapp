@@ -58,3 +58,37 @@ order by n.ho_ten;
 select pg_get_function_identity_arguments(oid) as tham_so,
        prosrc ilike '%ghi_so_hoa_don_xuat%' as co_ghi_so
 from pg_proc where proname = 'xuat_hoa_don_tu_bang_ke';
+
+-- ---------------------------------------------------------------------------
+-- BAN BO SUNG V3-V5
+-- ---------------------------------------------------------------------------
+
+-- 9) Dong Thu hoa don trong So quy: ngay dang ghi (= ngay xuat hoa don, do
+--    trigger sync_so_quy_hoa_don) so voi ngay bam "Thu tien" trong nhat ky
+select h.so_hoa_don, s.loai_so, s.so_tien, s.ngay as ngay_trong_so_quy,
+       max(n.created_at at time zone 'Asia/Ho_Chi_Minh')::date as lan_bam_thu_cuoi,
+       count(n.created_at) as so_lan_thu
+from so_quy s
+join hoa_don_xuat h on h.id = s.nguon_id
+left join nhat_ky_thao_tac n on n.bang = 'hoa_don_xuat' and n.dong_id = h.id and n.hanh_dong = 'thu_tien_hoa_don_xuat'
+where s.nguon_bang = 'hoa_don_xuat'
+group by h.so_hoa_don, s.loai_so, s.so_tien, s.ngay
+order by s.ngay;
+
+-- 10) Credit phat sinh va dong So quy tuong ung (so quy lay ngay NHAP, khong
+--     phai ngay nhan tien goc)
+select c.id as credit_id, s.id as so_quy_id, s.ngay, s.loai_so, s.so_tien, c.ly_do
+from credit_giao_dich c
+join so_quy s on s.nguon_bang = 'credit_giao_dich' and s.nguon_id = c.id
+order by s.ngay;
+
+-- 11) Hoa don C26TAA-91 / 95 co trong app khong
+select so_hoa_don, ngay_xuat, tong_tien, trang_thai from hoa_don_xuat
+where so_hoa_don ~ '(^|[^0-9])(91|95)$';
+
+-- 12) So dong cac bang ma Bao cao tai 1 lan (API Supabase mac dinh tra toi da
+--     1000 dong/truy van; vuot muc nay thi bao cao co the thieu so lieu)
+select 'phat_sinh_chi_phi' as bang, count(*) from phat_sinh_chi_phi
+union all select 'don_hang', count(*) from don_hang
+union all select 'so_quy', count(*) from so_quy
+union all select 'hoa_don_don_hang', count(*) from hoa_don_don_hang;
