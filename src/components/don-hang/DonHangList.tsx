@@ -137,15 +137,18 @@ export default function DonHangList({
     if (!ganSaleId || selected.size === 0) return;
     setDangGan(true);
     const ids = Array.from(selected);
-    // Dung RPC rieng (khong UPDATE truc tiep) de khong phai mo rong RLS
-    // UPDATE cua don_hang cho Ke toan — xem migration 0123.
-    const { error } = await supabase.rpc("gan_sale_hang_loat", { p_don_hang_ids: ids, p_sale_id: ganSaleId });
+    // P2 muc 9 (2026-11-27): cho phep "Bo gan Sale" (vd don bi gan nham 1
+    // nhan vien khong thuc su lam Sale) — gui null cho RPC thay vi bat buoc
+    // phai chon 1 nguoi. Dung RPC rieng (khong UPDATE truc tiep) de khong
+    // phai mo rong RLS UPDATE cua don_hang cho Ke toan — xem migration 0123.
+    const saleIdMoi = ganSaleId === CHUA_GAN ? null : ganSaleId;
+    const { error } = await supabase.rpc("gan_sale_hang_loat", { p_don_hang_ids: ids, p_sale_id: saleIdMoi });
     setDangGan(false);
     if (error) {
       window.alert(error.message);
       return;
     }
-    setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, sale_phu_trach_id: ganSaleId } : r)));
+    setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, sale_phu_trach_id: saleIdMoi } : r)));
     setSelected(new Set());
     setGanSaleId("");
   }
@@ -226,6 +229,7 @@ export default function DonHangList({
           </span>
           <select value={ganSaleId} onChange={(e) => setGanSaleId(e.target.value)} className={selectClass}>
             <option value="">-- Chọn CS --</option>
+            <option value={CHUA_GAN}>— Bỏ gán Sale (không ai) —</option>
             {saleList.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.ten}
