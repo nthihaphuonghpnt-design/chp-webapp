@@ -142,18 +142,25 @@ export function tinhCongNoTheoLo(
     hoaDonCuaLo.set(l.don_hang_id, (hoaDonCuaLo.get(l.don_hang_id) ?? new Set<string>()).add(l.hoa_don_id));
   }
 
-  /** "Gia ban" chung cua don thuong la so DA GOM VAT. Neu dung bang phan dich vu
-   * cua cac hoa don rieng cua lo (khong gop lo khac) thi tach VAT theo hoa don —
-   * tong phai thu khong doi. */
+  /** "Gia ban" (ca itemize lan fallback gia don hang) thuong la so DA GOM VAT —
+   * nguoi nhap thuong copy dung tong tien hoa don, de vat_percent trong/0. Neu
+   * lo co dung 1 hoa don rieng (khong gop lo khac) va VAT cua hoa don do CHUA
+   * duoc tinh (gt.vat = 0), tach VAT theo hoa don: tong phai thu khong doi, chi
+   * chuyen 1 phan tu "dich vu truoc VAT" sang "VAT". Van dung duoc ca khi hoa
+   * don chi gom 1 PHAN dich vu cua lo (phan con lai chua len hoa don, VAT chua
+   * ro nen giu nguyen truoc VAT) — chi can phan da len hoa don (dichVuGomVat)
+   * khong VUOT QUA tong da itemize cua lo (neu vuot, nhieu kha nang la gan
+   * NHAM hoa don cua lo khac, vd lo nho nhung gan phai hoa don rat lon — khong
+   * tu suy doan VAT trong truong hop do, de nguyen cho nguoi dung ra soat). */
   function giaTri(donHangId: string) {
     const gt = giaTriCuaLo(dongTheoDon.get(donHangId) ?? [], giaDonHangMap.get(donHangId) ?? null);
-    if (!gt.tamTinh) return gt;
+    if (gt.vat > 0) return gt;
     const ids = Array.from(hoaDonCuaLo.get(donHangId) ?? []);
     if (ids.length === 0 || ids.some((i) => soLoCuaHoaDon.get(i)!.size > 1)) return gt;
     const hds = ids.map((i) => hoaDonMap.get(i)!);
     const dichVuGomVat = hds.reduce((s, h) => s + (h.tong_tien ?? 0) - (h.tien_chi_ho ?? 0), 0);
     const vatHd = hds.reduce((s, h) => s + (h.tien_vat ?? 0), 0);
-    if (vatHd <= 0 || Math.abs(dichVuGomVat - gt.dichVuTruocVat) > 1) return gt;
+    if (vatHd <= 0 || dichVuGomVat > gt.dichVuTruocVat + 1) return gt;
     return { ...gt, dichVuTruocVat: gt.dichVuTruocVat - vatHd, vat: vatHd, tamTinh: false };
   }
 
