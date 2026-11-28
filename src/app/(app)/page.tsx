@@ -7,6 +7,7 @@ import { CONG_TY } from "@/lib/excel";
 import { homNayVN, laNhanVienVanPhong } from "@/lib/chamCong";
 import { trongCuaSoNhacCuoiThang } from "@/lib/nhacViec";
 import { khachMeCua } from "@/lib/nhomKhach";
+import { tinhSoDuHienTai } from "@/lib/soQuy";
 
 function loiChao() {
   const gio = new Date().getHours();
@@ -30,6 +31,13 @@ export default async function HomePage() {
   const lichSapToi: { noi_dung: string; ngay_du_kien: string; qua_han: boolean }[] = [];
   const congViecMucs: CongViecMuc[] = [];
   const tamUngChoDuyet: { ten: string; soTien: number; loai: string }[] = [];
+  let soLieuNhanh: {
+    soLoDangChay: number;
+    loChoXuatHoaDon: number;
+    tongPhaiThu: number;
+    soHoaDonQuaHan: number;
+    soDuQuy: number;
+  } | null = null;
 
   if (user) {
     const supabase = await createClient();
@@ -40,6 +48,10 @@ export default async function HomePage() {
     const isVanPhong = laNhanVienVanPhong(user.phong_ban);
     const trongVong30Ngay = new Date(new Date(`${homNay}T00:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
     const hopDongCot = "khach_hang_id, so_hop_dong, khach_hang:khach_hang_id(ten_day_du), nha_cung_cap:nha_cung_cap_id(ten), trang_thai_hop_dong, ngay_het_han";
+    // Dung chung cho ca canh bao Hop dong (da co) lan To khai (them o day) —
+    // chi nhac viec cho KHACH/LO con hoat dong gan day, tranh nhac viec cu tu
+    // ca nam truoc (xem P2 muc 16 va yeu cau bo sung V4 phan C.1.6/E.1).
+    const tuNgayLo = new Date(new Date(`${homNay}T00:00:00Z`).getTime() - 183 * 86400000).toISOString().slice(0, 10);
 
     // Chay song song toan bo truy van doc lap thay vi await tuan tu — trang
     // chu la trang tai dau tien moi lan dang nhap nen cang nhieu round-trip
@@ -54,6 +66,12 @@ export default async function HomePage() {
       { data: hdSapHetHan },
       { data: tk },
       { data: tamUng },
+      { data: donHangTrangThai },
+      { data: donHangHoanTatIds },
+      { data: hoaDonDonHangLinks },
+      { data: hoaDonXuatList },
+      { data: soQuyRows },
+      { data: chotSoDuList },
     ] = await Promise.all([
       isVanPhong
         ? supabase.from("cham_cong").select("id").eq("nhan_vien_id", user.id).eq("ngay", homNay).maybeSingle()
@@ -100,7 +118,7 @@ export default async function HomePage() {
       trongCuaSo && isChungTu
         ? supabase
             .from("to_khai_hai_quan")
-            .select("so_to_khai, don_hang:don_hang_id(so_don_hang)")
+            .select("so_to_khai, don_hang:don_hang_id(so_don_hang, ngay_len_don)")
             .neq("trang_thai", "Đã thông quan")
             .neq("trang_thai", "Giải phóng hàng")
         : Promise.resolve({ data: null }),
@@ -112,6 +130,27 @@ export default async function HomePage() {
             .select("loai, so_tien, doi_tuong, ten_tai_xe, nhan_vien:nhan_vien_id(ho_ten)")
             .eq("trang_thai", "Đề nghị")
             .order("created_at", { ascending: false })
+        : Promise.resolve({ data: null }),
+      // Cac truy van sau chi phuc vu "So lieu nhanh" o trang chu — chi tai
+      // cho Ke toan/Giam doc (du lieu tai chinh), khong tai cho phong ban khac
+      // de khong lam cham trang chu cua ho mot cach khong can thiet.
+      isKtGd ? supabase.from("don_hang").select("trang_thai") : Promise.resolve({ data: null }),
+      isKtGd ? supabase.from("don_hang").select("id").eq("trang_thai", "Hoàn tất") : Promise.resolve({ data: null }),
+      isKtGd
+        ? supabase.from("hoa_don_don_hang").select("don_hang_id, hoa_don:hoa_don_id(trang_thai)")
+        : Promise.resolve({ data: null }),
+      isKtGd
+        ? supabase
+            .from("hoa_don_xuat")
+            .select("tong_tien, so_tien_da_thu, trang_thai_thanh_toan, ngay_xuat")
+            .eq("trang_thai", "Đã phát hành")
+        : Promise.resolve({ data: null }),
+      isKtGd ? supabase.from("so_quy").select("loai_so, loai_giao_dich, so_tien, ngay") : Promise.resolve({ data: null }),
+      isKtGd
+        ? supabase
+            .from("chot_so_du_dau_ky")
+            .select("doi_tuong_loai, ngay_ap_dung, so_du")
+            .in("doi_tuong_loai", ["so_quy_tien_mat", "so_quy_tai_khoan_cong_ty"])
         : Promise.resolve({ data: null }),
     ]);
 
@@ -138,7 +177,6 @@ export default async function HomePage() {
     // cua nhom co cong ty me thi hop dong dat o cong ty me.
     let chuaCoCanNhac = hdChuaCo ?? [];
     if (chuaCoCanNhac.length > 0) {
-      const tuNgayLo = new Date(new Date(`${homNay}T00:00:00Z`).getTime() - 183 * 86400000).toISOString().slice(0, 10);
       const [{ data: loGanDay, error: loiLo }, { data: khachNhom }, { data: nhomAll }] = await Promise.all([
         supabase.from("don_hang").select("khach_hang_id").gte("ngay_len_don", tuNgayLo),
         supabase.from("khach_hang").select("id, nhom_khach_hang_id"),
@@ -173,10 +211,16 @@ export default async function HomePage() {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tenTk = (tk ?? []).map((r: any) => {
-      const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
-      return `${dh?.so_don_hang ?? "—"}${r.so_to_khai ? ` — TK ${r.so_to_khai}` : " — chưa có số TK"}`;
-    });
+    const tenTk = (tk ?? [])
+      .filter((r: any) => {
+        const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+        return (dh?.ngay_len_don ?? "") >= tuNgayLo;
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((r: any) => {
+        const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+        return `${dh?.so_don_hang ?? "—"}${r.so_to_khai ? ` — TK ${r.so_to_khai}` : " — chưa có số TK"}`;
+      });
     if (tenTk.length > 0) {
       congViecMucs.push({ nhan: "Tờ khai hải quan chưa hoàn tất", href: "/don-hang", items: tenTk });
     }
@@ -189,10 +233,69 @@ export default async function HomePage() {
         loai: r.loai,
       });
     }
+
+    // "So lieu nhanh" (yeu cau bo sung E.1, 2026-11-27) — chi Ke toan/Giam
+    // doc, dung so bo tuong tu Bao cao/So quy nhung gon lai thanh 1 hang cho
+    // trang chu, khong phai mo tung trang moi biet.
+    if (isKtGd) {
+      const soLoDangChay = (donHangTrangThai ?? []).filter((d) => d.trang_thai !== "Hoàn tất").length;
+
+      const hoanTatIds = new Set((donHangHoanTatIds ?? []).map((d) => d.id));
+      const daCoHoaDonIds = new Set(
+        (hoaDonDonHangLinks ?? [])
+          .filter((l) => {
+            const hd = Array.isArray(l.hoa_don) ? l.hoa_don[0] : l.hoa_don;
+            return hd && hd.trang_thai !== "Đã hủy" && hd.trang_thai !== "Đã thay thế";
+          })
+          .map((l) => l.don_hang_id)
+      );
+      const loChoXuatHoaDon = Array.from(hoanTatIds).filter((id) => !daCoHoaDonIds.has(id)).length;
+
+      const tongPhaiThu = (hoaDonXuatList ?? []).reduce((s, h) => s + (h.tong_tien - (h.so_tien_da_thu ?? 0)), 0);
+      const nguongQuaHan = new Date(new Date(`${homNay}T00:00:00`).getTime() - 30 * 86400000).toISOString().slice(0, 10);
+      const soHoaDonQuaHan = (hoaDonXuatList ?? []).filter(
+        (h) => h.trang_thai_thanh_toan !== "Đã thu đủ" && h.ngay_xuat < nguongQuaHan
+      ).length;
+
+      const soDuQuy =
+        tinhSoDuHienTai("Tiền mặt", soQuyRows ?? [], chotSoDuList ?? [], homNay) +
+        tinhSoDuHienTai("Tài khoản công ty", soQuyRows ?? [], chotSoDuList ?? [], homNay);
+
+      soLieuNhanh = { soLoDangChay, loChoXuatHoaDon, tongPhaiThu, soHoaDonQuaHan, soDuQuy };
+    }
   }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
+      {soLieuNhanh && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <Link href="/don-hang" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+            <p className="text-xs text-slate-500">Lô đang chạy</p>
+            <p className="text-lg font-semibold text-slate-900">{soLieuNhanh.soLoDangChay}</p>
+          </Link>
+          <Link href="/don-hang" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+            <p className="text-xs text-slate-500">Chờ xuất hóa đơn</p>
+            <p className="text-lg font-semibold text-slate-900">{soLieuNhanh.loChoXuatHoaDon}</p>
+          </Link>
+          <Link href="/khach-hang/hoa-don" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+            <p className="text-xs text-slate-500">Tổng phải thu</p>
+            <p className="text-lg font-semibold text-slate-900">{Math.round(soLieuNhanh.tongPhaiThu).toLocaleString("en-US")}</p>
+          </Link>
+          <Link href="/khach-hang/hoa-don" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+            <p className="text-xs text-slate-500">HĐ quá hạn 30 ngày</p>
+            <p className={`text-lg font-semibold ${soLieuNhanh.soHoaDonQuaHan > 0 ? "text-red-600" : "text-slate-900"}`}>
+              {soLieuNhanh.soHoaDonQuaHan}
+            </p>
+          </Link>
+          <Link href="/thu-chi/so-quy" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+            <p className="text-xs text-slate-500">Số dư quỹ</p>
+            <p className={`text-lg font-semibold ${soLieuNhanh.soDuQuy < 0 ? "text-red-600" : "text-slate-900"}`}>
+              {Math.round(soLieuNhanh.soDuQuy).toLocaleString("en-US")}
+            </p>
+          </Link>
+        </div>
+      )}
+
       {!daChamCongHomNay && user && <ChamCongNhanhCard nhanVienId={user.id} />}
 
       {tamUngChoDuyet.length > 0 && (
