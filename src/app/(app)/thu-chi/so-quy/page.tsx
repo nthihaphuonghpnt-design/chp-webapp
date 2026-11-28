@@ -38,7 +38,7 @@ export default async function SoQuyPage() {
     tamUngIds.length > 0
       ? await supabase
           .from("tam_ung_giai_chi")
-          .select("id, loai, doi_tuong, nhan_vien:nhan_vien_id(ho_ten), ten_tai_xe, khach_hang:khach_hang_id(ten_day_du)")
+          .select("id, loai, doi_tuong, nhan_vien:nhan_vien_id(ho_ten), ten_tai_xe, khach_hang:khach_hang_id(ten_day_du), don_hang_id, don_hang:don_hang_id(so_don_hang)")
           .in("id", tamUngIds)
       : { data: [] };
 
@@ -83,6 +83,14 @@ export default async function SoQuyPage() {
     const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
     if (r.don_hang_id && dh) donHangMap[r.id] = { id: r.don_hang_id, so_don_hang: dh.so_don_hang };
     if (r.tai_khoan_no) tkNoMap[r.id] = r.tai_khoan_no;
+  }
+  // F (28/11/2026): dong Tam ung/Giai chi (Tien mat) truoc gio KHONG hien duoc
+  // cot "Don hang" tren So quy du chinh tam_ung_giai_chi.don_hang_id da co san
+  // — chi thieu ghep vao donHangMap (bo sot khi lam rieng map nay cho 4 nguon
+  // kia, xem khoi phia tren).
+  for (const r of (tamUngDetails ?? []) as LienKetDonHang[]) {
+    const dh = Array.isArray(r.don_hang) ? r.don_hang[0] : r.don_hang;
+    if (r.don_hang_id && dh) donHangMap[r.id] = { id: r.don_hang_id, so_don_hang: dh.so_don_hang };
   }
   type PhieuChiTiet = { phieu_id: string; don_hang: { id: string; so_don_hang: string } | { id: string; so_don_hang: string }[] | null };
   const pqtDonHangList: Record<string, { id: string; so_don_hang: string }[]> = {};
