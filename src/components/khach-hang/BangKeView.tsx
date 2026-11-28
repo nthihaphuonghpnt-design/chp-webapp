@@ -109,6 +109,7 @@ export default function BangKeView({
   phuThuRows: initialPhuThu,
   thueNgoaiRows: initialThueNgoai,
   donHangChonSan = "",
+  tongHopChuaXuatHD = [],
 }: {
   donHangChonSan?: string;
   khachHangList: KhachHang[];
@@ -118,6 +119,7 @@ export default function BangKeView({
   chiPhiRows: ChiPhiRow[];
   phuThuRows: PhuThuRow[];
   thueNgoaiRows: ThueNgoaiRow[];
+  tongHopChuaXuatHD?: { khachHangId: string; ten: string; soTien: number }[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -651,7 +653,31 @@ export default function BangKeView({
         </label>
       )}
 
-      {!khachHangIdChon && <p className="text-sm text-slate-400">Chọn khách hàng để xem bảng kê chi phí chưa xuất hóa đơn.</p>}
+      {!khachHangIdChon && (
+        <div>
+          <p className="mb-2 text-sm text-slate-400">Chọn khách hàng để xem bảng kê chi phí chưa xuất hóa đơn.</p>
+          {tongHopChuaXuatHD.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white">
+              <p className="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+                Khách hàng còn lô chưa xuất hóa đơn ({tongHopChuaXuatHD.length})
+              </p>
+              <ul className="divide-y divide-slate-100">
+                {tongHopChuaXuatHD.map((r) => (
+                  <li key={r.khachHangId}>
+                    <button
+                      onClick={() => chonKhachHang(r.khachHangId)}
+                      className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-50"
+                    >
+                      <span className="text-slate-800">{r.ten}</span>
+                      <span className="font-medium text-slate-900">{r.soTien.toLocaleString("en-US")}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {khachHangIdChon && (
         <>

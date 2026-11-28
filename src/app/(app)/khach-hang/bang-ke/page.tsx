@@ -4,6 +4,26 @@ import BangKeView from "@/components/khach-hang/BangKeView";
 import { khachXuatDichVu } from "@/lib/nhomKhach";
 import { PHAT_SINH_CHI_PHI_SAFE_COLS, DON_THUE_NGOAI_SAFE_COLS, ghepGiaBanChiPhi, ghepGiaBanThueNgoai } from "@/lib/giaBan";
 
+function one<T>(v: T | T[] | null | undefined): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+}
+
+// PostgREST mac dinh gioi han 1000 dong/request — bang nay co the vuot qua so
+// do (vd phat_sinh_chi_phi chua xuat HD toan he thong), nen phai phan trang
+// (range) cho den khi het thay vi tin tuong 1 lan select() la du.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAllRange<T>(makeQuery: (from: number, to: number) => PromiseLike<{ data: any }>): Promise<T[]> {
+  const batchSize = 1000;
+  const all: T[] = [];
+  for (let from = 0; ; from += batchSize) {
+    const { data } = await makeQuery(from, from + batchSize - 1);
+    const batch: T[] = data ?? [];
+    all.push(...batch);
+    if (batch.length < batchSize) break;
+  }
+  return all;
+}
+
 export default async function BangKePage({
   searchParams,
 }: {
@@ -37,6 +57,66 @@ export default async function BangKePage({
   let phuThuRows: unknown[] = [];
   let thueNgoaiRows: unknown[] = [];
   let khachHangChiTiet: unknown = null;
+  let tongHopChuaXuatHD: { khachHangId: string; ten: string; soTien: number }[] = [];
+
+  if (!khach_hang) {
+    // P2 bo sung E.2 (2026-11-28): truoc day trang nay TRONG cho den khi chon
+    // khach, phai do tung khach moi biet co con lo chua xuat hoa don khong —
+    // hien san 1 bang tong hop so tien chua xuat HD theo tung khach de biet
+    // ngay nen uu tien khach nao.
+    // fetchAllRange: phat_sinh_chi_phi chua xuat HD toan he thong co the vuot
+    // qua 1000 dong (gioi han mac dinh cua PostgREST moi request) — thieu mat
+    // neu chi select() 1 lan, lam sai tong theo khach (da gap thuc te khi test).
+    type DonHangKhachRef = { khach_hang_id: string } | { khach_hang_id: string }[] | null;
+    const [cpChuaXuat, tnChuaXuat, ptChuaXuat] = await Promise.all([
+      fetchAllRange<{ id: string; chi_ho: boolean; so_tien_da_chi: number | null; don_hang: DonHangKhachRef }>((from, to) =>
+        supabase
+          .from("phat_sinh_chi_phi")
+          .select("id, chi_ho, so_tien_da_chi, don_hang:don_hang_id(khach_hang_id)")
+          .is("hoa_don_id", null)
+          .neq("trang_thai", "Từ chối")
+          .range(from, to),
+      ),
+      fetchAllRange<{ id: string; chi_ho: boolean; so_tien_da_chi: number | null; don_hang: DonHangKhachRef }>((from, to) =>
+        supabase
+          .from("don_thue_ngoai")
+          .select("id, chi_ho, so_tien_da_chi, don_hang:don_hang_id(khach_hang_id)")
+          .is("hoa_don_id", null)
+          .neq("trang_thai", "Từ chối")
+          .range(from, to),
+      ),
+      fetchAllRange<{ thanh_tien: number | null; don_hang: DonHangKhachRef }>((from, to) =>
+        supabase.from("phu_thu").select("thanh_tien, don_hang:don_hang_id(khach_hang_id)").is("hoa_don_id", null).range(from, to),
+      ),
+    ]);
+    // gia_ban_sell khong SELECT truc tiep duoc (xem lib/giaBan.ts) — ghep lai
+    // qua RPC giong het cach lam khi da chon 1 khach, roi gom theo khach_hang_id.
+    // Dong "Chi ho" dung so_tien_da_chi (tien ung ho thuc te, khong tinh VAT)
+    // thay vi gia_ban_sell — dung HET nhu cach BangKeView.tsx (chiTietBangKe)
+    // dang hien thi, de 2 noi khop so voi nhau.
+    const cpWithId = cpChuaXuat.map((r) => ({ id: r.id, chi_ho: r.chi_ho, so_tien_da_chi: r.so_tien_da_chi, _kh: one(r.don_hang)?.khach_hang_id ?? null }));
+    const tnWithId = tnChuaXuat.map((r) => ({ id: r.id, chi_ho: r.chi_ho, so_tien_da_chi: r.so_tien_da_chi, _kh: one(r.don_hang)?.khach_hang_id ?? null }));
+    const [cpGhep, tnGhep] = await Promise.all([
+      ghepGiaBanChiPhi(supabase, cpWithId),
+      ghepGiaBanThueNgoai(supabase, tnWithId),
+    ]);
+    const tongTheoKhach = new Map<string, number>();
+    const congDon = (khId: string | null, soTien: number | null) => {
+      if (!khId || !soTien) return;
+      tongTheoKhach.set(khId, (tongTheoKhach.get(khId) ?? 0) + soTien);
+    };
+    for (const r of cpGhep) congDon(r._kh, r.chi_ho ? r.so_tien_da_chi : r.gia_ban_sell);
+    for (const r of tnGhep) congDon(r._kh, r.chi_ho ? r.so_tien_da_chi : r.gia_ban_sell);
+    for (const r of ptChuaXuat) congDon(one(r.don_hang)?.khach_hang_id ?? null, r.thanh_tien);
+
+    tongHopChuaXuatHD = Array.from(tongTheoKhach.entries())
+      .map(([khachHangId, soTien]) => {
+        const kh = khachHangList.find((k) => k.id === khachHangId);
+        return { khachHangId, ten: kh?.ten_viet_tat || kh?.ten_day_du || "—", soTien };
+      })
+      .filter((r) => r.soTien > 0)
+      .sort((a, b) => b.soTien - a.soTien);
+  }
 
   if (khach_hang) {
     const [{ data: donHang }, { data: khCT }] = await Promise.all([
@@ -165,6 +245,7 @@ export default async function BangKePage({
       donHangChonSan={don_hang ?? ""}
       khachHangList={khachHangList ?? []}
       khachHangIdChon={khach_hang ?? ""}
+      tongHopChuaXuatHD={tongHopChuaXuatHD}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       khachHangChiTiet={khachHangChiTiet as any}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
