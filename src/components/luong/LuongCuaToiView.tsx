@@ -188,8 +188,16 @@ export default function LuongCuaToiView({
     const giamTru = giamTruGiaCanh(thangLuong, nv.so_nguoi_phu_thuoc ?? 0);
     const thuNhapChiuThue = Math.max(0, tongThuNhap - bhxhNv - giamTru);
     const thueTncn = tinhThueTNCN(thuNhapChiuThue, thangLuong);
-    const thucLanh = tongThuNhap - bhxhNv - thueTncn;
-    return { luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, giamTru, thueTncn, thucLanh };
+    // P2 muc 14 (2026-11-27): dung CHUNG 1 cach xu ly voi BangLuongView.tsx —
+    // BHXH la nghia vu phap ly tinh tren muc_dong_bhxh co dinh, khong giam
+    // theo Cham cong, nen co thang luong co dinh bi tru het (vd thieu cham
+    // cong ca thang) se lam BHXH+thue VUOT qua thu nhap, ra "thuc lanh" am
+    // (vo ly). Chan hien thi/tra am — hien 0 kem canh bao so thieu hut, thay
+    // vi de nhan vien thay minh "no luong".
+    const thucLanhGoc = tongThuNhap - bhxhNv - thueTncn;
+    const thucLanh = Math.max(0, thucLanhGoc);
+    const thieuHutThucLanh = thucLanhGoc < 0 ? -thucLanhGoc : 0;
+    return { luongCoDinh, luongCoDinhGoc, luongTheoLo, tongThuNhap, mucDongBhxh, bhxhNv, giamTru, thueTncn, thucLanh, thieuHutThucLanh };
   }, [nv, pb, donHangCuaToi, chiPhiGiaoNhanList, thangHoatDong, thangLuong, apDungChamCong, chamCongList, ngayLeSet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const daTra = luongDaTraList.find((d) => d.thang_luong === thangLuong) ?? null;
@@ -276,6 +284,11 @@ export default function LuongCuaToiView({
             <Row label="Thuế TNCN" value={-luong.thueTncn} />
             <Row label="Thực lãnh" value={luong.thucLanh} bold big />
           </dl>
+          {luong.thieuHutThucLanh > 0 && (
+            <p className="mt-2 text-xs font-medium text-red-600">
+              ⚠ BHXH/thuế vượt thu nhập tháng này {fmt(luong.thieuHutThucLanh)} (thường do thiếu Chấm công) — Kế toán cần rà soát trước khi trả lương.
+            </p>
+          )}
           <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
             {daTra ? (
               <p className="text-green-700">
