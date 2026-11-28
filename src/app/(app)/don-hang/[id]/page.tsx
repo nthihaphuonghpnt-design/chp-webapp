@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageDonHang } from "@/lib/permissions";
 import { UngTienNhanhButton } from "@/components/tam-ung-giai-chi/TamUngGiaiChiView";
+import DaThuDuNhanhButton from "@/components/don-hang/DaThuDuNhanhButton";
 import StatusBadge from "@/components/don-hang/StatusBadge";
 import ConfirmButtons from "@/components/don-hang/ConfirmButtons";
 import ContainerSection from "@/components/don-hang/ContainerSection";
@@ -364,6 +365,14 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
           <Link href="/khach-hang/hoa-don" className="rounded-lg border border-green-200 px-2.5 py-1 text-sm font-medium text-green-700">
             Hóa đơn & Thu tiền
           </Link>
+          {user?.phong_ban === "Kế toán" && hoaDonIdsCuaLo.length === 0 && (
+            <DaThuDuNhanhButton
+              donHangId={order.id}
+              soDonHang={order.so_don_hang}
+              khachHangId={order.khach_hang_id}
+              congNo={{ dichVuTruocVat: congNoLo.dichVuTruocVat, vat: congNoLo.vat, chiHo: congNoLo.chiHo, tongPhaiThu: congNoLo.tongPhaiThu }}
+            />
+          )}
         </div>
       )}
 
