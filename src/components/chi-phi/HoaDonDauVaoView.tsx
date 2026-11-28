@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
@@ -164,11 +164,16 @@ export default function HoaDonDauVaoView({
   nhaCungCapList,
   donHangList,
   canEdit,
+  autoThemDonHangTen,
 }: {
   initialRows: HoaDonDauVao[];
   nhaCungCapList: NhaCungCapOption[];
   donHangList: DonHangOption[];
   canEdit: boolean;
+  /** D1 muc 4 (27/11/2026): den tu nut "+ Them hoa don dau vao cho lo nay" o
+   * trang chi tiet don hang (?don_hang=<so_don_hang>) — tu mo san form them
+   * voi don hang dien san, khong can go lai ten de tim. */
+  autoThemDonHangTen?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<HoaDonDauVao[]>(initialRows);
@@ -299,7 +304,7 @@ export default function HoaDonDauVaoView({
     });
   }
 
-  function batDauThem() {
+  function batDauThem(prefillDonHangTen?: string) {
     const tam: HoaDonDauVao = {
       id: `new-${Date.now()}`,
       mau_so_hoa_don: null,
@@ -327,10 +332,16 @@ export default function HoaDonDauVaoView({
       chi_ho: false,
     };
     setRows((prev) => [tam, ...prev]);
-    setEditValues({ ...dongTrong(), thang_phan_bo: thangLoc || thangHienTai() });
+    setEditValues({ ...dongTrong(), thang_phan_bo: thangLoc || thangHienTai(), don_hang_ten: prefillDonHangTen ?? "" });
     setEditingId(tam.id);
     setError(null);
   }
+
+  // D1 muc 4: tu mo form them san don hang khi den tu trang chi tiet don hang.
+  useEffect(() => {
+    if (autoThemDonHangTen) batDauThem(autoThemDonHangTen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoThemDonHangTen]);
 
   function batDauSua(row: HoaDonDauVao) {
     setEditingId(row.id);
@@ -953,7 +964,7 @@ export default function HoaDonDauVaoView({
                 }}
               />
               <button
-                onClick={batDauThem}
+                onClick={() => batDauThem()}
                 disabled={editingId !== null}
                 className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm disabled:opacity-60"
               >

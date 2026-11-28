@@ -3,7 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import HoaDonDauVaoView, { type HoaDonDauVao } from "@/components/chi-phi/HoaDonDauVaoView";
 
-export default async function HoaDonDauVaoPage() {
+export default async function HoaDonDauVaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ don_hang?: string }>;
+}) {
+  const { don_hang } = await searchParams;
   const supabase = await createClient();
   const user = await getCurrentUser();
 
@@ -39,6 +44,7 @@ export default async function HoaDonDauVaoPage() {
           so_cont: ((d.don_hang_container ?? []) as { so_cont: string | null }[]).map((c) => c.so_cont ?? "").filter(Boolean),
         }))}
         canEdit={user.phong_ban === "Kế toán"}
+        autoThemDonHangTen={don_hang}
       />
     </div>
   );

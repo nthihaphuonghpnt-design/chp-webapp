@@ -115,6 +115,15 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
   // DON_THUE_NGOAI_SAFE_COLS, nen dung thang duoc, khong can zip lai voi rows goc.
   const { data: hoaDonLienKetRows } = await supabase.from("hoa_don_don_hang").select("hoa_don_id, don_hang_id").eq("don_hang_id", id);
   const hoaDonIdsCuaLo = (hoaDonLienKetRows ?? []).map((r) => r.hoa_don_id);
+
+  // D1 muc 4 (27/11/2026): hien hoa don DAU VAO (mua vao tu NCC) da gan voi lo
+  // nay ngay tren trang lo — truoc gio chi xem duoc tu trang Hoa don dau vao
+  // chung, phai tu tim theo so don hang.
+  const { data: hoaDonDauVaoCuaLo } = await supabase
+    .from("hoa_don_dau_vao")
+    .select("id, so_hoa_don, ngay_hoa_don, tong_tien_thanh_toan, tinh_trang_thanh_toan, nha_cung_cap:nha_cung_cap_id(ten)")
+    .eq("don_hang_id", id)
+    .order("ngay_hoa_don", { ascending: false });
   const hoaDonSoMap: Record<string, string> = {};
   let soHoaDonCuaLo = "";
   let hoaDonGomNhieuDon = false;
@@ -372,6 +381,39 @@ export default async function DonHangDetailPage({ params }: { params: Promise<{ 
               khachHangId={order.khach_hang_id}
               congNo={{ dichVuTruocVat: congNoLo.dichVuTruocVat, vat: congNoLo.vat, chiHo: congNoLo.chiHo, tongPhaiThu: congNoLo.tongPhaiThu }}
             />
+          )}
+        </div>
+      )}
+
+      {["Kế toán", "Giám đốc"].includes(user?.phong_ban ?? "") && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="font-medium text-slate-700">Hóa đơn đầu vào (mua vào từ NCC) của lô này</span>
+            <Link
+              href={`/chi-phi/hoa-don-dau-vao?don_hang=${encodeURIComponent(order.so_don_hang)}`}
+              className="text-xs font-medium text-blue-600"
+            >
+              + Thêm hóa đơn đầu vào →
+            </Link>
+          </div>
+          {(hoaDonDauVaoCuaLo ?? []).length === 0 ? (
+            <p className="text-xs text-slate-400">Chưa có hóa đơn đầu vào nào gắn với lô này.</p>
+          ) : (
+            <ul className="space-y-1 text-xs text-slate-600">
+              {(hoaDonDauVaoCuaLo ?? []).map((h) => {
+                const ncc = Array.isArray(h.nha_cung_cap) ? h.nha_cung_cap[0] : h.nha_cung_cap;
+                return (
+                  <li key={h.id} className="flex items-center justify-between gap-2">
+                    <span>
+                      {h.so_hoa_don || "(chưa có số)"} · {ncc?.ten ?? "—"} · {h.ngay_hoa_don}
+                    </span>
+                    <span>
+                      {Number(h.tong_tien_thanh_toan ?? 0).toLocaleString("en-US")} · {h.tinh_trang_thanh_toan}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
