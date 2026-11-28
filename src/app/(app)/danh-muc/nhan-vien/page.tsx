@@ -104,6 +104,7 @@ export default async function NhanVienPage() {
         statusField="dang_lam_viec"
         statusLabels={{ active: "Đang làm việc", inactive: "Nghỉ việc" }}
         selectColumns={NHAN_VIEN_COLUMNS}
+        warnDuplicateField="ho_ten"
       />
       <p className="mx-auto -mt-2 max-w-5xl px-4 pb-6 text-xs text-slate-400">
         Lưu ý: thêm nhân viên ở đây chỉ tạo hồ sơ. Để nhân viên đăng nhập được, vào Supabase

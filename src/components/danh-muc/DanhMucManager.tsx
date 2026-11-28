@@ -72,6 +72,10 @@ interface Props {
    * — hien 1 dropdown "Tat ca ..." ben canh o Tim kiem, loc chinh xac theo gia
    * tri thay vi phai go dung text hien thi vao o tim kiem. */
   filterField?: string;
+  /** Key cua 1 field — canh bao (bieu tuong + ghi chu) khi 2 dong tro len co
+   * CUNG gia tri field nay (vd "ho_ten" o Nhan vien — tranh nham lan nhu vu
+   * "Le Van Hieu" trung ten o 2 phong ban khac nhau). */
+  warnDuplicateField?: string;
 }
 
 export default function DanhMucManager({
@@ -87,6 +91,7 @@ export default function DanhMucManager({
   taxLookup,
   selectColumns,
   filterField,
+  warnDuplicateField,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [query, setQuery] = useState("");
@@ -107,6 +112,21 @@ export default function DanhMucManager({
   const searchFieldsAll = [primaryField, ...(extraSearchFields ?? [])];
 
   const filterFieldConfig = filterField ? fields.find((f) => f.key === filterField) : undefined;
+
+  const duplicateValues = useMemo(() => {
+    if (!warnDuplicateField) return new Set<string>();
+    const dem = new Map<string, number>();
+    for (const r of rows) {
+      const v = String(r[warnDuplicateField] ?? "").trim();
+      if (!v) continue;
+      dem.set(v, (dem.get(v) ?? 0) + 1);
+    }
+    return new Set(Array.from(dem.entries()).filter(([, n]) => n > 1).map(([v]) => v));
+  }, [rows, warnDuplicateField]);
+
+  function trungTen(field: FieldConfig, row: Row) {
+    return field.key === warnDuplicateField && duplicateValues.has(String(row[field.key] ?? "").trim());
+  }
 
   const filteredRows = rows.filter((r) => {
     if (filterField && filterValue && String(r[filterField] ?? "") !== filterValue) return false;
@@ -440,6 +460,11 @@ export default function DanhMucManager({
                 <span className="text-slate-500">{f.label}</span>
                 <span className="text-right font-medium text-slate-900">
                   {displayValue(f, row[f.key])}
+                  {trungTen(f, row) && (
+                    <span className="ml-1.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                      ⚠ trùng
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
@@ -490,7 +515,7 @@ export default function DanhMucManager({
                 </th>
               ))}
               <th className="px-4 py-3 font-medium">Trạng thái</th>
-              {canEdit && <th className="px-4 py-3"></th>}
+              {canEdit && <th className="sticky right-0 bg-slate-50 px-4 py-3 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]"></th>}
             </tr>
           </thead>
           <tbody>
@@ -499,6 +524,14 @@ export default function DanhMucManager({
                 {listFields.map((f) => (
                   <td key={f.key} className="px-4 py-3 text-slate-800">
                     {displayValue(f, row[f.key])}
+                    {trungTen(f, row) && (
+                      <span
+                        title="Có nhân viên/dòng khác trùng giá trị này — kiểm tra để tránh nhầm lẫn khi chọn trong bộ lọc."
+                        className="ml-1.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700"
+                      >
+                        ⚠ trùng
+                      </span>
+                    )}
                   </td>
                 ))}
                 <td className="px-4 py-3">
@@ -515,7 +548,7 @@ export default function DanhMucManager({
                   </button>
                 </td>
                 {canEdit && (
-                  <td className="px-4 py-3 text-right">
+                  <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]">
                     <div className="flex justify-end gap-3">
                       <button
                         onClick={() => openEdit(row)}
