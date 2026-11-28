@@ -801,6 +801,30 @@ export default function ChiPhiGopSection({
   const hienSoLuong = !!editingKey || rows.some((r) => r.soLuong !== null);
   const hienDonGia = !!editingKey || rows.some((r) => r.donGia !== null);
 
+  // C4 muc 2 (27/11/2026): du lieu lich su co lo co nhieu dong "gia ban" thuc
+  // chat la SO TIEN DA CHI nhan voi 1 he so phan bo co dinh (vd x7.57), khong
+  // phai gia ban that — loi nhuan tung dong vo nghia. Khong tu doan gia dung
+  // (can nguoi dung nhap lai that), chi canh bao: >=2 dong cung lo co ty le
+  // sell/buy GIONG NHAU va BAT THUONG CAO (>=2.5 lan — markup thuc te hiem khi
+  // vuot muc nay) thi danh dau nghi ngo cho ca nhom.
+  const giaBanNghiNgoSet = useMemo(() => {
+    const nhom = new Map<string, string[]>();
+    for (const rv of rows) {
+      if (rv.chiHo || rv.sell === null || rv.buy === null || rv.buy <= 0) continue;
+      const tyLe = rv.sell / rv.buy;
+      if (tyLe < 2.5) continue;
+      const key = tyLe.toFixed(1);
+      const ds = nhom.get(key) ?? [];
+      ds.push(rv.key);
+      nhom.set(key, ds);
+    }
+    const out = new Set<string>();
+    for (const ds of nhom.values()) {
+      if (ds.length >= 2) for (const k of ds) out.add(k);
+    }
+    return out;
+  }, [rows]);
+
   /** Trang thai len hoa don + nguoi duyet cua 1 dong. */
   function ghiChuDong(rv: RowView) {
     const raw = rv.raw as { hoa_don_id?: string | null; nguoi_duyet_id?: string | null };
@@ -1365,7 +1389,14 @@ export default function ChiPhiGopSection({
                         {rv.chiHo && rv.soChungTuGoc && <p className="text-xs text-slate-400">CT gốc: {rv.soChungTuGoc}</p>}
                       </td>
                       <td className="px-2 py-2 text-slate-500">{rv.nguonThanhToan ?? "—"}</td>
-                      {canSeeSell && <td className="px-2 py-2 font-medium text-slate-700">{loiNhuan !== null ? fmt(loiNhuan) : "—"}</td>}
+                      {canSeeSell && (
+                        <td className="px-2 py-2 font-medium text-slate-700">
+                          {loiNhuan !== null ? fmt(loiNhuan) : "—"}
+                          {giaBanNghiNgoSet.has(rv.key) && (
+                            <p className="text-xs font-medium text-amber-600">⚠ Giá bán nghi là số phân bổ cũ, không phải giá thật</p>
+                          )}
+                        </td>
+                      )}
                       <td className="px-2 py-2">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${rv.trangThai ? TRANG_THAI_COLOR[rv.trangThai] : "bg-slate-100 text-slate-400"}`}>
                           {rv.trangThai ?? "—"}
@@ -1433,7 +1464,7 @@ export default function ChiPhiGopSection({
                 {rv.doiTac} · Số tiền đã chi: {rv.buy !== null ? fmt(rv.buy) : "—"}
                 {canSeeSell && rv.sell !== null && ` · Giá bán: ${fmt(rv.sell)}`}
                 {canSeeSell && rv.loai === "chi_phi" && !rv.chiHo && (rv.raw as PhatSinhChiPhi).vat_percent ? ` · VAT: ${(rv.raw as PhatSinhChiPhi).vat_percent}%` : ""}
-                {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}`}
+                {canSeeSell && loiNhuan !== null && ` · LN: ${fmt(loiNhuan)}${giaBanNghiNgoSet.has(rv.key) ? " ⚠" : ""}`}
                 {rv.chiHo ? " · Chi hộ" : rv.noiBo !== null && ` · ${rv.noiBo ? "Nội bộ" : "—"}`}
                 {rv.nguonThanhToan && ` · Nguồn: ${rv.nguonThanhToan}`}
                 {` · ${ghiChuDong(rv).hoaDon}`}
