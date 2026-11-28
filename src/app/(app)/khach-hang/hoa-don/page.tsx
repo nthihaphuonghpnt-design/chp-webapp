@@ -86,8 +86,33 @@ export default async function HoaDonPage() {
   ]);
   const dichVuRiengMap = new Map((donDichVuRieng ?? []).map((d) => [d.id, d.khach_hang_dich_vu_id as string]));
 
+  // C2 (27/11/2026): ngay_xuat la ngay PHAT HANH hoa don, khong phai ngay
+  // THU TIEN thuc te — hien dung ngay (tu so_quy, qua 2 duong: thu truc tiep
+  // tung hoa don (nguon_bang='hoa_don_xuat') hoac thu gop nhieu hoa don ghi
+  // tay (thu_gop_chi_tiet, xem migration 0134)) de tranh hieu nham kieu
+  // "Da thu du ngay 05/11" trong khi tien thuc nhan vao mot ngay khac han.
+  const [{ data: soQuyThuTrucTiep }, { data: thuGopChiTietCuaHd }] = await Promise.all([
+    hoaDonIds.length > 0
+      ? supabase.from("so_quy").select("nguon_id, ngay").eq("nguon_bang", "hoa_don_xuat").in("nguon_id", hoaDonIds)
+      : Promise.resolve({ data: [] }),
+    hoaDonIds.length > 0
+      ? supabase.from("thu_gop_chi_tiet").select("hoa_don_id, so_quy:so_quy_id(ngay)").in("hoa_don_id", hoaDonIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const ngayThuMap: Record<string, string> = {};
+  const capNhatNgay = (hoaDonId: string, ngay: string | undefined | null) => {
+    if (!ngay) return;
+    if (!ngayThuMap[hoaDonId] || ngay > ngayThuMap[hoaDonId]) ngayThuMap[hoaDonId] = ngay;
+  };
+  for (const r of soQuyThuTrucTiep ?? []) capNhatNgay(r.nguon_id, r.ngay);
+  for (const r of thuGopChiTietCuaHd ?? []) {
+    const sq = Array.isArray(r.so_quy) ? r.so_quy[0] : r.so_quy;
+    capNhatNgay(r.hoa_don_id, sq?.ngay);
+  }
+
   return (
     <HoaDonView
+      ngayThuMap={ngayThuMap}
       nhomList={nhomList ?? []}
       thongTinHuy={(nhatKyHuy ?? []).map((n) => {
         const nguoi = (Array.isArray(n.nguoi) ? n.nguoi[0] : n.nguoi) as { ho_ten: string } | null;

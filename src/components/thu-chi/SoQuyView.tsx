@@ -82,6 +82,7 @@ export default function SoQuyView({
   donHangMap = {},
   tkNoMap = {},
   hoaDonDetailMap = {},
+  thuGopChiTietMap = {},
   canEdit = false,
   nhanVienList = [],
   donHangOptions = [],
@@ -92,6 +93,7 @@ export default function SoQuyView({
   donHangMap?: Record<string, { id: string; so_don_hang: string }>;
   tkNoMap?: Record<string, string>;
   hoaDonDetailMap?: Record<string, string>;
+  thuGopChiTietMap?: Record<string, { soHoaDon: string; khach: string; soTien: number }[]>;
   canEdit?: boolean;
   nhanVienList?: { id: string; ho_ten: string }[];
   donHangOptions?: { id: string; so_don_hang: string }[];
@@ -422,9 +424,37 @@ export default function SoQuyView({
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  {r.noi_dung ?? "—"}
-                  {r.nguon_bang === "hoa_don_xuat" && hoaDonDetailMap[r.nguon_id] && (
-                    <p className="text-xs text-slate-500">{hoaDonDetailMap[r.nguon_id]}</p>
+                  {thuGopChiTietMap[r.id] ? (
+                    <>
+                      <p className="mb-1">{r.noi_dung ?? "—"}</p>
+                      <ul className="space-y-0.5 rounded-md bg-slate-50 p-1.5 text-xs text-slate-600">
+                        {thuGopChiTietMap[r.id].map((ct, i) => (
+                          <li key={i} className="flex items-center justify-between gap-2">
+                            <span>
+                              HĐ {ct.soHoaDon} · {ct.khach}
+                            </span>
+                            <span className="font-medium text-slate-800">{fmt(ct.soTien)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {(() => {
+                        const tongPhanBo = thuGopChiTietMap[r.id].reduce((s, ct) => s + ct.soTien, 0);
+                        const chenh = r.so_tien - tongPhanBo;
+                        return Math.abs(chenh) >= 1 ? (
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            ⚠ Tổng hóa đơn đã gắn ({fmt(tongPhanBo)}) chênh {fmt(Math.abs(chenh))} so với số tiền thực nhận ({fmt(r.so_tien)}) —
+                            có thể còn hóa đơn chưa nhập vào app.
+                          </p>
+                        ) : null;
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                      {r.noi_dung ?? "—"}
+                      {r.nguon_bang === "hoa_don_xuat" && hoaDonDetailMap[r.nguon_id] && (
+                        <p className="text-xs text-slate-500">{hoaDonDetailMap[r.nguon_id]}</p>
+                      )}
+                    </>
                   )}
                 </td>
                 <td className="px-3 py-2">

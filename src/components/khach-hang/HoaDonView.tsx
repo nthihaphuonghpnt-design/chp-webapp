@@ -144,6 +144,7 @@ export default function HoaDonView({
   currentUserId,
   nhomList = [],
   thongTinHuy = [],
+  ngayThuMap = {},
 }: {
   nhomList?: NhomCoMe[];
   thongTinHuy?: ThongTinHuy[];
@@ -159,6 +160,8 @@ export default function HoaDonView({
   canEdit: boolean;
   canHuy: boolean;
   currentUserId?: string;
+  /** C2 (27/11/2026): ngay THU TIEN thuc te lay tu so_quy, khac ngay_xuat (ngay phat hanh). */
+  ngayThuMap?: Record<string, string>;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[]>(initialRows);
@@ -754,7 +757,9 @@ export default function HoaDonView({
               {row.ngay_xuat} · Tổng: {row.tong_tien.toLocaleString("en-US")}
               {row.tien_vat ? ` (gồm VAT ${row.tien_vat.toLocaleString("en-US")}${row.vat_percent ? ` · ${row.vat_percent}%` : ""})` : ""}
               {row.tien_chi_ho ? ` (gồm chi hộ ${row.tien_chi_ho.toLocaleString("en-US")})` : ""}
-              {row.so_tien_da_thu ? ` · Đã thu: ${row.so_tien_da_thu.toLocaleString("en-US")}` : ""}
+              {row.so_tien_da_thu
+                ? ` · Đã thu: ${row.so_tien_da_thu.toLocaleString("en-US")}${ngayThuMap[row.id] ? ` (ngày ${ngayThuMap[row.id]})` : ""}`
+                : ""}
               {row.loai_hoa_don !== "Gốc" ? ` · ${row.loai_hoa_don} cho hóa đơn khác` : ""}
             </p>
             {donHangCuaHoaDon(row.id).length > 0 && (

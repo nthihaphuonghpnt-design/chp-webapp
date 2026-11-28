@@ -109,9 +109,37 @@ export default async function SoQuyPage() {
     hoaDonDetailMap[h.id] = `HĐ ${h.so_hoa_don || "(chưa có số)"} · ${kh?.ten_viet_tat || kh?.ten_day_du || "—"} · tổng HĐ ${Number(h.tong_tien).toLocaleString("en-US")}`;
   }
 
+  // C2 (27/11/2026): dong "thu gop nhieu hoa don" ghi tay — chi tiet phan bo
+  // tung hoa don luu rieng o thu_gop_chi_tiet (xem migration 0134), vi
+  // so_quy.nguon_id chi tro duoc ve 1 ban ghi, khong gom het ca nhom hoa don.
+  const thuGopIds = (rows ?? []).filter((r) => r.nguon_bang === "thu_gop_thu_cong").map((r) => r.id);
+  const { data: thuGopChiTietRows } =
+    thuGopIds.length > 0
+      ? await supabase
+          .from("thu_gop_chi_tiet")
+          .select("so_quy_id, so_tien, hoa_don:hoa_don_id(so_hoa_don, khach_hang:khach_hang_id(ten_day_du, ten_viet_tat))")
+          .in("so_quy_id", thuGopIds)
+      : { data: [] };
+  type ThuGopChiTietRow = {
+    so_quy_id: string;
+    so_tien: number;
+    hoa_don: { so_hoa_don: string | null; khach_hang: { ten_day_du: string; ten_viet_tat: string | null } | { ten_day_du: string; ten_viet_tat: string | null }[] | null } | { so_hoa_don: string | null; khach_hang: unknown }[] | null;
+  };
+  const thuGopChiTietMap: Record<string, { soHoaDon: string; khach: string; soTien: number }[]> = {};
+  for (const r of (thuGopChiTietRows ?? []) as ThuGopChiTietRow[]) {
+    const hd = Array.isArray(r.hoa_don) ? r.hoa_don[0] : r.hoa_don;
+    const kh = hd ? (Array.isArray(hd.khach_hang) ? hd.khach_hang[0] : hd.khach_hang) as { ten_day_du: string; ten_viet_tat: string | null } | null : null;
+    (thuGopChiTietMap[r.so_quy_id] ??= []).push({
+      soHoaDon: hd?.so_hoa_don || "(chưa có số)",
+      khach: kh?.ten_viet_tat || kh?.ten_day_du || "—",
+      soTien: Number(r.so_tien),
+    });
+  }
+
   return (
     <SoQuyView
       hoaDonDetailMap={hoaDonDetailMap}
+      thuGopChiTietMap={thuGopChiTietMap}
       initialRows={rows ?? []}
       tamUngDetailMap={tamUngDetailMap}
       donHangMap={donHangMap}
